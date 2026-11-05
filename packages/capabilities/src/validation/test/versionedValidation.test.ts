@@ -19,7 +19,7 @@
  *   a ledger-v8 transaction handed to ledger-v9's `wellFormed` fails, and vice versa. A pass therefore proves the
  *   routing as surely as a failure does — nothing but the right validator can produce one.
  */
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Cause, Effect, Either, Exit, Option } from 'effect';

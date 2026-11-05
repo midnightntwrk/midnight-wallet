@@ -22,7 +22,7 @@
  */
 import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import { DateTime, Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { isAwaiting, type LifecycleEntry, lifecycleEntriesOf } from '../src/index.js';

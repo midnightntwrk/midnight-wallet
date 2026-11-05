@@ -24,7 +24,7 @@ import {
   type Transaction,
   type Event,
   updatedValue,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { ProtocolVersion, type SnapshotFormat, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Option, pipe } from 'effect';
 import { type Dust, type PendingDust } from './types/Dust.js';

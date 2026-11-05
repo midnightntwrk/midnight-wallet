@@ -14,7 +14,7 @@ import Worker from 'web-worker';
 import { type Context, Effect, Layer, Schema, pipe } from 'effect';
 import { type InvalidProtocolSchemeError, ClientError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import type * as ledger from '@midnightntwrk/ledger-v9';
-import { type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
+import { type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnightntwrk/zkir-v2';
 import { DefaultKeyMaterialSource, makeKeyMaterialProvider, V8KeyMaterial, V9KeyMaterial } from './KeyMaterial.js';
 import { ProverClient } from './ProverClient.js';
 

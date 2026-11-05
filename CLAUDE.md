@@ -110,11 +110,13 @@ sync, proving, submission) + Capabilities (pure state transforms) with state in 
 
 The SDK runs ledger-v8 below the protocol boundary and ledger-v9 from it, so both are installed and both are real:
 
-- **`@midnight-ntwrk/ledger-v8`** — ledger-v8, run by the `v1` variants below `forks.v9`
+- **`@midnightntwrk/ledger-v8`** — ledger-v8, run by the `v1` variants below `forks.v9`
 - **`@midnightntwrk/ledger-v9`** — ledger-v9, run by the `v2` variants from `forks.v9`
-- **Watch the scope.** `@midnight-ntwrk` (hyphenated) and `@midnightntwrk` (not) are **two different npm orgs**, and the
-  two ledgers are published under different ones. One character decides which package you import; getting it wrong
-  yields a module-not-found for a package that plainly exists. Copy the specifier, do not type it.
+- **Watch the scope.** Every Midnight package the SDK depends on comes from the public `@midnightntwrk` npm org.
+  `@midnight-ntwrk` (hyphenated) is a legacy org that mirrors the same builds, and it is still in `node_modules`: the
+  published releases `serialization-tests` restores from depend on it. A hyphenated import therefore resolves rather
+  than failing — to a second copy of the ledger, whose objects the SDK's own copy does not accept. Copy the specifier,
+  do not type it.
 - Never hardcode a ledger version in SDK code that a wallet runs. Version travels as `ProtocolVersion` data;
   `packages/abstractions/src/WalletTransaction.ts` is how a transaction carries the version that built it.
 
@@ -123,7 +125,7 @@ The SDK runs ledger-v8 below the protocol boundary and ledger-v9 from it, so bot
 Each of the three wallet packages holds **two variants of the same wallet**, one per ledger version, in sibling
 directories under `src/`:
 
-- **`src/v1`** - the **V1** variant, on `@midnight-ntwrk/ledger-v8`. Active below the chain's `forks.v9`.
+- **`src/v1`** - the **V1** variant, on `@midnightntwrk/ledger-v8`. Active below the chain's `forks.v9`.
 - **`src/v2`** - the **V2** variant, on `@midnightntwrk/ledger-v9`. Active from `forks.v9` upwards.
 
 The two trees are near-identical modulo the ledger import: same file names, same exports with `V1`/`V2` in their names.
@@ -207,6 +209,6 @@ touched; full rationale and worked examples: `docs/CodingConventions.md`.
   `yarn dist` needed before `yarn test`.
 - **Turbo's cache can be stale** after branch switches, rebases, or changes it doesn't track — bypass with `--force`
   (`yarn dist --force`, `yarn test --force`).
-- **Two npm scopes, one character apart** — `@midnight-ntwrk/ledger-v8` and `@midnightntwrk/ledger-v9` live in different
-  orgs (see Two ledgers, side by side); a module-not-found for a ledger that is plainly installed is almost always the
-  hyphen.
+- **A hyphen away from the legacy scope** — `@midnight-ntwrk/ledger-v8` still resolves, to a second copy of the ledger
+  (see Two ledgers, side by side); a ledger object the wallet rejects although it is plainly the right type is almost
+  always a hyphenated import.

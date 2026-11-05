@@ -20,14 +20,14 @@ import {
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { HttpProverClient, WasmProver } from '@midnightntwrk/wallet-sdk-prover-client/effect';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { Effect, Either, Schedule, Duration, type Scope, pipe } from 'effect';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
 import { getNonDustImbalance } from './utils.js';
 
-const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:9.0.0-rc.10';
+const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:9.0.0';
 /** The proof server of the epoch before the boundary: no image serves both sides, so the ledger-v8 case needs its own. */
 const V8_PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:8.1.0';
 const PROOF_SERVER_PORT: number = 6300;

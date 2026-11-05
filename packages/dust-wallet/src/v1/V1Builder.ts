@@ -17,7 +17,7 @@ import {
   DustSecretKey,
   type FinalizedTransaction,
   LedgerParameters,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import {
   WalletRuntimeError,
   type StartMaterial,

@@ -19,7 +19,7 @@
 // dust whose fixtures must mint real events through a simulator. What is NOT synthetic here is the identity: the owner
 // address is derived through the real keystore from a fixed seed, so the UTXOs are addressed to an address the ledger
 // would actually produce.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Ref } from 'effect';
 import { createKeystore, type PublicKey, PublicKey as PublicKeyOps } from '../KeyStore.js';

@@ -32,7 +32,7 @@ import {
   type SignatureVerifyingKey,
   type FinalizedTransaction,
   type UnprovenTransaction,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { ProtocolVersion, Token, VariantState } from '@midnightntwrk/wallet-sdk-abstractions';
 import { InsufficientDustForFeeError, OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
 import { dustTreeRoots } from './Utils.js';

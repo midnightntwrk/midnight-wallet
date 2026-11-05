@@ -30,7 +30,7 @@
  * Every version here is arbitrary and test-supplied: the real fork version is not final and must never be hardcoded.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Cause, Effect, Exit, Fiber, Option, pipe, type Array as Arr } from 'effect';

@@ -4,7 +4,7 @@
 
 Breaking changes since 4.x
 
-The facade runs `@midnight-ntwrk/ledger-v8` below the chain's `forks.v9` and `@midnightntwrk/ledger-v9` from it, and
+The facade runs `@midnightntwrk/ledger-v8` below the chain's `forks.v9` and `@midnightntwrk/ledger-v9` from it, and
 follows a live chain across that boundary: balances, coins and transaction history survive the crossing, and a wallet
 restored from a snapshot crosses too.
 
@@ -66,7 +66,7 @@ restored from a snapshot crosses too.
   Entries carry a `lifecycle`, and a recorded inclusion wins over a later rejection. `mergeWalletEntries` keeps a
   finalized entry over a rejected one, keeps the first writer's facts, unions `identifiers` and keeps the fields it does
   not declare.
-- **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` beside `@midnight-ntwrk/ledger-v8`, so a browser
+- **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `^1.0.0` beside `@midnightntwrk/ledger-v8`, so a browser
   bundle loads both ledgers' WASM modules.
 
 Migrating from 4.x:

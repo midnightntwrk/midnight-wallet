@@ -30,7 +30,7 @@ import {
   DustSecretKey as V8SecretKey,
   Event as V8Event,
   LedgerParameters as V8LedgerParameters,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, Schema } from 'effect';

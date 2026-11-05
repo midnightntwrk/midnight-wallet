@@ -19,7 +19,7 @@ import {
   type QualifiedDustOutput,
   Transaction,
   type UnprovenTransaction,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';

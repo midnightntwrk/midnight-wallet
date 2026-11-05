@@ -26,7 +26,7 @@
  *   synchronous and blocks the event loop, so no test timeout could stop it. The guard turns that into a failure after
  *   a bounded number of coin-selection fetches and calls; a loop that settles never gets near it.
  */
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';

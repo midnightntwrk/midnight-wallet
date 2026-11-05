@@ -29,7 +29,7 @@ import {
   dustKeys,
 } from './key-derivation-reference.js';
 import { Roles, derivationPath, seedAt, walletSeeds } from './seed-derivation-reference.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 
 type AddressEntry = { hex: string; bech32m: string };
 type NullableAddressEntry = { hex: string | null; bech32m: string | null };

@@ -25,7 +25,7 @@
  *
  *   Network is needed (the key material is fetched); Docker is not.
  */
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as WasmProver from '../WasmProver.js';

@@ -52,38 +52,45 @@ have_bindgen="$(wasm-bindgen --version | awk '{print $2}')"
 # `[patch.crates-io]` points at the result. Delete all of this — the patch, this block, and that `[patch]` entry — once
 # a published `midnight-storage` has it.
 #
-# The source is the midnight-ledger git tag below rather than crates.io, because the ledger-v9 tag `Cargo.toml` pins
-# needs a `midnight-storage` that is not published there yet. Like the tags there, it is the crate's own release tag,
-# where its dependencies are plain versions that `[patch]` redirects rather than paths into the ledger's checkout. A crate inside the
-# upstream workspace inherits `license` and `repository` from it, so the patch also spells those out; if it stops
-# applying, the crate has moved and the patch needs regenerating — a hard failure rather than a silently unpatched
-# build.
+# The source is the published crate: the release the ledger-v9 crates resolve to on crates.io, so the vendored copy
+# differs from what they would otherwise build against by the patch alone. If the patch stops applying, the crate has
+# moved and the patch needs regenerating — a hard failure rather than a silently unpatched build.
 #
-# The source is fetched by the commit the tag points at, never by the tag: a tag can be moved, and this source is
-# compiled into the WASM the package ships. Moving to a new tag means updating both, from
-# `git ls-remote https://github.com/midnightntwrk/midnight-ledger 'refs/tags/<tag>^{}'`.
+# The archive is checked against the checksum the crates.io index records for that version before anything is
+# extracted: this source is compiled into the WASM the package ships. Moving to a new version means updating both, the
+# checksum from the `cksum` field of that version's line in `curl -s https://index.crates.io/mi/dn/midnight-storage`.
 # ---------------------------------------------------------------------------
-storage_tag=storage-2.0.4-rc.1
-storage_rev=971a9960b6c281c80fcd7ad873e3ec10b9476404
+storage_version=2.0.4
+storage_sha256=a323e4919828de8316fde57fae86c00e2c89bf9657372f7ec17542eb88440e13
 storage_patch="$crate_dir/patches/midnight-storage-wasm-instant.patch"
 
-# The stamp covers the patch as well as the commit: editing the patch without the commit moving would otherwise keep
+sha256_of() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | awk '{print $1}'; }
+
+# The stamp covers the patch as well as the source: editing the patch without the version moving would otherwise keep
 # building from the previously patched tree until `.vendor` was deleted by hand.
-patch_digest="$({ sha256sum "$storage_patch" 2>/dev/null || shasum -a 256 "$storage_patch"; } | awk '{print $1}')"
+patch_digest="$(sha256_of "$storage_patch")"
 storage_dir="$vendor_dir/midnight-storage"
 stamp="$storage_dir/.patched-version"
-if [ "$(cat "$stamp" 2>/dev/null || true)" != "$storage_rev $patch_digest" ]; then
-  echo "vendoring midnight-storage $storage_tag ($storage_rev) with the wasm clock patch"
+if [ "$(cat "$stamp" 2>/dev/null || true)" != "$storage_version $storage_sha256 $patch_digest" ]; then
+  echo "vendoring midnight-storage $storage_version from crates.io with the wasm clock patch"
   rm -rf "$storage_dir"
   mkdir -p "$storage_dir"
-  curl -sSfL "https://codeload.github.com/midnightntwrk/midnight-ledger/tar.gz/${storage_rev}" \
-    | tar xz -C "$storage_dir" --strip-components=2 "midnight-ledger-${storage_rev}/storage"
+  archive="$vendor_dir/midnight-storage-$storage_version.crate"
+  curl -sSfL "https://static.crates.io/crates/midnight-storage/midnight-storage-${storage_version}.crate" -o "$archive"
+  have_sha256="$(sha256_of "$archive")"
+  [ "$have_sha256" = "$storage_sha256" ] || {
+    echo "error: midnight-storage $storage_version downloaded with sha256 $have_sha256, expected $storage_sha256." >&2
+    rm -f "$archive"
+    exit 1
+  }
+  tar xzf "$archive" -C "$storage_dir" --strip-components=1
+  rm -f "$archive"
   patch -p1 -s -d "$storage_dir" <"$storage_patch" || {
-    echo "error: $storage_patch does not apply to midnight-storage $storage_tag ($storage_rev)." >&2
+    echo "error: $storage_patch does not apply to midnight-storage $storage_version." >&2
     echo "       The crate has moved; regenerate the patch (see ../README.md) or drop it if the fix is now released." >&2
     exit 1
   }
-  echo "$storage_rev $patch_digest" >"$stamp"
+  echo "$storage_version $storage_sha256 $patch_digest" >"$stamp"
 fi
 
 # The stack protector pulls in OS code that does not exist on wasm — the same reason midnight-ledger's nix build

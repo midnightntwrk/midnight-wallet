@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type DustLocalState } from '@midnight-ntwrk/ledger-v8';
+import { type DustLocalState } from '@midnightntwrk/ledger-v8';
 import { ScaleBigInt } from '@midnightntwrk/wallet-sdk-address-format';
 import { type DustTreeRoots } from '../SpendTime.js';
 

@@ -20,7 +20,7 @@
  *   version boundary, identity only.
  */
 
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';

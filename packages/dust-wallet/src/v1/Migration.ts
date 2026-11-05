@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type DustParameters, DustSecretKey } from '@midnight-ntwrk/ledger-v8';
+import { type DustParameters, DustSecretKey } from '@midnightntwrk/ledger-v8';
 import { SnapshotFormat, type SyncProgress, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect } from 'effect';
 import { CoreWallet } from './CoreWallet.js';

@@ -67,7 +67,7 @@ import {
   WalletTransaction,
   WireFormatError,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import { type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import * as Signatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import {

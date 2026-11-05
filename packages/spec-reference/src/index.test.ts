@@ -27,7 +27,7 @@ import {
   ShieldedEncryptionSecretKey,
   UnshieldedAddress,
 } from './address-format-reference.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import * as ledger9 from '@midnightntwrk/ledger-v9';
 import {
   coinKeys,

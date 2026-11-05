@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { DustLocalState, DustSecretKey, LedgerParameters, dustNullifier } from '@midnight-ntwrk/ledger-v8';
+import { DustLocalState, DustSecretKey, LedgerParameters, dustNullifier } from '@midnightntwrk/ledger-v8';
 import { NetworkId, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either, pipe } from 'effect';
