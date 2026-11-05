@@ -1,5 +1,17 @@
 # @midnightntwrk/wallet-sdk
 
+## 2.0.0-rc.3
+
+### Patch Changes
+
+- Updated dependencies [2e933df]
+- Updated dependencies [d898335]
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-rc.3
+  - @midnightntwrk/wallet-sdk-facade@5.0.0-rc.3
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-rc.3
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-rc.3
+
 ## 2.0.0-rc.2
 
 ### Major Changes

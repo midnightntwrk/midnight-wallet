@@ -1,6 +1,6 @@
 {
   "name": "@midnightntwrk/wallet-sdk-dust-wallet",
-  "version": "5.0.0-rc.2",
+  "version": "5.0.0-rc.3",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -37,7 +37,7 @@
     "@midnight-ntwrk/ledger-v8": "^8.1.0",
     "@midnightntwrk/ledger-v9": "1.0.0-rc.7",
     "@midnightntwrk/wallet-sdk-abstractions": "3.0.0-rc.2",
-    "@midnightntwrk/wallet-sdk-address-format": "4.0.0-rc.1",
+    "@midnightntwrk/wallet-sdk-address-format": "4.0.0-rc.2",
     "@midnightntwrk/wallet-sdk-capabilities": "4.0.0-rc.2",
     "@midnightntwrk/wallet-sdk-indexer-client": "2.0.0-rc.2",
     "@midnightntwrk/wallet-sdk-runtime": "2.0.0-rc.2",

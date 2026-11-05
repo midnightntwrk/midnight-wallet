@@ -15,6 +15,8 @@
 // ledger-v9 chain, and the hard-fork lane's crossing from event sync into projections sync — and a wallet that
 // disagreed with its twin in only one of them would be a finding either suite could miss, so the comparison lives in
 // one place rather than in each.
+import { Buffer } from 'node:buffer';
+import { ScaleBigInt } from '@midnightntwrk/wallet-sdk-address-format';
 import { eitherCoreStateOf } from '@midnightntwrk/wallet-sdk-utilities/testing/variants';
 import { Array as Arr } from 'effect';
 import { type FacadeState } from '@midnightntwrk/wallet-sdk-facade';
@@ -59,6 +61,22 @@ export const sameItems = <T>(
   left.length === right.length &&
   Arr.differenceWith<T>(equal)(left, right).length === 0 &&
   Arr.differenceWith<T>(equal)(right, left).length === 0;
+
+/** A dust state's two tree roots, or a block's, in the indexer's hex encoding. */
+export type EncodedDustTreeRoots = Readonly<{ commitment: string; generation: string }>;
+
+const scaleCompactHex = (root: bigint | undefined): string =>
+  root === undefined ? '' : Buffer.from(ScaleBigInt.encode(root)).toString('hex');
+
+/**
+ * A dust state's tree roots, SCALE-compact hex-encoded: the encoding the dust wallet uses to match its trees against a
+ * block, and the one the indexer reports a block's roots in. A root the ledger does not give reads as the empty
+ * string.
+ */
+export const encodedDustTreeRoots = (state: SyncedDustState): EncodedDustTreeRoots => ({
+  commitment: scaleCompactHex(state.commitmentTreeRoot()),
+  generation: scaleCompactHex(state.generatingTreeRoot()),
+});
 
 export const rootsEqual = (state1: SyncedDustState, state2: SyncedDustState): boolean =>
   state1.commitmentTreeRoot() === state2.commitmentTreeRoot() &&

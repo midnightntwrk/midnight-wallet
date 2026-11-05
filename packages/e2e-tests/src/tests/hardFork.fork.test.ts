@@ -54,10 +54,18 @@ import {
   type WalletEntry,
   WalletFacade,
 } from '@midnightntwrk/wallet-sdk-facade';
+import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
+import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { type ForkFixture, useForkFixture } from './fork-fixture.js';
 import * as utils from './utils.js';
 import { carried } from './helpers/transactions.js';
-import { rootsEqual, sameDustCoins, dustLocalStateOf } from './helpers/dustComparison.js';
+import {
+  type EncodedDustTreeRoots,
+  encodedDustTreeRoots,
+  rootsEqual,
+  sameDustCoins,
+  dustLocalStateOf,
+} from './helpers/dustComparison.js';
 import { logger } from './logger.js';
 
 /** The dev preset's funded account. */
@@ -585,6 +593,57 @@ describe.sequential('Hard fork crossing @fork', () => {
       expect(nightBefore).toBe(v8State.unshielded.balances[NIGHT]);
     },
     SPEND_TIMEOUT_MS + 5 * 60 * 1000,
+  );
+
+  test(
+    'holds the dust tree roots the ledger-v8 indexer reports for a block it has synced to',
+    async () => {
+      // The dust wallet dates a fee spend only at a block whose roots it holds, matched in the encoding below. Were its
+      // encoding of its own roots to differ from the indexer's, no ledger-v8 block would ever match and every
+      // ledger-v8 fee would be refused.
+      // One reading: the indexer's newest block, then the wallet's state once it reports itself synced. Read in that
+      // order so the wallet has had the chance to apply everything up to the block; the two can still be a block apart
+      // when the chain moves between the reads, which is why a disagreeing reading is retried rather than failed.
+      const readRoots = async () => {
+        const { block } = await QueryRunner.runPromise(BlockHash, { offset: null }, { url: fixture.getIndexerUri() });
+        if (block === null) throw new Error('the indexer reported no block');
+        const state = await wallet.waitForSyncedState();
+        return {
+          height: block.height,
+          protocolVersion: block.protocolVersion,
+          walletDustVersion: state.protocolVersion.dust,
+          wallet: encodedDustTreeRoots(dustLocalStateOf(state.dust)),
+          indexer: {
+            commitment: block.dustCommitmentMerkleTreeRoot ?? '',
+            generation: block.dustGenerationMerkleTreeRoot ?? '',
+          } satisfies EncodedDustTreeRoots,
+        };
+      };
+      type Reading = Awaited<ReturnType<typeof readRoots>>;
+      const agree = (reading: Reading): boolean =>
+        reading.wallet.commitment === reading.indexer.commitment &&
+        reading.wallet.generation === reading.indexer.generation;
+
+      // The first agreeing reading, or the last one taken before the deadline, so a failure shows both sides' roots.
+      const reading = await rx.firstValueFrom(
+        rx.timer(0, DUST_POLL_MS).pipe(
+          rx.concatMap(() => rx.defer(readRoots)),
+          rx.tap((each) => logger.info(`ledger-v8 dust roots at block ${each.height}: ${asJson(each)}`)),
+          rx.takeUntil(rx.timer(RESYNC_TIMEOUT_MS)),
+          rx.takeWhile((each) => !agree(each), true),
+          rx.last(),
+        ),
+      );
+
+      // A ledger-v8 block, read by the V1 variant: this is the encoding ledger-v8 fees are dated against.
+      expect(reading.protocolVersion).toBe(V8_SPEC_VERSION);
+      expect(reading.walletDustVersion).toBeLessThan(ProtocolVersion.V9NativeForkVersion);
+      // The indexer must report roots for the comparison to say anything: two absent roots agree vacuously.
+      expect(reading.indexer.commitment).not.toBe('');
+      expect(reading.indexer.generation).not.toBe('');
+      expect(reading.wallet).toEqual(reading.indexer);
+    },
+    RESYNC_TIMEOUT_MS + 60_000,
   );
 
   test('enacts the ledger 8 to 9 hard fork through governance', async () => {

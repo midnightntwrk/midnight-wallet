@@ -1,0 +1,17 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    // test/bech32.test.ts reads the specification's address vectors from packages/spec-reference rather than keeping a
+    // copy. Declared as an input so a change to those vectors re-runs the tests instead of replaying a cached pass.
+    "test": {
+      "inputs": ["$TURBO_EXTENDS$", "$TURBO_ROOT$/packages/spec-reference/test-vectors/addresses.json"]
+    },
+    "test:unit": {
+      "inputs": ["$TURBO_EXTENDS$", "$TURBO_ROOT$/packages/spec-reference/test-vectors/addresses.json"]
+    },
+    "typecheck": {
+      "inputs": ["$TURBO_EXTENDS$", "$TURBO_ROOT$/packages/spec-reference/test-vectors/addresses.json"]
+    }
+  }
+}
