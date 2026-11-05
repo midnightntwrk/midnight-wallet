@@ -2781,7 +2781,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnightntwrk/wallet-sdk-utilities@npm:1.3.0, @midnightntwrk/wallet-sdk-utilities@npm:^1.3.0, @midnightntwrk/wallet-sdk-utilities@workspace:*, @midnightntwrk/wallet-sdk-utilities@workspace:^, @midnightntwrk/wallet-sdk-utilities@workspace:packages/utilities":
+"@midnightntwrk/wallet-sdk-utilities@npm:1.3.0, @midnightntwrk/wallet-sdk-utilities@npm:^1.2.0, @midnightntwrk/wallet-sdk-utilities@npm:^1.3.0, @midnightntwrk/wallet-sdk-utilities@workspace:*, @midnightntwrk/wallet-sdk-utilities@workspace:^, @midnightntwrk/wallet-sdk-utilities@workspace:packages/utilities":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-utilities@workspace:packages/utilities"
   dependencies:
@@ -2790,16 +2790,6 @@ __metadata:
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
-
-"@midnightntwrk/wallet-sdk-utilities@npm:^1.2.0":
-  version: 1.2.1
-  resolution: "@midnightntwrk/wallet-sdk-utilities@npm:1.2.1"
-  dependencies:
-    effect: "npm:^3.19.19"
-    rxjs: "npm:^7.8.2"
-  checksum: 10c0/e077d8450e9989f6ca1ad736ac92e9e1041495da985f9cab3b1502a476344d3375a1d1a477434ba1d4c782cf63e11a211982eeaa7b9b20546cd91bf1a29f21df
-  languageName: node
-  linkType: hard
 
 "@midnightntwrk/wallet-sdk@workspace:*, @midnightntwrk/wallet-sdk@workspace:packages/wallet-sdk":
   version: 0.0.0-use.local
