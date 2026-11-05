@@ -17,9 +17,10 @@
  * @remarks
  *   The node verifies a Dust spend's proof against the Dust tree roots it recorded at the spend's `ctime`, while the
  *   proof itself is built from the wallet's local trees. Dating a spend at the newest block is therefore only sound
- *   when the local trees hold exactly that block's roots. These tests drive `RunningV1Variant.balanceTransactions` with
- *   a wallet whose trees are one real Dust event behind (or ahead of) the block the indexer reports, and record the
- *   state and time the transacting capability is asked to spend with.
+ *   when the local trees hold exactly that block's roots. The V1 variant syncs by events only, which keep no block
+ *   height, so it has no block of its own to fall back on. These tests drive `RunningV1Variant.balanceTransactions`
+ *   with a wallet whose trees are one real Dust event behind (or ahead of) the block the indexer reports, and record
+ *   the state and time the transacting capability is asked to spend with.
  */
 import {
   type DustSecretKey,
@@ -29,6 +30,7 @@ import {
   type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ScaleBigInt } from '@midnightntwrk/wallet-sdk-address-format';
 import {
   Cause,
   Duration,
@@ -36,6 +38,8 @@ import {
   Either,
   Exit,
   Fiber,
+  Layer,
+  Logger,
   Option,
   Scope,
   Stream,
@@ -48,18 +52,23 @@ import { chooseCoin, makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBa
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
 import { RunningV1Variant } from '../RunningV1Variant.js';
-import { ScaleBigInt } from '@midnightntwrk/wallet-sdk-address-format';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { BackgroundRepeat, type BlockData, type SyncService } from '../Sync.js';
 import { TransactingCapabilityImplementation } from '../Transacting.js';
 import { type AnyTransaction } from '../types/index.js';
+import { dustTreeRoots, type DustTreeRoots } from '../Utils.js';
 import { OtherWalletError, type WalletError } from '../WalletError.js';
 import { buildDustChain, DUST_EVENT_COUNT, eventAt, fixtureSecretKey, freshWallet } from './dustEvents.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const TIP_TIME = new Date('2026-10-06T23:30:24Z');
 const LATER_TIP_TIME = new Date('2026-10-06T23:30:30Z');
+const OWN_BLOCK_TIME = new Date('2026-10-06T23:30:12Z');
 const TTL = new Date('2026-10-07T00:30:00Z');
+const TIP_HEIGHT = 8;
+const LATER_TIP_HEIGHT = 9;
+const OWN_HEIGHT = 7;
+const NOT_HELD = 'a-root-not-held-locally';
 
 type SpendCall = { readonly state: CoreWallet; readonly currentTime: Date };
 
@@ -105,49 +114,64 @@ const makeRecordingTransacting = (
   );
 };
 
-type Roots = { readonly commitment: string; readonly generation: string };
-
-/** A tree root as the indexer serializes it: SCALE-encoded, hex, the same for ledger-v8 and ledger-v9 blocks. */
-const indexerHex = (root: bigint | undefined): string =>
-  root === undefined ? '' : Buffer.from(ScaleBigInt.encode(root)).toString('hex');
-
 /** The Dust tree roots of a wallet, encoded the way the indexer reports a block's roots. */
-const rootsOf = (wallet: CoreWallet): Roots => ({
-  commitment: indexerHex(wallet.state.commitmentTreeRoot()),
-  generation: indexerHex(wallet.state.generatingTreeRoot()),
-});
+const rootsOf = (wallet: CoreWallet): DustTreeRoots => dustTreeRoots(wallet.state);
 
-/** A block at `timestamp`; without `roots` it reports none, as the simulator's blocks and older sync services do. */
-const blockAt = (timestamp: Date, roots?: Roots): BlockData => ({
-  hash: 'block-hash',
-  height: 1,
+/** SCALE-compact hex written out by hand, so the encoding under test is checked against something other than itself. */
+const scaleHex = (n: bigint | undefined): string =>
+  n === undefined ? '' : Buffer.from(ScaleBigInt.encode(n)).toString('hex');
+
+/**
+ * A block at `timestamp`. Without `roots` it reports none, as the simulator's blocks do and as an indexer block with
+ * null roots decodes to; a `roots` field left `undefined` reports that one root only.
+ */
+const blockAt = (
+  timestamp: Date,
+  roots?: { readonly commitment?: string; readonly generation?: string },
+  height: number = TIP_HEIGHT,
+): BlockData => ({
+  hash: `block-hash-${height}`,
+  height,
   protocolVersion: 0,
   ledgerParameters: LedgerParameters.initialParameters(),
   timestamp,
-  ...(roots === undefined
-    ? {}
-    : { dustCommitmentMerkleTreeRoot: roots.commitment, dustGenerationMerkleTreeRoot: roots.generation }),
+  ...(roots?.commitment === undefined ? {} : { dustCommitmentMerkleTreeRoot: roots.commitment }),
+  ...(roots?.generation === undefined ? {} : { dustGenerationMerkleTreeRoot: roots.generation }),
 });
 
-/** A sync service with no updates whose newest block is the next of `blocks` on each call, then the last one forever. */
-const syncServiceReporting = (blocks: readonly BlockData[]): SyncService<CoreWallet, null, never> => {
+/**
+ * A sync service with no updates. Its newest block is the next of `tips` on each call, then the last one forever; a
+ * block at a given height is the one in `pastBlocks` at that height.
+ */
+const syncServiceReporting = (
+  tips: readonly BlockData[],
+  pastBlocks: readonly BlockData[],
+): SyncService<CoreWallet, null, never> => {
   const served = { count: 0 };
   return {
     backgroundRepeat: BackgroundRepeat.Once(),
     updates: () => Stream.empty,
-    blockData: () =>
-      Effect.sync(() => {
-        const block = blocks[Math.min(served.count, blocks.length - 1)];
-        served.count += 1;
-        return block;
-      }),
+    blockData: (height?: number) => {
+      if (height === undefined) {
+        return Effect.sync(() => {
+          const block = tips[Math.min(served.count, tips.length - 1)];
+          served.count += 1;
+          return block;
+        });
+      }
+      const past = pastBlocks.find((block) => block.height === height);
+      return past === undefined
+        ? Effect.fail(new OtherWalletError({ message: `no block at height ${height}` }))
+        : Effect.succeed(past);
+    },
   };
 };
 
 const variantOver = (
   stateRef: SubscriptionRef.SubscriptionRef<CoreWallet>,
   scope: Scope.Scope,
-  blocks: readonly BlockData[],
+  tips: readonly BlockData[],
+  pastBlocks: readonly BlockData[],
   transacting: RecordingTransacting,
 ): RunningV1Variant<string, never, ProofErasedTransaction, null> => {
   const keysCapability = makeDefaultKeysCapability();
@@ -162,7 +186,7 @@ const variantOver = (
     },
     {
       serializationCapability: makeDefaultV1SerializationCapability(),
-      syncService: syncServiceReporting(blocks),
+      syncService: syncServiceReporting(tips, pastBlocks),
       syncCapability: { applyUpdate: (state) => [state, { changes: [], protocolVersion: 1 }] },
       transactingCapability: transacting,
       coinsAndBalancesCapability: makeDefaultCoinsAndBalancesCapability(undefined, () => ({ keysCapability })),
@@ -172,6 +196,9 @@ const variantOver = (
     },
   );
 };
+
+const failureTagOf = (exit: Exit.Exit<unknown, WalletError>): Option.Option<string> =>
+  Exit.isFailure(exit) ? Option.map(Cause.failureOption(exit.cause), (error) => error._tag) : Option.none();
 
 describe('RunningV1Variant.balanceTransactions spend time', () => {
   // `behind` holds every fixture Dust event but the last; `caughtUp` holds all of them. Built once: the fixture's
@@ -194,7 +221,12 @@ describe('RunningV1Variant.balanceTransactions spend time', () => {
       eventsUpTo(DUST_EVENT_COUNT),
       chain.syncTime,
     );
-    // Every case below relies on the two wallets' roots being real, non-empty and different.
+    // Every case below relies on the two wallets' roots being real, non-empty, different, and encoded as the indexer
+    // encodes them.
+    expect(rootsOf(caughtUp)).toEqual({
+      commitment: scaleHex(caughtUp.state.commitmentTreeRoot()),
+      generation: scaleHex(caughtUp.state.generatingTreeRoot()),
+    });
     expect(rootsOf(caughtUp).commitment).not.toBe('');
     expect(rootsOf(behind)).not.toEqual(rootsOf(caughtUp));
     wallets.behind = behind;
@@ -207,27 +239,31 @@ describe('RunningV1Variant.balanceTransactions spend time', () => {
   /** Starts balancing in a fiber against `initial`, under the test clock. */
   const balancing = (
     initial: CoreWallet,
-    blocks: readonly BlockData[],
-    currentTime?: Date,
-    Capability: typeof RecordingTransacting = RecordingTransacting,
+    tips: readonly BlockData[],
+    options: {
+      readonly currentTime?: Date;
+      readonly Capability?: typeof RecordingTransacting;
+      readonly pastBlocks?: readonly BlockData[];
+    } = {},
   ) =>
     Effect.gen(function* () {
       const stateRef = yield* SubscriptionRef.make(initial);
       const scope = yield* Scope.make();
-      const transacting = makeRecordingTransacting(Capability);
-      const variant = variantOver(stateRef, scope, blocks, transacting);
-      const fiber = yield* Effect.fork(variant.balanceTransactions(fixtureSecretKey(), [], TTL, currentTime));
+      const transacting = makeRecordingTransacting(options.Capability);
+      const variant = variantOver(stateRef, scope, tips, options.pastBlocks ?? [], transacting);
+      const fiber = yield* Effect.fork(variant.balanceTransactions(fixtureSecretKey(), [], TTL, options.currentTime));
       return { stateRef, transacting, fiber };
     });
 
-  it('should date the spend at the newest block when the local trees hold that block’s roots', async () => {
+  it('should date the spend at the newest block when the local trees hold that block’s roots, because the node then finds the roots the proof names', async () => {
     const result = await Effect.gen(function* () {
       const { transacting, fiber } = yield* balancing(caughtUp(), [blockAt(TIP_TIME, rootsOf(caughtUp()))]);
-      const exit = yield* Fiber.await(fiber);
+      yield* TestClock.adjust(Duration.millis(1));
+      const exit = yield* Fiber.poll(fiber);
       return { exit, calls: transacting.calls };
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
 
-    expect(Exit.isSuccess(result.exit)).toBe(true);
+    expect(Option.map(result.exit, Exit.isSuccess)).toEqual(Option.some(true));
     expect(result.calls).toHaveLength(1);
     expect(result.calls[0].currentTime).toEqual(TIP_TIME);
     expect(rootsOf(result.calls[0].state)).toEqual(rootsOf(caughtUp()));
@@ -253,12 +289,44 @@ describe('RunningV1Variant.balanceTransactions spend time', () => {
     expect(rootsOf(result.calls[0].state)).toEqual(rootsOf(caughtUp()));
   });
 
-  it('should read the newest block again when the local trees are ahead of it, and date the spend at the block they match', async () => {
+  it('should wait when only the commitment tree is behind the newest block, because other wallets’ spends move that tree alone', async () => {
+    const result = await Effect.gen(function* () {
+      const reported = { commitment: NOT_HELD, generation: rootsOf(caughtUp()).generation };
+      const { transacting, fiber } = yield* balancing(caughtUp(), [blockAt(TIP_TIME, reported)]);
+      yield* TestClock.adjust(Duration.seconds(1));
+      const whileWaiting = yield* Fiber.poll(fiber);
+      yield* TestClock.adjust(Duration.minutes(10));
+      const exit = yield* Fiber.await(fiber);
+      return { whileWaiting, exit, calls: transacting.calls };
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(Option.isNone(result.whileWaiting)).toBe(true);
+    expect(result.calls).toHaveLength(0);
+    expect(failureTagOf(result.exit)).toEqual(Option.some('Wallet.Sync'));
+  });
+
+  it('should wait when only the generation tree is behind the newest block, because the proof covers both trees', async () => {
+    const result = await Effect.gen(function* () {
+      const reported = { commitment: rootsOf(caughtUp()).commitment, generation: NOT_HELD };
+      const { transacting, fiber } = yield* balancing(caughtUp(), [blockAt(TIP_TIME, reported)]);
+      yield* TestClock.adjust(Duration.seconds(1));
+      const whileWaiting = yield* Fiber.poll(fiber);
+      yield* TestClock.adjust(Duration.minutes(10));
+      const exit = yield* Fiber.await(fiber);
+      return { whileWaiting, exit, calls: transacting.calls };
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(Option.isNone(result.whileWaiting)).toBe(true);
+    expect(result.calls).toHaveLength(0);
+    expect(failureTagOf(result.exit)).toEqual(Option.some('Wallet.Sync'));
+  });
+
+  it('should read the newest block again when the local trees are ahead of it, and date the spend at the block they match, because the indexer’s view can trail the wallet', async () => {
     const result = await Effect.gen(function* () {
       // The indexer's HTTP view first reports a block whose events the wallet has already gone past.
       const { transacting, fiber } = yield* balancing(caughtUp(), [
         blockAt(TIP_TIME, rootsOf(behind())),
-        blockAt(LATER_TIP_TIME, rootsOf(caughtUp())),
+        blockAt(LATER_TIP_TIME, rootsOf(caughtUp()), LATER_TIP_HEIGHT),
       ]);
       yield* TestClock.adjust(Duration.seconds(5));
       const exit = yield* Fiber.await(fiber);
@@ -268,73 +336,128 @@ describe('RunningV1Variant.balanceTransactions spend time', () => {
     expect(Exit.isSuccess(result.exit)).toBe(true);
     expect(result.calls).toHaveLength(1);
     expect(result.calls[0].currentTime).toEqual(LATER_TIP_TIME);
+    expect(Exit.isSuccess(result.exit) ? result.exit.value.blockData.height : undefined).toBe(LATER_TIP_HEIGHT);
   });
 
-  it('should fail with a sync error, spending nothing, when the local trees never reach the newest block’s roots', async () => {
+  it('should keep waiting for two minutes, so a sync that falls briefly behind can still deliver the roots', async () => {
+    const result = await Effect.gen(function* () {
+      const { stateRef, transacting, fiber } = yield* balancing(behind(), [blockAt(TIP_TIME, rootsOf(caughtUp()))]);
+      yield* TestClock.adjust(Duration.seconds(119));
+      const at119Seconds = yield* Fiber.poll(fiber);
+      yield* SubscriptionRef.set(stateRef, caughtUp());
+      yield* TestClock.adjust(Duration.seconds(1));
+      const exit = yield* Fiber.poll(fiber);
+      return { at119Seconds, exit, calls: transacting.calls };
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(Option.isNone(result.at119Seconds)).toBe(true);
+    expect(Option.map(result.exit, Exit.isSuccess)).toEqual(Option.some(true));
+    expect(result.calls).toHaveLength(1);
+  });
+
+  it('should fail with a sync error naming both root pairs, spending nothing, when the local trees never reach the newest block’s roots, so lag and a broken encoding can be told apart', async () => {
     const result = await Effect.gen(function* () {
       const { transacting, fiber } = yield* balancing(behind(), [blockAt(TIP_TIME, rootsOf(caughtUp()))]);
       yield* TestClock.adjust(Duration.minutes(10));
-      const exit = yield* Fiber.await(fiber);
+      const exit = yield* Fiber.poll(fiber);
       return { exit, calls: transacting.calls };
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
 
     expect(result.calls).toHaveLength(0);
-    const failure = Exit.isFailure(result.exit) ? Cause.failureOption(result.exit.cause) : Option.none();
+    const failure = Option.flatMap(result.exit, (exit) =>
+      Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none(),
+    );
     expect(Option.map(failure, (error) => error._tag)).toEqual(Option.some('Wallet.Sync'));
+    expect(Option.map(failure, (error) => error.cause)).toEqual(
+      Option.some(
+        expect.objectContaining({
+          _tag: 'DustTreesNotAtBlock',
+          blockHeight: TIP_HEIGHT,
+          local: rootsOf(behind()),
+          reported: rootsOf(caughtUp()),
+        }),
+      ),
+    );
   });
 
-  it('should wait when only the generation tree is behind the newest block, because the proof covers both trees', async () => {
+  it('should fail at once when balancing itself fails, because only trees not at the block’s roots are worth waiting for', async () => {
     const result = await Effect.gen(function* () {
-      const reported = { commitment: rootsOf(caughtUp()).commitment, generation: 'a-generation-root-not-held-locally' };
-      const { transacting, fiber } = yield* balancing(caughtUp(), [blockAt(TIP_TIME, reported)]);
-      yield* TestClock.adjust(Duration.minutes(10));
-      const exit = yield* Fiber.await(fiber);
-      return { exit, calls: transacting.calls };
-    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
-
-    expect(result.calls).toHaveLength(0);
-    expect(Exit.isFailure(result.exit)).toBe(true);
-  });
-
-  it('should fail at once when balancing itself fails, because only trees behind the block are worth waiting for', async () => {
-    const result = await Effect.gen(function* () {
-      const { transacting, fiber } = yield* balancing(
-        caughtUp(),
-        [blockAt(TIP_TIME, rootsOf(caughtUp()))],
-        undefined,
-        FailingTransacting,
-      );
-      yield* TestClock.adjust(Duration.minutes(10));
-      const exit = yield* Fiber.await(fiber);
+      const { transacting, fiber } = yield* balancing(caughtUp(), [blockAt(TIP_TIME, rootsOf(caughtUp()))], {
+        Capability: FailingTransacting,
+      });
+      yield* TestClock.adjust(Duration.millis(1));
+      const exit = yield* Fiber.poll(fiber);
       return { exit, calls: transacting.calls };
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
 
     expect(result.calls).toHaveLength(1);
-    const failure = Exit.isFailure(result.exit) ? Cause.failureOption(result.exit.cause) : Option.none();
-    expect(Option.map(failure, (error) => error._tag)).toEqual(Option.some('Wallet.Other'));
+    expect(Option.flatMap(result.exit, failureTagOf)).toEqual(Option.some('Wallet.Other'));
   });
 
-  it('should date the spend at the newest block at once when the block reports no Dust roots, as the simulator’s do', async () => {
+  it('should not fall back to a block of its own, because the V1 variant syncs by events, which keep no block height', async () => {
+    const result = await Effect.gen(function* () {
+      const wallet = CoreWallet.updateProgress(caughtUp(), { highestIndex: BigInt(OWN_HEIGHT) });
+      const { transacting, fiber } = yield* balancing(
+        wallet,
+        [blockAt(TIP_TIME, { commitment: NOT_HELD, generation: NOT_HELD })],
+        { pastBlocks: [blockAt(OWN_BLOCK_TIME, rootsOf(caughtUp()), OWN_HEIGHT)] },
+      );
+      yield* TestClock.adjust(Duration.seconds(1));
+      const exit = yield* Fiber.poll(fiber);
+      return { exit, calls: transacting.calls };
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(Option.isNone(result.exit)).toBe(true);
+    expect(result.calls).toHaveLength(0);
+  });
+
+  it('should wait when the newest block reports one root and not the other, because a half-reported block still names a root the trees must hold', async () => {
+    const result = await Effect.gen(function* () {
+      const { transacting, fiber } = yield* balancing(caughtUp(), [
+        blockAt(TIP_TIME, { commitment: rootsOf(caughtUp()).commitment }),
+      ]);
+      yield* TestClock.adjust(Duration.seconds(1));
+      const exit = yield* Fiber.poll(fiber);
+      return { exit, calls: transacting.calls };
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(Option.isNone(result.exit)).toBe(true);
+    expect(result.calls).toHaveLength(0);
+  });
+
+  it('should date the spend at the newest block at once, with a warning, when the block reports no Dust roots, so a source that cannot report them still works and a real one that stops is noticed', async () => {
+    const logged: Array<{ readonly level: string; readonly message: string }> = [];
+    const recordingLogger = Logger.make(({ logLevel, message }) => {
+      logged.push({ level: logLevel.label, message: Array.isArray(message) ? message.join(' ') : String(message) });
+    });
     const result = await Effect.gen(function* () {
       const { transacting, fiber } = yield* balancing(behind(), [blockAt(TIP_TIME)]);
-      const exit = yield* Fiber.await(fiber);
+      yield* TestClock.adjust(Duration.millis(1));
+      const exit = yield* Fiber.poll(fiber);
       return { exit, calls: transacting.calls };
-    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+    }).pipe(
+      Effect.provide(Layer.merge(TestContext.TestContext, Logger.replace(Logger.defaultLogger, recordingLogger))),
+      Effect.runPromise,
+    );
 
-    expect(Exit.isSuccess(result.exit)).toBe(true);
+    expect(Option.map(result.exit, Exit.isSuccess)).toEqual(Option.some(true));
     expect(result.calls).toHaveLength(1);
     expect(result.calls[0].currentTime).toEqual(TIP_TIME);
+    expect(logged.filter((entry) => entry.level === 'WARN')).toHaveLength(1);
   });
 
   it('should use a time the caller passes at once, because the caller then owns the spend time', async () => {
     const callerTime = new Date('2026-10-06T23:29:54Z');
     const result = await Effect.gen(function* () {
-      const { transacting, fiber } = yield* balancing(behind(), [blockAt(TIP_TIME, rootsOf(caughtUp()))], callerTime);
-      const exit = yield* Fiber.await(fiber);
+      const { transacting, fiber } = yield* balancing(behind(), [blockAt(TIP_TIME, rootsOf(caughtUp()))], {
+        currentTime: callerTime,
+      });
+      yield* TestClock.adjust(Duration.millis(1));
+      const exit = yield* Fiber.poll(fiber);
       return { exit, calls: transacting.calls };
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
 
-    expect(Exit.isSuccess(result.exit)).toBe(true);
+    expect(Option.map(result.exit, Exit.isSuccess)).toEqual(Option.some(true));
     expect(result.calls).toHaveLength(1);
     expect(result.calls[0].currentTime).toEqual(callerTime);
   });
