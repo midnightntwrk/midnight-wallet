@@ -202,6 +202,15 @@ const syncedByProjectionsTo = (wallet: CoreWallet, height: number): CoreWallet =
 const failureTagOf = (exit: Exit.Exit<unknown, WalletError>): Option.Option<string> =>
   Exit.isFailure(exit) ? Option.map(Cause.failureOption(exit.cause), (error) => error._tag) : Option.none();
 
+/** The cause of a finished balancing's failure, if it finished and failed. */
+const causeOf = (exit: Option.Option<Exit.Exit<unknown, WalletError>>): Option.Option<unknown> =>
+  Option.flatMap(exit, (finished) =>
+    Exit.isFailure(finished)
+      ? // Type cast required because: not every member of the `WalletError` union declares a `cause` field.
+        Option.map(Cause.failureOption(finished.cause), (error) => (error as { readonly cause?: unknown }).cause)
+      : Option.none(),
+  );
+
 describe('RunningV2Variant.balanceTransactions spend time', () => {
   // `behind` holds every fixture Dust event but the last; `caughtUp` holds all of them. Built once: the fixture's
   // events are real chain events, so the two wallets' roots are real roots the indexer could report.
@@ -246,6 +255,7 @@ describe('RunningV2Variant.balanceTransactions spend time', () => {
       readonly currentTime?: Date;
       readonly Capability?: typeof RecordingTransacting;
       readonly pastBlocks?: readonly BlockData[];
+      readonly ttl?: Date;
     } = {},
   ) =>
     Effect.gen(function* () {
@@ -253,7 +263,9 @@ describe('RunningV2Variant.balanceTransactions spend time', () => {
       const scope = yield* Scope.make();
       const transacting = makeRecordingTransacting(options.Capability);
       const variant = variantOver(stateRef, scope, tips, options.pastBlocks ?? [], transacting);
-      const fiber = yield* Effect.fork(variant.balanceTransactions(fixtureSecretKey(), [], TTL, options.currentTime));
+      const fiber = yield* Effect.fork(
+        variant.balanceTransactions(fixtureSecretKey(), [], options.ttl ?? TTL, options.currentTime),
+      );
       return { stateRef, transacting, fiber };
     });
 
@@ -406,7 +418,7 @@ describe('RunningV2Variant.balanceTransactions spend time', () => {
     expect(Option.flatMap(result.exit, failureTagOf)).toEqual(Option.some('Wallet.Other'));
   });
 
-  it('should date the spend at the block the event-less sync last verified when the newest block’s roots differ, because the node accepts a spend dated at any recent block whose roots the proof holds', async () => {
+  it('should date the spend at the block the event-less sync last verified when the newest block’s roots differ, because the node accepts a spend dated at a recent block whose roots the proof holds and whose grace period lasts until the TTL', async () => {
     const result = await Effect.gen(function* () {
       const wallet = syncedByProjectionsTo(caughtUp(), OWN_HEIGHT);
       const { transacting, fiber } = yield* balancing(
@@ -447,7 +459,7 @@ describe('RunningV2Variant.balanceTransactions spend time', () => {
     expect(result.calls).toHaveLength(0);
   });
 
-  it('should not date the spend at the event-less sync’s own block once it is older than the Dust grace period, because the node rejects a spend dated that far back', async () => {
+  it('should not date the spend at the event-less sync’s own block once its grace period ended before the newest block, because the node rejects a spend dated that far back', async () => {
     const graceSeconds = Number(LedgerParameters.initialParameters().dust.dustGracePeriodSeconds);
     const tooOld = new Date(TIP_TIME.getTime() - (graceSeconds + 1) * 1000);
     const result = await Effect.gen(function* () {
@@ -468,23 +480,97 @@ describe('RunningV2Variant.balanceTransactions spend time', () => {
 
   it('should not date the spend at the event-less sync’s own block when the grace period ends before the transaction’s TTL, because the node checks the grace period against the block that includes it', async () => {
     const graceSeconds = Number(LedgerParameters.initialParameters().dust.dustGracePeriodSeconds);
-    // Within the grace period of the newest block, but the transaction may still land after the period ends.
-    const expiresBeforeTtl = new Date(TTL.getTime() - (graceSeconds + 1) * 1000);
-    expect(TIP_TIME.getTime() - expiresBeforeTtl.getTime()).toBeLessThan(graceSeconds * 1000);
+    // A block seconds behind the newest, whose grace period still ends just before the transaction may land.
+    const ttl = new Date(OWN_BLOCK_TIME.getTime() + (graceSeconds + 1) * 1000);
     const result = await Effect.gen(function* () {
       const wallet = syncedByProjectionsTo(caughtUp(), OWN_HEIGHT);
       const { transacting, fiber } = yield* balancing(
         wallet,
         [blockAt(TIP_TIME, { commitment: NOT_HELD, generation: NOT_HELD })],
-        { pastBlocks: [blockAt(expiresBeforeTtl, rootsOf(caughtUp()), OWN_HEIGHT)] },
+        { pastBlocks: [blockAt(OWN_BLOCK_TIME, rootsOf(caughtUp()), OWN_HEIGHT)], ttl },
       );
       yield* TestClock.adjust(Duration.seconds(1));
+      const whileWaiting = yield* Fiber.poll(fiber);
+      yield* TestClock.adjust(Duration.seconds(120));
+      const exit = yield* Fiber.poll(fiber);
+      return { whileWaiting, exit, calls: transacting.calls };
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(Option.isNone(result.whileWaiting)).toBe(true);
+    expect(result.calls).toHaveLength(0);
+    // The failure says why the block the wallet holds was not used, so a long TTL is not mistaken for sync lag.
+    expect(causeOf(result.exit)).toEqual(
+      Option.some(
+        expect.objectContaining({
+          _tag: 'DustTreesNotAtBlock',
+          ownBlockRefusal: Option.some({ height: OWN_HEIGHT, reason: 'GraceEndsBeforeTtl' }),
+        }),
+      ),
+    );
+  });
+
+  it('should date the spend at the event-less sync’s own block when its grace period ends exactly at the TTL, because the node accepts a spend whose grace period reaches the including block', async () => {
+    const graceSeconds = Number(LedgerParameters.initialParameters().dust.dustGracePeriodSeconds);
+    const ttl = new Date(OWN_BLOCK_TIME.getTime() + graceSeconds * 1000);
+    const result = await Effect.gen(function* () {
+      const wallet = syncedByProjectionsTo(caughtUp(), OWN_HEIGHT);
+      const { transacting, fiber } = yield* balancing(
+        wallet,
+        [blockAt(TIP_TIME, { commitment: NOT_HELD, generation: NOT_HELD })],
+        { pastBlocks: [blockAt(OWN_BLOCK_TIME, rootsOf(caughtUp()), OWN_HEIGHT)], ttl },
+      );
+      yield* TestClock.adjust(Duration.millis(1));
       const exit = yield* Fiber.poll(fiber);
       return { exit, calls: transacting.calls };
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
 
-    expect(Option.isNone(result.exit)).toBe(true);
+    expect(Option.map(result.exit, Exit.isSuccess)).toEqual(Option.some(true));
+    expect(result.calls[0]?.currentTime).toEqual(OWN_BLOCK_TIME);
+  });
+
+  it('should not date the spend at the event-less sync’s own block once it is more than ten minutes behind the newest, because the node keeps past Dust roots only for its global TTL, which can be as short as an hour', async () => {
+    const stale = new Date(TIP_TIME.getTime() - (10 * 60 + 1) * 1000);
+    const result = await Effect.gen(function* () {
+      const wallet = syncedByProjectionsTo(caughtUp(), OWN_HEIGHT);
+      const { transacting, fiber } = yield* balancing(
+        wallet,
+        [blockAt(TIP_TIME, { commitment: NOT_HELD, generation: NOT_HELD })],
+        { pastBlocks: [blockAt(stale, rootsOf(caughtUp()), OWN_HEIGHT)] },
+      );
+      yield* TestClock.adjust(Duration.seconds(1));
+      const whileWaiting = yield* Fiber.poll(fiber);
+      yield* TestClock.adjust(Duration.seconds(120));
+      const exit = yield* Fiber.poll(fiber);
+      return { whileWaiting, exit, calls: transacting.calls };
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(Option.isNone(result.whileWaiting)).toBe(true);
     expect(result.calls).toHaveLength(0);
+    expect(causeOf(result.exit)).toEqual(
+      Option.some(
+        expect.objectContaining({
+          ownBlockRefusal: Option.some({ height: OWN_HEIGHT, reason: 'TooFarBehindNewest' }),
+        }),
+      ),
+    );
+  });
+
+  it('should date the spend at the event-less sync’s own block when it is exactly ten minutes behind the newest, because that is still inside the bound', async () => {
+    const atBound = new Date(TIP_TIME.getTime() - 10 * 60 * 1000);
+    const result = await Effect.gen(function* () {
+      const wallet = syncedByProjectionsTo(caughtUp(), OWN_HEIGHT);
+      const { transacting, fiber } = yield* balancing(
+        wallet,
+        [blockAt(TIP_TIME, { commitment: NOT_HELD, generation: NOT_HELD })],
+        { pastBlocks: [blockAt(atBound, rootsOf(caughtUp()), OWN_HEIGHT)] },
+      );
+      yield* TestClock.adjust(Duration.millis(1));
+      const exit = yield* Fiber.poll(fiber);
+      return { exit, calls: transacting.calls };
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(Option.map(result.exit, Exit.isSuccess)).toEqual(Option.some(true));
+    expect(result.calls[0]?.currentTime).toEqual(atBound);
   });
 
   it('should not look for an own block on a wallet the event-based sync moved, because its progress counts events, not block heights', async () => {
