@@ -9,9 +9,8 @@ Fixes and other changes since 4.x
   repeating. With the loop bounded, Dust the transactions already carry counts toward the fee; a transaction that
   already covers its fee gets an empty balancing transaction, where 4.x looped forever; a coin selection that exhausts
   the pool is retried once largest-first; and a selector that returns a coin it was not offered fails with
-  `TransactingError`. `dryRunFee` takes an optional trailing parameter carrying the merged transactions, so a caller
-  pricing several input sets merges them once, and with no inputs prices the merged transactions rather than adding an
-  empty intent.
+  `TransactingError`. `dryRunFee` takes an optional trailing parameter carrying the proof-erased, merged transactions,
+  and with no inputs prices the transactions as they are rather than with an extra empty intent.
 - Reverting a transaction releases only the Dust it booked. It used to drop decaying Dust coins the transaction never
   spent, and release coins other pending transactions held. A coin a pending transaction spent stays pending through
   syncs, and in the snapshot, until the chain spends it, its lock runs out or it decays to nothing
