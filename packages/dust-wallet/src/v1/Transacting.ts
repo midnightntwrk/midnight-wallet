@@ -26,8 +26,10 @@ import {
   DustRegistration,
   type DustSecretKey,
   Intent,
+  type Binding,
   type PreBinding,
   type PreProof,
+  type Proof,
   type Signature,
   SignatureEnabled,
   type SignatureVerifyingKey,
@@ -45,7 +47,13 @@ import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { OtherWalletError, TransactingError, type WalletError, InsufficientFundsError } from './WalletError.js';
 import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { CoreWallet } from './CoreWallet.js';
-import { type AnyTransaction, type Dust, type NetworkId, type TotalCostParameters } from './types/index.js';
+import {
+  type AnyTransaction,
+  type Dust,
+  type NetworkId,
+  type TotalCostParameters,
+  type UnprovenDustSpend,
+} from './types/index.js';
 import {
   type CoinsAndBalancesCapability,
   type CoinSelection,
@@ -213,39 +221,145 @@ const distributeFeeAcrossInputs = <T extends { value: bigint }>(
     { result: [], remaining: fee },
   ).result;
 
-/** The transactions being balanced, proof-erased and merged once, with the segment a balancing intent may use. */
-type MergedTransactions = {
-  readonly transaction: ProofErasedTransaction;
-  readonly segmentId: number;
+/**
+ * Transactions merged in the form they are priced in. `ProofErased` is the fallback when one of them has no proven
+ * form, and is exact only for transactions submitted without proofs.
+ */
+type MergedTransactions = Data.TaggedEnum<{
+  Proven: { readonly transaction: FinalizedTransaction };
+  ProofErased: { readonly transaction: ProofErasedTransaction };
+}>;
+
+const MergedTransactions = Data.taggedEnum<MergedTransactions>();
+
+/** A transaction being balanced, beside its proven form when it has one. */
+type PricingInput = {
+  readonly transaction: FinalizedTransaction | UnprovenTransaction;
+  readonly proven: Option.Option<FinalizedTransaction>;
+};
+
+const mergeAll = <T extends { merge(other: T): T }>(first: T, rest: ReadonlyArray<T>): T =>
+  rest.reduce((acc, tx) => acc.merge(tx), first);
+
+/**
+ * The transaction as the node prices it, proven and bound. `None` only when it has no proven form: a proof-erased
+ * transaction, or an unproven one with contract calls. Any other ledger failure, from binding above all, throws.
+ */
+const asProven = (transaction: AnyTransaction): Option.Option<FinalizedTransaction> =>
+  Option.orElse(
+    // Type cast required because: `mockProve` refuses proof-erased transactions, the only form not signature-enabled.
+    Option.liftThrowable(() => transaction.mockProve() as FinalizedTransaction)(),
+    () => {
+      const bound = transaction.bind();
+      return Option.liftThrowable(() =>
+        Transaction.deserialize<SignatureEnabled, Proof, Binding>(
+          SignatureMarker.signature,
+          ProofMarker.proof,
+          BindingMarker.binding,
+          bound.serialize(),
+        ),
+      )();
+    },
+  );
+
+/** Pairs each transaction with its proven form. Throws on a ledger fault, so callers wrap it in `LedgerOps.ledgerTry`. */
+const toPricingInputs = (
+  transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
+): ReadonlyArray<PricingInput> => transactions.map((transaction) => ({ transaction, proven: asProven(transaction) }));
+
+/** The segment a balancing intent takes: the lowest one `merged` leaves free, or 1 when there is none. */
+const balancingSegmentOf = (merged: Option.Option<MergedTransactions>): number =>
+  pipe(
+    merged,
+    Option.flatMap(({ transaction }) => findAvailableSegmentId(transaction)),
+    Option.getOrElse(() => 1),
+  );
+
+/**
+ * Merges the inputs proven, or all proof-erased when any of them has no proven form; `None` when there are none. Ledger
+ * arithmetic that may throw, so callers wrap it in `LedgerOps.ledgerTry`.
+ */
+const mergeForPricing = (inputs: ReadonlyArray<PricingInput>): Option.Option<MergedTransactions> =>
+  pipe(
+    Option.liftPredicate(inputs, EArray.isNonEmptyReadonlyArray),
+    Option.map(([first, ...rest]) =>
+      Option.match(Option.all([first.proven, Option.all(rest.map(({ proven }) => proven))]), {
+        onSome: ([head, tail]) => MergedTransactions.Proven({ transaction: mergeAll(head, tail) }),
+        onNone: () =>
+          MergedTransactions.ProofErased({
+            transaction: mergeAll(
+              first.transaction.eraseProofs(),
+              rest.map(({ transaction }) => transaction.eraseProofs()),
+            ),
+          }),
+      }),
+    ),
+  );
+
+/** The merged transactions with the balancing transaction added in the same form, ready to be priced. */
+const withBalancing = (merged: Option.Option<MergedTransactions>, balancing: UnprovenTransaction): MergedTransactions =>
+  Option.match(merged, {
+    onNone: () => MergedTransactions.Proven({ transaction: balancing.mockProve() }),
+    onSome: MergedTransactions.$match({
+      Proven: ({ transaction }) => MergedTransactions.Proven({ transaction: transaction.merge(balancing.mockProve()) }),
+      ProofErased: ({ transaction }) =>
+        MergedTransactions.ProofErased({ transaction: transaction.merge(balancing.eraseProofs()) }),
+    }),
+  });
+
+/**
+ * A balancing transaction spending `spends` from an intent copied out of `intentTemplate`. Fresh intents can differ in
+ * size by a byte, so the intent priced and the intent returned are copies of one template.
+ */
+const balancingTransaction = (
+  networkId: NetworkId,
+  intentTemplate: Uint8Array,
+  spends: ReadonlyArray<UnprovenDustSpend>,
+  currentTime: Date,
+  segmentId: number,
+): UnprovenTransaction => {
+  const intent = Intent.deserialize<SignatureEnabled, PreProof, PreBinding>(
+    SignatureMarker.signature,
+    ProofMarker.preProof,
+    BindingMarker.preBinding,
+    intentTemplate,
+  );
+  intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
+    SignatureMarker.signature,
+    ProofMarker.preProof,
+    currentTime,
+    [...spends],
+    [],
+  );
+  return Transaction.fromParts(networkId).addIntent({ tag: 'specific', value: segmentId }, intent);
 };
 
 /**
- * Proof-erases and merges the transactions being balanced. This does not depend on which dust inputs are being priced,
- * so callers pricing several input sets against the same transactions do it once, not once per pass. `None` when there
- * is nothing to balance against. May throw: it is ledger arithmetic, and callers wrap it in `LedgerOps.ledgerTry`.
+ * What dust selection produces: the total fee of the balanced result, what each selected coin pays, and the selected
+ * coins at their full value, in the same order, from which a balancing intent for a higher fee is distributed.
  */
-const mergeErasedTransactions = (
-  transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
-): Option.Option<MergedTransactions> =>
-  pipe(
-    transactions.map((tx) => tx.eraseProofs()),
-    EArray.match({
-      onEmpty: () => Option.none(),
-      onNonEmpty: ([first, ...rest]) => {
-        const transaction = rest.reduce((acc, tx) => acc.merge(tx), first);
-        return Option.some({
-          transaction,
-          segmentId: Option.getOrElse(findAvailableSegmentId(transaction), () => 1),
-        });
-      },
-    }),
-  );
-
-/** What `computeBalancingRecipe` produces: the total fee of the balanced result and what each selected coin pays. */
-type DustBalancingRecipe = {
+type DustSelection = {
   readonly fee: bigint;
   readonly recipeInputs: ReadonlyArray<CoinWithValue<Dust>>;
+  readonly selectedCoins: ReadonlyArray<CoinWithValue<Dust>>;
 };
+
+/**
+ * A dust selection with what it was priced against: the intent template, the segment the balancing intent takes, the
+ * transactions merged for pricing, and the dust they already carry.
+ */
+type DustBalancingRecipe = DustSelection & {
+  readonly intentTemplate: Uint8Array;
+  readonly segmentId: number;
+  readonly merged: Option.Option<MergedTransactions>;
+  readonly existingDust: bigint;
+};
+
+/**
+ * Settling passes a balancing intent gets before it is refused. The price only rises between passes and each rise is at
+ * most a byte of encoded size, so a pass or two settles it; the bound refuses rather than loop.
+ */
+const MAX_SETTLING_PASSES = 3;
 
 /** The pool ran out under the configured order before the fee was covered — an ordering artefact, retried largest-first. */
 class SelectionExhausted extends Data.TaggedError('DustBalancing.SelectionExhausted')<{
@@ -361,18 +475,18 @@ const selectDustInputs = (args: {
     inputs: EArray.NonEmptyReadonlyArray<CoinWithValue<Dust>>,
   ) => Either.Either<bigint, LedgerOps.LedgerError>;
   readonly coinSelection: CoinSelection;
-}): Either.Either<DustBalancingRecipe, SelectionFailure | LedgerOps.LedgerError> => {
+}): Either.Either<DustSelection, SelectionFailure | LedgerOps.LedgerError> => {
   const { baseFee, existingDust, feeWith, coinSelection } = args;
   const go = (
     remaining: ReadonlyArray<CoinWithValue<Dust>>,
     inputs: ReadonlyArray<CoinWithValue<Dust>>,
     fee: bigint,
-  ): Either.Either<DustBalancingRecipe, SelectionFailure | LedgerOps.LedgerError> =>
+  ): Either.Either<DustSelection, SelectionFailure | LedgerOps.LedgerError> =>
     Either.gen(function* () {
       const covered = BigIntOps.sumAll(inputs.map((input) => input.value));
       const deficit = fee - existingDust - covered;
       if (deficit <= 0n) {
-        return { fee, recipeInputs: distributeFeeAcrossInputs(inputs, fee - existingDust) };
+        return { fee, recipeInputs: distributeFeeAcrossInputs(inputs, fee - existingDust), selectedCoins: inputs };
       }
       const added = yield* selectForDeficit(
         remaining,
@@ -394,11 +508,9 @@ const selectDustInputs = (args: {
  * dominate every other k-subset. Any other failure — a declining selector above all — is reported as it is.
  */
 const selectWithLargestFirstRetry = (
-  select: (
-    coinSelection: CoinSelection,
-  ) => Either.Either<DustBalancingRecipe, SelectionFailure | LedgerOps.LedgerError>,
+  select: (coinSelection: CoinSelection) => Either.Either<DustSelection, SelectionFailure | LedgerOps.LedgerError>,
   configured: CoinSelection,
-): Either.Either<DustBalancingRecipe, SelectionFailure | LedgerOps.LedgerError> =>
+): Either.Either<DustSelection, SelectionFailure | LedgerOps.LedgerError> =>
   pipe(
     select(configured),
     Either.orElse((failure) =>
@@ -781,7 +893,32 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     });
   }
 
-  calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint {
+  /**
+   * The fee of `transaction` with the configured margin, priced in its proven form so that the margin also covers its
+   * proofs. A transaction with no proven form (proof-erased, or unproven with contract calls) is priced as it is.
+   *
+   * @example
+   *   ```typescript
+   *   const fee = transacting.calculateFee(unprovenTransaction, ledgerParameters);
+   *   ```;
+   *
+   * @param transaction - The transaction to price, in any form.
+   * @param ledgerParams - The ledger parameters the fee is computed under.
+   * @param pricedAs - `@internal` The form `transaction` is priced in, when the caller has already computed it; its
+   *   proven form by default, or `transaction` itself when it has none.
+   * @returns The fee in SPECK, `feeBlocksMargin` blocks of margin and `additionalFeeOverhead` included.
+   * @throws When the ledger fails on the transaction for any reason other than it having no proven form.
+   */
+  calculateFee(
+    transaction: AnyTransaction,
+    ledgerParams: LedgerParameters,
+    pricedAs: AnyTransaction = Option.getOrElse(asProven(transaction), (): AnyTransaction => transaction),
+  ): bigint {
+    return this.#feeOfPriced(pricedAs, ledgerParams);
+  }
+
+  /** The fee with the configured margin of a transaction already in the form it is priced in. */
+  #feeOfPriced(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint {
     return (
       transaction.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) +
       (this.costParams.additionalFeeOverhead ?? 0n)
@@ -790,9 +927,26 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
   /**
    * The fee the transactions would carry with `recipeInputs` attached as dust spends in a balancing intent. With no
-   * inputs there is no intent to attach — an intent with empty `DustActions` is not well-formed — so it is the fee of
-   * the transactions as they are. Nothing is persisted. `merged` lets a caller pricing several input sets against the
-   * same transactions proof-erase and merge them once; it is derived from `transactions` when omitted.
+   * inputs there is no intent to attach (an intent with empty `DustActions` is not well-formed), so it is the fee of
+   * the merged transactions alone, in the form they are priced in. Nothing is persisted.
+   *
+   * @example
+   *   ```typescript
+   *   const fee = transacting.dryRunFee(coins, [transaction], secretKey, state, ttl, now, ledgerParameters);
+   *   ```;
+   *
+   * @param recipeInputs - The dust coins the balancing intent spends, each at its full value.
+   * @param transactions - The transactions being balanced.
+   * @param secretKey - The dust secret key that spends the coins.
+   * @param state - The wallet state the coins are spent from; it is not updated.
+   * @param ttl - The time-to-live of the balancing intent.
+   * @param currentTime - The time the coins are spent at.
+   * @param ledgerParams - The ledger parameters the fee is computed under.
+   * @param merged - `@internal` `transactions` merged for pricing, so a caller pricing several input sets merges them
+   *   once; it must be derived from `transactions`.
+   * @param intentTemplate - `@internal` The serialised intent the balancing intent is copied from, so a caller can
+   *   return an intent of exactly the size it priced.
+   * @returns The fee in SPECK, margin included, or `0n` with neither inputs nor transactions.
    */
   dryRunFee(
     recipeInputs: ReadonlyArray<CoinWithValue<Dust>>,
@@ -802,40 +956,27 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-    merged: Option.Option<MergedTransactions> = mergeErasedTransactions(transactions),
+    merged: Option.Option<MergedTransactions> = mergeForPricing(toPricingInputs(transactions)),
+    intentTemplate: Uint8Array = Intent.new(ttl).serialize(),
   ): bigint {
     const priced = EArray.match(recipeInputs, {
-      onEmpty: () => Option.map(merged, (existing) => existing.transaction),
+      onEmpty: () => merged,
       onNonEmpty: (inputs) => {
         const [spends] = CoreWallet.spendCoins(state, secretKey, inputs, currentTime);
-        const intent = Intent.new(ttl);
-        intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
-          SignatureMarker.signature,
-          ProofMarker.preProof,
+        const balancing = balancingTransaction(
+          this.networkId,
+          intentTemplate,
+          spends,
           currentTime,
-          [...spends],
-          [],
+          balancingSegmentOf(merged),
         );
-        const segmentId = pipe(
-          merged,
-          Option.map((existing) => existing.segmentId),
-          Option.getOrElse(() => 1),
-        );
-        const balancing = Transaction.fromParts(this.networkId)
-          .addIntent({ tag: 'specific', value: segmentId }, intent)
-          .eraseProofs();
-        return Option.some(
-          pipe(
-            merged,
-            Option.match({ onNone: () => balancing, onSome: (existing) => existing.transaction.merge(balancing) }),
-          ),
-        );
+        return Option.some(withBalancing(merged, balancing));
       },
     });
-    return pipe(
-      priced,
-      Option.match({ onNone: () => 0n, onSome: (transaction) => this.calculateFee(transaction, ledgerParams) }),
-    );
+    return Option.match(priced, {
+      onNone: () => 0n,
+      onSome: ({ transaction }) => this.#feeOfPriced(transaction, ledgerParams),
+    });
   }
 
   static feeImbalance(transaction: AnyTransaction, totalFee: bigint): bigint {
@@ -852,8 +993,9 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
    * Selects the dust inputs a balancing intent needs so that, merged with `transactions`, the result covers its own fee
    * — including the fee those inputs add — net of any dust the transactions already carry. `fee` is the total fee of
    * that merged result, the figure {@link estimateFee} reports; `recipeInputs` lists the selected coins in selection
-   * order, each valued at the part of the shortfall it pays. Both are empty when the transactions already cover their
-   * fee.
+   * order, each valued at the part of the shortfall it pays, and `selectedCoins` the same coins at full value. Both
+   * lists are empty when the transactions already cover their fee. `fee` prices each coin spent at full value; the
+   * intent {@link balanceTransactions} returns is priced again as built.
    *
    * Selection runs under the configured {@link CoinSelection} and is retried once largest-first only if that order
    * exhausts the pool; a selector that declines coins is honoured and reports insufficient funds directly.
@@ -867,9 +1009,17 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     ledgerParams: LedgerParameters,
   ): Either.Either<DustBalancingRecipe, WalletError> {
     return Either.gen(this, function* () {
-      const merged = yield* LedgerOps.ledgerTry(() => mergeErasedTransactions(transactions));
+      const pricingInputs = yield* LedgerOps.ledgerTry(() => toPricingInputs(transactions));
+      const merged = yield* LedgerOps.ledgerTry(() => mergeForPricing(pricingInputs));
+      const intentTemplate = yield* LedgerOps.ledgerTry(() => Intent.new(ttl).serialize());
       const standaloneFees = yield* LedgerOps.ledgerTry(() =>
-        transactions.map((transaction) => this.calculateFee(transaction, ledgerParams)),
+        pricingInputs.map(({ transaction, proven }) =>
+          this.calculateFee(
+            transaction,
+            ledgerParams,
+            Option.getOrElse(proven, (): AnyTransaction => transaction),
+          ),
+        ),
       );
       // `feeImbalance` nets the dust a transaction already carries (spends, registration allowances) against its own
       // fee. Adding the fees back isolates that dust, which counts toward coverage on every pass.
@@ -886,18 +1036,32 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           merged,
           Option.match({
             onNone: () => 0n,
-            onSome: (existing) => this.calculateFee(existing.transaction, ledgerParams),
+            onSome: ({ transaction }) => this.calculateFee(transaction, ledgerParams, transaction),
           }),
         ),
       );
       const coins = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
       const feeWith = (inputs: EArray.NonEmptyReadonlyArray<CoinWithValue<Dust>>) =>
         LedgerOps.ledgerTry(() =>
-          this.dryRunFee(inputs, transactions, secretKey, state, ttl, currentTime, ledgerParams, merged),
+          this.dryRunFee(
+            inputs,
+            transactions,
+            secretKey,
+            state,
+            ttl,
+            currentTime,
+            ledgerParams,
+            merged,
+            intentTemplate,
+          ),
         );
       const select = (coinSelection: CoinSelection) =>
         selectDustInputs({ coins, baseFee, existingDust, feeWith, coinSelection });
-      return yield* Either.mapLeft(selectWithLargestFirstRetry(select, this.getCoinSelection()), toWalletError);
+      const selection = yield* Either.mapLeft(
+        selectWithLargestFirstRetry(select, this.getCoinSelection()),
+        toWalletError,
+      );
+      return { ...selection, intentTemplate, segmentId: balancingSegmentOf(merged), merged, existingDust };
     });
   }
 
@@ -915,6 +1079,30 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     );
   }
 
+  /**
+   * Builds the balancing transaction for `transactions` and books its dust spends as pending in the returned state.
+   *
+   * The returned balancing intent pays at least the fee, margin included, of `transactions` merged with it as returned.
+   * A spend's encoded size depends on the value it spends, so the intent is priced as built, with each coin spending
+   * its share of the fee, and is distributed again at the higher price whenever that price exceeds what it pays.
+   *
+   * @example
+   *   ```typescript
+   *   const [balancing, nextState] = Either.getOrThrow(
+   *     transacting.balanceTransactions(secretKey, state, [transaction], ttl, now, ledgerParameters),
+   *   );
+   *   ```;
+   *
+   * @param secretKey - The dust secret key that spends the selected coins.
+   * @param state - The wallet state the coins are spent from.
+   * @param transactions - The transactions being balanced.
+   * @param ttl - The time-to-live of the balancing intent.
+   * @param currentTime - The time the coins are spent at.
+   * @param ledgerParams - The ledger parameters the fee is computed under.
+   * @returns The balancing transaction, empty when the transactions already cover their fee, and the state with its
+   *   spends pending; `InsufficientFundsError` when the selected coins cannot pay the price of the intent that spends
+   *   them, `TransactingError` when its price does not settle.
+   */
   balanceTransactions(
     secretKey: DustSecretKey,
     state: CoreWallet,
@@ -927,35 +1115,52 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
     return pipe(
       this.computeBalancingRecipe(secretKey, state, transactions, ttl, currentTime, ledgerParams),
-      Either.flatMap(({ recipeInputs }) =>
-        LedgerOps.ledgerTry((): [UnprovenTransaction, CoreWallet] =>
-          EArray.match(recipeInputs, {
-            // The transactions already cover their fee. An intent with empty `DustActions` is not well-formed, so
-            // there is nothing to add: an empty transaction merges into anything as the identity, and no dust is
-            // booked as pending.
-            onEmpty: () => [Transaction.fromParts(networkId), state],
-            onNonEmpty: (inputs) => {
-              const [spends, updatedState] = CoreWallet.spendCoins(state, secretKey, inputs, currentTime);
-              const intent = Intent.new(ttl);
-              intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
-                SignatureMarker.signature,
-                ProofMarker.preProof,
-                currentTime,
-                [...spends],
-                [],
-              );
-              const segmentId = pipe(
-                mergeErasedTransactions(transactions),
-                Option.map((existing) => existing.segmentId),
-                Option.getOrElse(() => 1),
-              );
-              return [
-                Transaction.fromParts(networkId).addIntent({ tag: 'specific', value: segmentId }, intent),
-                updatedState,
-              ];
-            },
-          }),
-        ),
+      Either.flatMap(({ fee, selectedCoins, intentTemplate, segmentId, merged, existingDust }) =>
+        EArray.match(selectedCoins, {
+          // The transactions already cover their fee. An intent with empty `DustActions` is not well-formed, so
+          // there is nothing to add: an empty transaction merges into anything as the identity, and no dust is
+          // booked as pending.
+          onEmpty: () => Either.right<[UnprovenTransaction, CoreWallet]>([Transaction.fromParts(networkId), state]),
+          onNonEmpty: (coins) => {
+            const available = BigIntOps.sumAll(coins.map((coin) => coin.value));
+            const settle = (
+              price: bigint,
+              passesLeft: number,
+            ): Either.Either<[UnprovenTransaction, CoreWallet], WalletError> =>
+              Either.gen(this, function* () {
+                const [balancing, updatedState, priceAsBuilt] = yield* LedgerOps.ledgerTry(() => {
+                  const inputs = distributeFeeAcrossInputs(coins, price - existingDust);
+                  const [spends, spentState] = CoreWallet.spendCoins(state, secretKey, inputs, currentTime);
+                  const built = balancingTransaction(networkId, intentTemplate, spends, currentTime, segmentId);
+                  return [
+                    built,
+                    spentState,
+                    this.#feeOfPriced(withBalancing(merged, built).transaction, ledgerParams),
+                  ] as const;
+                });
+                if (priceAsBuilt <= price) {
+                  return [balancing, updatedState];
+                }
+                if (priceAsBuilt - existingDust > available) {
+                  return yield* Either.left(
+                    new InsufficientFundsError({
+                      message: `Insufficient Funds: the selected dust coins hold ${available}, short of the ${priceAsBuilt - existingDust} the balancing intent spending them costs`,
+                      tokenType: 'dust',
+                    }),
+                  );
+                }
+                if (passesLeft <= 1) {
+                  return yield* Either.left(
+                    new TransactingError({
+                      message: `The fee of the balancing intent did not settle within ${MAX_SETTLING_PASSES} passes; last priced at ${priceAsBuilt}`,
+                    }),
+                  );
+                }
+                return yield* settle(priceAsBuilt, passesLeft - 1);
+              });
+            return settle(fee, MAX_SETTLING_PASSES);
+          },
+        }),
       ),
     );
   }
