@@ -6,7 +6,9 @@ The fee the wallet pays now carries the full `feeBlocksMargin` of the transactio
 on proof-erased transactions, which the ledger prices accurately only for transactions submitted without proofs, so the
 margin fell short by the cost of the proofs, including the wallet's own Dust spend. `calculateFee`, `estimateFee`,
 `dryRunFee` and balancing now price the proven form: an unproven transaction is mock-proved and an unbound one is bound.
-The balancing intent the wallet returns is the one it priced, so the margin holds on every balance. The optional
+A Dust spend's encoded size depends on the value it spends, so the balancing intent is priced again as built and its
+fee spread over the coins again when that costs more; the margin holds on every balance. An unbound transaction is
+priced on the wallet's own binding and may be bound a byte longer before submission. The optional
 trailing parameter of `dryRunFee` now carries the merged transactions in the form they are priced in, no longer
 proof-erased.
 
