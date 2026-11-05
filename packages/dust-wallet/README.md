@@ -24,7 +24,7 @@ provides:
 ### Starting the Wallet
 
 ```typescript
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 
@@ -84,7 +84,9 @@ const syncedState = await dustWallet.waitForSyncedState();
 ### Balancing Transaction Fees
 
 ```typescript
-// Add fee balancing to a transaction; `blockData` describes the block it was priced at
+// Add fee balancing to a transaction; `blockData` describes the block it was priced at.
+// Without a `currentTime`, this may wait up to two minutes for the wallet's Dust trees to reach a recent block, then
+// fails with a `Wallet.Sync` error.
 const { transaction: feeBalancingTx, blockData } = await dustWallet.balanceTransactions([transactionToBalance], ttl);
 ```
 

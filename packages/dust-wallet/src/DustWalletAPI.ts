@@ -336,6 +336,19 @@ export type DustWalletAPI<TKeys = never, TSerialized = string> = {
    *   The parameters are the pricing variant's own ledger object, of whichever ledger version that is, and so are
    *   `unknown` here: a caller that needs them checks which ledger version's object it holds, and `protocolVersion`
    *   says which to expect.
+   *
+   *   When `currentTime` is not given, the Dust spend is dated at a block whose Dust tree roots the wallet's local trees
+   *   hold. That is the newest block when the local roots match it. A wallet on the event-less (projections) sync may
+   *   instead use the block it last synced to, if that block is no more than ten minutes behind the newest and its Dust
+   *   grace period lasts until the `ttl`. When neither holds, the wallet waits: it reads the newest block again once a
+   *   second, for up to two minutes. If no usable block appears in that time, it fails with `SyncWalletError` (tag
+   *   `Wallet.Sync`). The wallet reserves no Dust while it waits. Anything the caller booked before calling, for
+   *   example shielded or unshielded coins, stays booked for the whole wait.
+   *
+   *   A `currentTime` the caller passes is used as given, at once, with no wait.
+   *
+   *   The node accepts a Dust spend only while the block that includes it is within the Dust grace period (three hours by
+   *   default) of the spend's time. A `ttl` further out than that lets the transaction land too late to be accepted.
    */
   balanceTransactions(
     transactions: ReadonlyArray<AnyTx>,

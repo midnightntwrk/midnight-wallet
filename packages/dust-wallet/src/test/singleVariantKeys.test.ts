@@ -20,7 +20,7 @@
  *   side and leaves the rest — shown here by what it synchronizes, which only the right key can read.
  */
 
-import { DustSecretKey as V8SecretKey } from '@midnight-ntwrk/ledger-v8';
+import { DustSecretKey as V8SecretKey } from '@midnightntwrk/ledger-v8';
 import { DustSecretKey as V9SecretKey } from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Option, type Scope, Stream, pipe } from 'effect';

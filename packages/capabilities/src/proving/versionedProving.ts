@@ -21,7 +21,7 @@
  *   fork schedule the wallets are built with. Written the same way validation's `versionedValidation.ts` is, because it
  *   is the same problem.
  */
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Either, Option } from 'effect';

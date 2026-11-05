@@ -53,4 +53,4 @@ Breaking changes since 3.x
   `restore` throws that tagged error. A snapshot whose stored address does not derive from its key is refused.
 - **Indexer.** The sync reads `protocolVersion` from the indexer's progress frames and the block hash and height of each
   transaction, so it needs an indexer that serves them. The SDK is tested against indexer `4.4.0-rc.6`.
-- **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` beside `@midnight-ntwrk/ledger-v8`.
+- **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `^1.0.0` beside `@midnightntwrk/ledger-v8`.

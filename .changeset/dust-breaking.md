@@ -51,4 +51,4 @@ Breaking changes since 4.x
   common lifecycle entry with an optional `dust` section. A custom `TransactionHistoryService` returns
   `TransactionDetails` with the `block` (`hash`, `height`, `timestamp`), the transaction's `identifiers` and its `fees`
   in place of `timestamp`, and may fail with `BlocklessFinalizedEntryError`.
-- **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` beside `@midnight-ntwrk/ledger-v8`.
+- **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `^1.0.0` beside `@midnightntwrk/ledger-v8`.

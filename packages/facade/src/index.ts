@@ -67,7 +67,7 @@ import {
   WalletTransaction,
   WireFormatError,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import { type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import * as Signatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import {
@@ -2007,6 +2007,9 @@ export class WalletFacade {
    * before this method to surface structural errors early. `enforceBalancing` is `false` because the transaction is not
    * yet balanced at this stage; `verifySignatures` is `true` because signatures are already present and must be valid.
    *
+   * @remarks
+   *   Paying the fee with Dust may wait up to two minutes for the wallet's Dust trees to reach a recent block, then
+   *   rejects with a `Wallet.Sync` error. Coins booked for the transaction stay booked during that wait.
    * @param tx - The finalized transaction to balance.
    * @param options - TTL for the balancing transaction, and optional subset of token kinds to balance.
    * @returns A {@link FinalizedTransactionRecipe} containing the original and balancing transactions.
@@ -2075,6 +2078,9 @@ export class WalletFacade {
    * before this method to surface structural errors early. All configurable flags are `false` because the transaction
    * is not yet balanced and signatures are not yet present.
    *
+   * @remarks
+   *   Paying the fee with Dust may wait up to two minutes for the wallet's Dust trees to reach a recent block, then
+   *   rejects with a `Wallet.Sync` error. Coins booked for the transaction stay booked during that wait.
    * @param tx - The unbound transaction to balance.
    * @param options - TTL for the balancing transaction, and optional subset of token kinds to balance.
    * @returns An {@link UnboundTransactionRecipe} containing the base and optional balancing transactions.
@@ -2144,6 +2150,9 @@ export class WalletFacade {
    * before this method to surface structural errors early. All configurable flags are `false` because the transaction
    * is not yet balanced and signatures are not yet present.
    *
+   * @remarks
+   *   Paying the fee with Dust may wait up to two minutes for the wallet's Dust trees to reach a recent block, then
+   *   rejects with a `Wallet.Sync` error. Coins booked for the transaction stay booked during that wait.
    * @param tx - The unproven transaction to balance.
    * @param options - TTL for the balancing transaction, and optional subset of token kinds to balance.
    * @returns An {@link UnprovenTransactionRecipe} containing the balanced transaction.
@@ -2408,6 +2417,26 @@ export class WalletFacade {
     return await this.dust.estimateFee([tx], ttl, options?.currentTime);
   }
 
+  /**
+   * Builds a transfer to the given shielded and unshielded outputs.
+   *
+   * @remarks
+   *   With `payFees` (the default), paying the fee with Dust may wait up to two minutes for the wallet's Dust trees to
+   *   reach a recent block, then rejects with a `Wallet.Sync` error. Coins booked for the transaction stay booked
+   *   during that wait. If any step fails, every booking this call made is released before the error is rethrown.
+   * @example
+   *   ```ts
+   *   const recipe = await wallet.transferTransaction(
+   *     [{ type: 'unshielded', outputs: [{ amount: 1_000_000n, receiverAddress, type: Token.night }] }],
+   *     { ttl: new Date(Date.now() + 30 * 60 * 1000) },
+   *   );
+   *   ```;
+   *
+   * @param outputs - The outputs to pay, grouped by token kind; at least one output is required.
+   * @param options - `ttl` for the transfer, and `payFees` to pay its fee with Dust (default `true`).
+   * @returns An {@link UnprovenTransactionRecipe} holding the transfer, fee included when `payFees` is set.
+   * @throws When there are no outputs, or when building, balancing or paying the fee fails.
+   */
   async transferTransaction(
     outputs: CombinedTokenTransfer[],
     options: {
@@ -2527,6 +2556,28 @@ export class WalletFacade {
     };
   }
 
+  /**
+   * Starts a swap offering the desired inputs for the desired outputs.
+   *
+   * @remarks
+   *   With `payFees` (off by default), paying the fee with Dust may wait up to two minutes for the wallet's Dust trees to
+   *   reach a recent block, then rejects with a `Wallet.Sync` error. Coins booked for the transaction stay booked
+   *   during that wait. If any step fails, every booking this call made is released before the error is rethrown.
+   * @example
+   *   ```ts
+   *   const recipe = await wallet.initSwap(
+   *     { shielded: { [offeredToken]: 1_000_000n } },
+   *     [{ type: 'shielded', outputs: [{ type: wantedToken, amount: 1_000_000n, receiverAddress }] }],
+   *     { ttl: new Date(Date.now() + 30 * 60 * 1000) },
+   *   );
+   *   ```;
+   *
+   * @param desiredInputs - The shielded and unshielded amounts this wallet puts into the swap, by token type.
+   * @param desiredOutputs - What this wallet wants to receive, grouped by token kind.
+   * @param options - `ttl` for the swap, and `payFees` to pay its fee with Dust (default `false`).
+   * @returns An {@link UnprovenTransactionRecipe} holding this wallet's half of the swap.
+   * @throws When the swap has neither a shielded nor an unshielded part, or when building it or paying the fee fails.
+   */
   async initSwap(
     desiredInputs: CombinedSwapInputs,
     desiredOutputs: CombinedSwapOutputs[],

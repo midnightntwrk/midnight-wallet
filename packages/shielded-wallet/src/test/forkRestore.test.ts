@@ -33,7 +33,7 @@
  *   restored is what this package actually produces rather than a fixture that could drift from it.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';

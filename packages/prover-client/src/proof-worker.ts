@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Schema } from 'effect';
-import { check, prove, type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
+import { check, prove, type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnightntwrk/zkir-v2';
 import {
   GetParamsOperationResultSchema,
   CheckOperationSchema,

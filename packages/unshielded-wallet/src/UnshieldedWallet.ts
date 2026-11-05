@@ -33,7 +33,7 @@
  *   same wallet over builders the caller chooses, and `SingleVariantUnshieldedWallet.ts` is the composition that gives
  *   up the crossing to run one variant only.
  */
-import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,

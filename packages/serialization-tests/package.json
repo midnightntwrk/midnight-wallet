@@ -17,7 +17,7 @@
     "check:frozen": "node check-frozen.mjs"
   },
   "devDependencies": {
-    "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@midnightntwrk/ledger-v8": "^8.1.3",
     "@midnightntwrk/wallet-sdk-abstractions": "workspace:*",
     "@midnightntwrk/wallet-sdk-capabilities": "workspace:^",
     "@midnightntwrk/wallet-sdk-dust-wallet": "workspace:^",

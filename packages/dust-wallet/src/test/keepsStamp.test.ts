@@ -27,8 +27,8 @@
  *   probe which variant to start on, and the single-variant one has only the one.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
-import { LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
+import { LedgerParameters as V8LedgerParameters } from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion, type UnprovenTx, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';

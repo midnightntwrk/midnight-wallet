@@ -25,13 +25,10 @@ v8-to-v9-state-translation = { git = "...", branch = "tkerber/state-translation/
 
 Once it reaches crates.io that becomes `version = "0.1.0"` and nothing else changes.
 
-Note the `[patch.crates-io]` block in the **repository-root `Cargo.toml`** — Cargo only honours `[patch]` there, which
-is also why the `wasm` profile lives at the root. The ledger's v9 line is in pre-release and not on crates.io, its own
-workspace builds those crates from path dependencies, and consuming the translation from outside that workspace means
-redirecting them to git tags. Use each crate's own release tag (`zswap-9.0.0-rc.5`, not `crate-ledger-9.1.0.0-rc.5`): at
-the ledger's release tag the crates' midnight dependencies are paths into that checkout, which builds a second copy of
-every shared crate, `midnight-storage` included, and fails on mismatched types. **Keep the tags in step with each other,
-and `storage_tag` in the build script with them — together with `storage_rev`, the commit that tag points at.**
+The translation's own dependencies, ledger-v8 and ledger-v9 alike, are plain crates.io versions and resolve to the
+ledger's published releases. The one redirect is `midnight-storage`, in the `[patch.crates-io]` block of the
+**repository-root `Cargo.toml`** — Cargo only honours `[patch]` there, which is also why the `wasm` profile lives at the
+root. Why that crate is patched is below.
 
 ## Iterating against a local checkout
 
@@ -53,27 +50,28 @@ first real state. Verified in isolation: a wasm export whose whole body is `Inst
 which re-exports `std::time` on non-wasm targets and backs `Instant` with `performance.now()` on wasm — so every other
 target is byte-identical.
 
-`../scripts/build-wasm.sh` applies it: it fetches `storage/` from the midnight-ledger commit in its `storage_rev` (the
-commit `storage_tag` points at), patches it into `.vendor/midnight-storage` (gitignored), and the root `Cargo.toml`'s
-`[patch.crates-io]` points there. The source is a git tag because ledger-v9 rc.7 needs `midnight-storage` 2.0.4, which
-is not on crates.io. The git `Cargo.toml` inherits `license` and `repository` from the upstream workspace, so the patch
-spells those out as well. **Drive cargo through the script**; a bare `cargo build` fails on the missing directory, which
-is deliberate — the alternative is silently producing a wasm that traps.
+`../scripts/build-wasm.sh` applies it: it downloads the `midnight-storage` release named by its `storage_version` from
+crates.io, checks the archive against `storage_sha256` (the checksum the crates.io index records for that version),
+patches it into `.vendor/midnight-storage` (gitignored), and the root `Cargo.toml`'s `[patch.crates-io]` points there.
+The source is the published crate because that is the exact release the ledger-v9 crates resolve to, so the vendored
+copy differs from it by the patch alone. **Drive cargo through the script**; a bare `cargo build` fails on the missing
+directory, which is deliberate — the alternative is silently producing a wasm that traps.
 
-If the patch stops applying, the crate has moved. Regenerate it against the new version rather than working around it:
+If the patch stops applying, the crate has moved. Regenerate it against the new version rather than working around it,
+and move `storage_version` and `storage_sha256` together:
 
 ```bash
-curl -sSfL https://codeload.github.com/midnightntwrk/midnight-ledger/tar.gz/<storage_rev> \
-  | tar xz --strip-components=1 "midnight-ledger-<storage_rev>/storage"
-cp -R storage a && cp -R storage b
-# edit b/Cargo.toml and b/src/state_translation.rs, then:
-diff -ruN a b > wasm/patches/midnight-storage-wasm-instant.patch
+curl -sSfL https://static.crates.io/crates/midnight-storage/midnight-storage-<version>.crate | tar xz
+cp -R midnight-storage-<version> a && cp -R midnight-storage-<version> b
+# edit b/Cargo.toml and b/src/state_translation.rs, then (only the two edited files belong in the patch):
+diff -ruN a/Cargo.toml b/Cargo.toml > wasm/patches/midnight-storage-wasm-instant.patch
+diff -ruN a/src/state_translation.rs b/src/state_translation.rs >> wasm/patches/midnight-storage-wasm-instant.patch
 ```
 
 **The real fix has to be published, not just committed to the ledger repository** — this crate takes `midnight-storage`
-from a release, and redirecting it to a local checkout does not work: the git-tagged v9 crates fail against the ledger
-workspace's copy with trait-mismatch errors, that copy having drifted past the released one. `storage-2.0.4-rc.1` does
-not contain the fix either.
+from a release, and redirecting it to a local checkout does not work: the released v9 crates fail against the ledger
+workspace's copy with trait-mismatch errors, that copy having drifted past the released one. The `midnight-storage`
+2.0.4 release does not contain the fix either.
 
 Once a release does carry it, delete four things: this section, `patches/`, the `midnight-storage` entry in the root
 `Cargo.toml`'s `[patch.crates-io]`, and the vendoring block in the build script.

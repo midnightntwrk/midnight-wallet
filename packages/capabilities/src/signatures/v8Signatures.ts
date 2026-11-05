@@ -21,7 +21,7 @@
  *   and a partial one in the other: a signature of a scheme ledger-v8 has never heard of cannot be lowered at all, and
  *   says so rather than being handed over as bytes it would misread.
  */
-import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import { Data, Either } from 'effect';
 import type * as Signing from './signing.js';
 

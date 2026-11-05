@@ -26,7 +26,7 @@
  *   fee needs nothing from those two but the version they report.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect } from 'effect';
 import * as rx from 'rxjs';

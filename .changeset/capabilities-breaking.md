@@ -4,7 +4,7 @@
 
 Breaking changes since 3.x
 
-In 3.x this package served ledger-v8 alone. It now serves `@midnight-ntwrk/ledger-v8` and `@midnightntwrk/ledger-v9`
+In 3.x this package served ledger-v8 alone. It now serves `@midnightntwrk/ledger-v8` and `@midnightntwrk/ledger-v9`
 side by side, and its proving, simulation and submission names say which ledger version they serve.
 
 - **Proving.** `ProvingService<TProven, TUnproven>` and `ProvingServiceEffect<TProven, TUnproven>` name the unproven
@@ -45,5 +45,5 @@ side by side, and its proving, simulation and submission names say which ledger 
   `makeV9SimulatorSubmissionService` and `V9SimulatorSubmissionConfiguration`, over the ledger-v9 simulator.
 - **Submission.** `makeDefaultSubmissionService(Effect)` submits either ledger version's finalized transaction
   (`AnyVersionFinalizedTransaction`) when no transaction type is named.
-- **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` beside `@midnight-ntwrk/ledger-v8`, and on
-  `@midnight-ntwrk/zkir-v2` `2.2.0-rc.6`.
+- **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `^1.0.0` beside `@midnightntwrk/ledger-v8`, and on
+  `@midnightntwrk/zkir-v2` `^2.2.0`.

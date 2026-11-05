@@ -42,4 +42,4 @@ Breaking changes since 3.x
   so an exhaustive match over it must handle them.
 - **Snapshots.** An unreadable snapshot is refused with `SnapshotRestoreError` instead of `Wallet.Other`, and `restore`
   throws that tagged error.
-- **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` beside `@midnight-ntwrk/ledger-v8`.
+- **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `^1.0.0` beside `@midnightntwrk/ledger-v8`.

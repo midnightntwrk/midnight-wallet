@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
-import * as otherLedger from '@midnight-ntwrk/ledger-v8';
+import * as otherLedger from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { V8 as OtherSimulation, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, Option, Stream, identity } from 'effect';

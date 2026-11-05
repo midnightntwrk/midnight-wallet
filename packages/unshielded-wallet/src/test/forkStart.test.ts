@@ -36,7 +36,7 @@
  *   version a chain reports is a property of the chain, and the real fork's value is not final.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,

@@ -34,7 +34,7 @@ import {
   type DustStateChanges,
   Event as LedgerEvent,
   LedgerParameters,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { BlockHash, DustLedgerEventTip, DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
@@ -103,6 +103,13 @@ export interface BlockData {
   protocolVersion: number;
   ledgerParameters: LedgerParameters;
   timestamp: Date;
+  /**
+   * The block's Dust commitment tree root, hex-encoded as the indexer serializes it. Absent when the source does not
+   * report it, as the simulator does not; absent and `''` both mean not reported.
+   */
+  dustCommitmentMerkleTreeRoot?: string | undefined;
+  /** The block's Dust generation tree root, encoded and absent on the same terms as the commitment root. */
+  dustGenerationMerkleTreeRoot?: string | undefined;
 }
 
 /**
@@ -619,6 +626,8 @@ export const makeDefaultSyncService = (
               protocolVersion: blockData.protocolVersion,
               ledgerParameters,
               timestamp: new Date(blockData.timestamp),
+              dustCommitmentMerkleTreeRoot: blockData.dustCommitmentMerkleTreeRoot ?? undefined,
+              dustGenerationMerkleTreeRoot: blockData.dustGenerationMerkleTreeRoot ?? undefined,
             })),
             Either.mapLeft((error) => new SyncWalletError({ message: error.message, cause: error })),
             EitherOps.toEffect,

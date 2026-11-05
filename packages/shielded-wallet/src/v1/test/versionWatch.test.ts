@@ -26,7 +26,7 @@
  *   which is what the runtime acts on.
  */
 
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   BlockHash,

@@ -26,7 +26,7 @@
  * it may be hardcoded in the simulators.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
