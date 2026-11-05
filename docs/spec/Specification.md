@@ -438,6 +438,11 @@ The human-readable part should consist of 3 parts, separated by underscore:
   The same value is meant to be used as part of transaction data for consistency verification. For mainnet (the value
   `mainnet`), network identifier has to be omitted (and so its preceding underscore).
 
+The 90-character limit that [BIP-173](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki) places on Bech32
+strings does not apply to Midnight addresses: a shielded payment address is 124 characters long on mainnet and longer on
+other networks, and the network identifier has no length bound. Instead, each credential type defines the length of its
+own payload.
+
 ### Unshielded Payment address
 
 Primary payment address in the network. It allows receiving Night and other unshielded tokens. The address is always 32
