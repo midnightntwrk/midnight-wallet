@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
-  type Option,
+  Option,
   Effect,
   SubscriptionRef,
   Stream,
@@ -23,7 +23,6 @@ import {
   Schedule,
   Array as Arr,
   Ref,
-  Data,
   Either,
 } from 'effect';
 import { type TransactionHistoryService } from './TransactionHistory.js';
@@ -37,6 +36,16 @@ import {
 import { ProtocolVersion, Token, VariantState } from '@midnightntwrk/wallet-sdk-abstractions';
 import { InsufficientDustForFeeError, OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
 import { dustTreeRoots } from './Utils.js';
+import {
+  awaitTreesAtBlock,
+  describeNotAtBlock,
+  type DustTreesNotAtBlockError,
+  holds,
+  type RootedBlock,
+  spendTimeAt,
+  type SpendTime,
+  warnIfUnchecked,
+} from '../SpendTime.js';
 import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   type WalletRuntimeError,
@@ -60,45 +69,24 @@ import { type SerializationCapability } from './Serialization.js';
 import { type AnyTransaction } from './types/ledger.js';
 import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 
-/** The local Dust trees do not hold the roots of the block a spend would be dated at, so the spend must wait. */
-class DustTreesNotAtBlockError extends Data.TaggedError('DustTreesNotAtBlock')<{ blockHeight: number }> {
-  static readonly tag = 'DustTreesNotAtBlock';
-}
+/** A block's height, time and Dust roots, as dating a spend reads them. */
+const rootedBlock = (block: BlockData): RootedBlock => ({
+  height: block.height,
+  timestamp: block.timestamp,
+  roots: { commitment: block.dustCommitmentMerkleTreeRoot, generation: block.dustGenerationMerkleTreeRoot },
+});
 
 /**
- * How often balancing reads the newest block again while the local Dust trees are not at its roots, and for how long.
+ * The height of the block whose roots this state was last verified against.
  *
  * @remarks
- *   The event-based sync closes the gap within moments; the event-less sync applies the chain in passes a few seconds
- *   apart. Two minutes covers several of those passes, after which the wallet is not keeping up and balancing fails.
+ *   Only the event-less sync knows one: each pass checks the local roots against the block it read, then records that
+ *   block's height. The event-based sync counts events, not blocks, so it has none.
  */
-const spendTimeRetrySchedule = pipe(Schedule.spaced(Duration.seconds(1)), Schedule.upTo(Duration.minutes(2)));
-
-/**
- * The time a Dust spend can be dated at against this state and this block.
- *
- * @remarks
- *   The node checks a spend's proof against the roots it recorded at the spend's time, so the newest block's time is only
- *   sound when the local trees hold that block's roots. A time the caller gives is the caller's to vouch for, and a
- *   block that reports no roots cannot be checked, so both are used as they are.
- */
-const spendTimeOf = (
-  state: CoreWallet,
-  blockData: BlockData,
-  currentTime: Date | undefined,
-): Either.Either<Date, DustTreesNotAtBlockError> => {
-  if (currentTime !== undefined) {
-    return Either.right(currentTime);
-  }
-  const reportsRoots = blockData.dustCommitmentMerkleTreeRoot !== '' || blockData.dustGenerationMerkleTreeRoot !== '';
-  const roots = dustTreeRoots(state.state);
-  const atBlock =
-    roots.commitment === blockData.dustCommitmentMerkleTreeRoot &&
-    roots.generation === blockData.dustGenerationMerkleTreeRoot;
-  return !reportsRoots || atBlock
-    ? Either.right(blockData.timestamp)
-    : Either.left(new DustTreesNotAtBlockError({ blockHeight: blockData.height }));
-};
+const verifiedBlockHeight = (state: CoreWallet): Option.Option<number> =>
+  state.syncKind === 'projections' && state.progress.highestIndex > 0n
+    ? Option.some(Number(state.progress.highestIndex))
+    : Option.none();
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
@@ -559,16 +547,22 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
    * Pays the transactions' fees with Dust.
    *
    * @remarks
-   *   Without a `currentTime`, the spend is dated at the newest block only once the local Dust trees hold that block's
-   *   roots: the node checks the spend's proof against the roots it recorded at the spend's time, and the proof is
-   *   built from the local trees. Until they match, balancing reads the newest block again as sync moves on, and fails
-   *   with a {@link SyncWalletError} if they never do. A block that reports no roots, as the simulator's do, is used at
-   *   once.
+   *   Without a `currentTime`, the spend is dated at a block whose Dust roots the local trees hold, because the node
+   *   checks the spend's proof against the roots it recorded at the spend's time and the proof is built from the local
+   *   trees. That is the newest block when its roots match; on the event-less sync, otherwise the block its last pass
+   *   verified, if within the Dust grace period of the newest. When neither holds, balancing reads the newest block
+   *   again every second, reserving nothing, and fails with a {@link SyncWalletError} after two minutes. A newest block
+   *   that reports no roots is used at once, with a warning. Fees are priced against the newest block either way.
+   * @example
+   *   ```ts
+   *   const { transaction, blockData } = yield* variant.balanceTransactions(dustSecretKey, [tx], ttl);
+   *   ```;
+   *
    * @param secretKey The Dust secret key to spend with.
    * @param transactions The transactions to pay for.
    * @param ttl The time the balancing transaction stays valid until.
-   * @param currentTime The time to date the spend at; when given, it is used as it is.
-   * @returns The balancing transaction and the block it was priced at.
+   * @param currentTime The time to date the spend at; when given, it is used as it is, at once.
+   * @returns The balancing transaction and the newest block, which it was priced at.
    */
   balanceTransactions(
     secretKey: DustSecretKey,
@@ -576,44 +570,79 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     ttl: Date,
     currentTime?: Date,
   ): Effect.Effect<{ transaction: UnprovenTransaction; blockData: BlockData }, WalletError> {
+    const syncService = this.#v2Context.syncService;
+    // The state read here only decides whether the verified block is worth fetching; the spend is dated and built
+    // against the state inside `modifyEffect`, so a sync landing in between can only make this attempt wait.
+    const verifiedBlockFor = (
+      observed: CoreWallet,
+      tip: BlockData,
+    ): Effect.Effect<Option.Option<BlockData>, WalletError> =>
+      currentTime !== undefined || holds(dustTreeRoots(observed.state), rootedBlock(tip))
+        ? Effect.succeed(Option.none())
+        : Option.match(verifiedBlockHeight(observed), {
+            onNone: () => Effect.succeed(Option.none()),
+            onSome: (height) => Effect.map(syncService.blockData(height), Option.some),
+          });
     const attempt = pipe(
-      this.#v2Context.syncService.blockData(),
-      Effect.flatMap((blockData) =>
+      Effect.all([syncService.blockData(), SubscriptionRef.get(this.#context.stateRef)]),
+      Effect.flatMap(([tip, observed]) =>
         pipe(
-          SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
-            pipe(
-              spendTimeOf(state, blockData, currentTime),
-              Either.flatMap((spendTime) =>
-                this.#v2Context.transactingCapability.balanceTransactions(
-                  secretKey,
-                  state,
-                  transactions,
-                  ttl,
-                  spendTime,
-                  blockData.ledgerParameters,
-                ),
-              ),
+          verifiedBlockFor(observed, tip),
+          Effect.flatMap((verifiedBlock) =>
+            SubscriptionRef.modifyEffect(
+              this.#context.stateRef,
+              this.#spendFrom(secretKey, transactions, ttl, currentTime, tip, verifiedBlock),
             ),
           ),
-          Effect.map((transaction) => ({ transaction, blockData })),
+          Effect.tap(([, spendTime]) => warnIfUnchecked(spendTime)),
+          Effect.map(([transaction]) => ({ transaction, blockData: tip })),
         ),
       ),
     );
-    return pipe(
+    return awaitTreesAtBlock(
       attempt,
-      Effect.retry({
-        schedule: spendTimeRetrySchedule,
-        while: (error) => error._tag === DustTreesNotAtBlockError.tag,
-      }),
-      Effect.catchTag(DustTreesNotAtBlockError.tag, (error) =>
-        Effect.fail(
-          new SyncWalletError({
-            message: `The wallet's Dust trees did not reach the roots of block ${error.blockHeight}, so no spend can be dated there yet`,
-            cause: error,
-          }),
-        ),
-      ),
+      (error) =>
+        new SyncWalletError({ message: `No Dust spend can be dated yet: ${describeNotAtBlock(error)}`, cause: error }),
     );
+  }
+
+  /** Dates and builds the spend against `state`, the state it is proved from, and returns the state it leaves. */
+  #spendFrom(
+    secretKey: DustSecretKey,
+    transactions: ReadonlyArray<AnyTransaction>,
+    ttl: Date,
+    currentTime: Date | undefined,
+    tip: BlockData,
+    verifiedBlock: Option.Option<BlockData>,
+  ): (
+    state: CoreWallet,
+  ) => Either.Either<[[UnprovenTransaction, SpendTime], CoreWallet], WalletError | DustTreesNotAtBlockError> {
+    return (state) =>
+      pipe(
+        spendTimeAt(
+          dustTreeRoots(state.state),
+          rootedBlock(tip),
+          Option.map(verifiedBlock, rootedBlock),
+          Number(tip.ledgerParameters.dust.dustGracePeriodSeconds),
+          currentTime,
+        ),
+        Either.flatMap((spendTime) =>
+          pipe(
+            this.#v2Context.transactingCapability.balanceTransactions(
+              secretKey,
+              state,
+              transactions,
+              ttl,
+              spendTime.time,
+              tip.ledgerParameters,
+            ),
+            Either.map(([transaction, next]): [[UnprovenTransaction, SpendTime], CoreWallet] => [
+              [transaction, spendTime],
+              next,
+            ]),
+          ),
+        ),
+      );
   }
 
   revertTransaction(transaction: AnyTransaction): Effect.Effect<void, WalletError> {

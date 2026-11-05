@@ -105,7 +105,7 @@ export interface BlockData {
   timestamp: Date;
   /**
    * The block's Dust commitment tree root, hex-encoded as the indexer serializes it. Absent when the source does not
-   * report it, as the simulator does not.
+   * report it, as the simulator does not; absent and `''` both mean not reported.
    */
   dustCommitmentMerkleTreeRoot?: string | undefined;
   /** The block's Dust generation tree root, encoded and absent on the same terms as the commitment root. */

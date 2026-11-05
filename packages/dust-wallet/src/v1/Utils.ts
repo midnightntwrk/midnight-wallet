@@ -12,18 +12,28 @@
 // limitations under the License.
 import { type DustLocalState } from '@midnight-ntwrk/ledger-v8';
 import { ScaleBigInt } from '@midnightntwrk/wallet-sdk-address-format';
+import { type DustTreeRoots } from '../SpendTime.js';
 
-/** Hex-encodes a value in SCALE compact form, which is how the indexer serializes a Merkle tree root. */
-export const leBigintToHex = (n: bigint): string => Buffer.from(ScaleBigInt.encode(n)).toString('hex');
+export type { DustTreeRoots } from '../SpendTime.js';
 
-/** The commitment and generation tree roots of a Dust state, hex-encoded as the indexer reports a block's roots. */
-export type DustTreeRoots = { readonly commitment: string; readonly generation: string };
+/**
+ * Hex-encodes a value in SCALE compact form, which is how the indexer serializes a Merkle tree root.
+ *
+ * @param n The value to encode.
+ * @param dropLengthPrefix Whether to drop the leading SCALE compact length-prefix byte.
+ * @returns The hex encoding.
+ */
+export const leBigintToHex = (n: bigint, dropLengthPrefix: boolean = false): string => {
+  const encoded = Buffer.from(ScaleBigInt.encode(n));
+  return (dropLengthPrefix ? encoded.subarray(1) : encoded).toString('hex');
+};
 
 /**
  * Reads a Dust state's tree roots in the indexer's encoding, so they compare directly with a block's reported roots.
  *
  * @param state The local Dust state.
- * @returns The two roots; an empty tree, which has no root, is the empty string.
+ * @returns The two roots. An empty tree has root `0n`, so it reads as `'00'`; the empty string stands for a root the
+ *   ledger did not give.
  */
 export const dustTreeRoots = (state: DustLocalState): DustTreeRoots => {
   const commitment = state.commitmentTreeRoot();
