@@ -23,12 +23,11 @@
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { makeV8ValidationServiceEffect, type AnyV8ValidatableTransaction } from './v8ValidationService.js';
+import { makeV9ValidationServiceEffect, type AnyV9ValidatableTransaction } from './v9ValidationService.js';
 import {
-  makeV9ValidationServiceEffect,
   makeVersionedValidationServiceEffect,
   wrapVersionedValidationService,
   type AnyLedgerParameters,
-  type AnyV9ValidatableTransaction,
   type ValidationServiceDependencies,
   type ValidationServiceEffect,
   type ValidationServices,
@@ -58,8 +57,9 @@ export type VersionValidationServiceEffect = ValidationServiceEffect<
  *   Both validators are handed the same block-data fetcher, and that is correct rather than a shortcut: the fetcher
  *   decodes a block's parameters with the codec registered for the version the block itself was reported under, so it
  *   already yields the ledger version whose validator will be chosen for a transaction authored in the same epoch. A
- *   transaction authored on the other side of the boundary from the chain's current block is the case neither can
- *   serve, and it fails at the ledger rather than silently checking against the wrong parameters.
+ *   transaction authored on the other side of the boundary from the chain's latest block is the case neither can serve:
+ *   its validator refuses the fetched parameters with a `LedgerParametersMismatchError` rather than checking against
+ *   them, and only `blockData` from the transaction's own epoch gets it checked.
  * @param deps The network, clock, and the block-data fetcher shared by both validators.
  * @param forkVersion The protocol version at which the chain hands over to the ledger-v9.
  * @returns The validators and the version ranges they serve.

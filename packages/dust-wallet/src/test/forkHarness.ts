@@ -330,8 +330,9 @@ export type ForkWalletConfig = Readonly<{
    *   module produced them. The shipped wallet rebuilds the ledger-v8 set from the ledger-v9 one it is handed; this
    *   harness states both so a proof can assert what the migration was given.
    *
-   *   Configuration only: the start is called without them, as `DustWallet(configuration).startWithSeed(seed)` is, so it
-   *   falls back to the class's default.
+   *   The variants' configuration only: neither the wallet layer's configuration nor the start names rates, so a fresh
+   *   start values its empty state against the ledger's initial ones. `configuration.test.ts` covers configured rates
+   *   reaching a start.
    */
   dustParameters: Readonly<{ v8: V8Parameters; v9: V9Parameters }>;
   /** The instant sync updates are valued at — at or after the last event's block time. */
@@ -476,10 +477,9 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
 
         keys: { v8: v8Key, v9: v9Key },
 
-        // The key handed over is ledger-v9's, which is what the wallet's API speaks. The ledger-v8
-        // variant running underneath is started from the seed the wallet retained instead — the seam a wallet crossing
-        // a boundary rests on.
-        start: Effect.promise(() => wallet.start(v9Key)),
+        // One ledger version's key per side: the variant running now takes its own, and the other is kept for the
+        // hand-over — the seam a wallet crossing a boundary rests on.
+        start: Effect.promise(() => wallet.start({ v8: v8Key, v9: v9Key })),
 
         awaitMigration: Deferred.await(captured),
 

@@ -24,7 +24,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   type UnprovenTx,
   WalletSeed,
   WalletTransaction,
@@ -56,7 +56,7 @@ import {
   CoreWallet,
 } from './v2/index.js';
 import { type WalletSyncUpdate } from './v2/Sync.js';
-import { type TokenTransfer } from './v2/Transacting.js';
+import { type TokenTransfer } from './types/ShieldedWalletTypes.js';
 import { type WalletError } from './v2/WalletError.js';
 
 export type CustomizedShieldedWallet<
@@ -64,7 +64,7 @@ export type CustomizedShieldedWallet<
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> = ShieldedWalletAPI<TStartAux, TTransaction, TSerialized> &
+> = ShieldedWalletAPI<Readonly<{ v9: TStartAux }>, TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
 export interface CustomizedShieldedWalletClass<
@@ -266,7 +266,15 @@ export function CustomShieldedWallet<
       );
     }
 
-    start(secretKeys: TStartAux): Promise<void> {
+    /**
+     * Starts background synchronization from the ledger-v9 keys, the only side the one variant runs on.
+     *
+     * @remarks
+     *   Takes them out of a product rather than bare, so a caller holding keys for more ledger versions — a facade, which
+     *   derives one per side of every boundary — hands this wallet the same value it hands one that spans them.
+     * @param keys The ledger-v9's Zswap secret keys, under `v9`.
+     */
+    start({ v9: secretKeys }: Readonly<{ v9: TStartAux }>): Promise<void> {
       return Effect.gen(this, function* () {
         const current = yield* this.runtime.currentVariant;
         yield* Ref.update(this.#retainedStartMaterial, (retained) =>
@@ -347,7 +355,7 @@ export function CustomShieldedWallet<
       return this.runtime
         .dispatch<
           ShieldedBalancingResult,
-          WalletError | StartMaterial.MissingStartAuxError | ProtocolVersionMismatchError
+          WalletError | StartMaterial.MissingStartAuxError | WalletTransactionUnwrapError
         >({
           [V2Tag]: (v2) =>
             Effect.all([
@@ -411,10 +419,22 @@ export function CustomShieldedWallet<
         .pipe(Effect.runPromise);
     }
 
+    revertFailedSegments(transaction: AnyTx, failedSegments: ReadonlyArray<number>): Promise<void> {
+      return this.runtime
+        .dispatch<void, WalletError>({
+          [V2Tag]: (v2) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>
+              >(transaction, CustomShieldedWalletImplementation.#epoch),
+              { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertFailedSegments(unwrapped, failedSegments) },
+            ),
+        })
+        .pipe(Effect.runPromise);
+    }
+
     waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<TSerialized>> {
-      return rx.firstValueFrom(
-        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
-      );
+      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.progress.isCompleteWithin(allowedGap))));
     }
 
     /**

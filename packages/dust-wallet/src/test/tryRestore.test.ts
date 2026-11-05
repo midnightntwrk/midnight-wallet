@@ -22,12 +22,14 @@ import {
   ProtocolVersion,
   SnapshotFormat,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Either } from 'effect';
+import { Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { type DefaultDustConfiguration } from '../DustWalletAPI.js';
-import { DustWallet } from '../DustWallet.js';
+import { CustomForkingDustWallet, DustWallet, dustVariantConfigurations } from '../DustWallet.js';
 import { UnsupportedSnapshotVersionError } from '../Restore.js';
-import { TransactionHistory } from '../v2/index.js';
+import { V1Builder } from '../v1/index.js';
+import { CoreWallet, Serialization, SyncService, TransactionHistory, V2Builder } from '../v2/index.js';
+import { ProgressUpdate } from '../v2/SyncSchema.js';
 
 const configuration: DefaultDustConfiguration = {
   networkId: NetworkId.NetworkId.Undeployed,
@@ -94,5 +96,96 @@ describe('a Dust wallet restored from a snapshot it cannot read', () => {
     expect(DustWallet(configuration).tryRestore(fromTheFuture).pipe(Either.flip, Either.getOrThrow)).toBeInstanceOf(
       UnsupportedSnapshotVersionError,
     );
+  });
+});
+
+/**
+ * Restoring a Dust wallet from a snapshot whose position was recorded by a different synchronization than the one the
+ * wallet resumes with.
+ *
+ * @remarks
+ *   The two synchronizations save their position in the same `offset`, and mean different things by it. Event replay
+ *   saves the id of the last dust ledger event it applied, and resumes the subscription from it. A projections pass
+ *   saves the height of the block it last synced to, which is not an event id at all. A wallet that replays events,
+ *   handed a projections position, would subscribe from an id that names an unrelated event: past the last one, it
+ *   would wait forever for events that never arrive; below it, it would skip the dust in between. Neither surfaces as
+ *   an error once the wallet runs, because a failed pass is retried rather than reported — so the refusal has to come
+ *   at restore, where the application decides what to do with a snapshot it cannot use.
+ *
+ *   The other direction is safe and stays accepted: a projections pass resumes from the trees in the ledger state itself,
+ *   and handed an event position it asks for every dtime update rather than misreading the event id as a height.
+ */
+describe('a Dust wallet restored from a snapshot whose position another synchronization recorded', () => {
+  const forkVersion = configuration.forks.v9;
+  const fromTheFork = ProtocolVersion.makeRange(forkVersion, ProtocolVersion.MaxSupportedVersion);
+  const secretKey = ledger.DustSecretKey.fromSeed(seed);
+  const dustParameters = ledger.LedgerParameters.initialParameters().dust;
+  const serialization = Serialization.makeDefaultV2SerializationCapability();
+
+  /** A V2 wallet past the fork, as a start there leaves it, before anything has been synchronized. */
+  const pastTheFork = (): CoreWallet =>
+    CoreWallet.withProtocolVersion(
+      CoreWallet.initEmpty(dustParameters, secretKey, configuration.networkId),
+      forkVersion,
+    );
+
+  /** Saved after a projections pass reported its progress, so its position is a projections one. */
+  const projectionsSnapshot = (): string => {
+    const [reported] = SyncService.makeEventLessSyncCapability().applyUpdate(
+      pastTheFork(),
+      ProgressUpdate({ appliedIndex: 4_242, highestRelevantIndex: 9_000 }),
+      fromTheFork,
+    );
+    return serialization.serialize(reported);
+  };
+
+  /** Saved by a wallet positioned at dust ledger event 3326, the way event replay keeps its position. */
+  const eventsSnapshot = (): string =>
+    serialization.serialize(CoreWallet.updateProgress(pastTheFork(), { appliedIndex: 3_326n }));
+
+  /** The shipped two-variant wallet with its V2 variant synchronizing by projections, as `dust-fast-sync.ts` builds it. */
+  const ProjectionsDustWallet = () => {
+    const { v1, v2, migration } = dustVariantConfigurations(configuration);
+    return CustomForkingDustWallet(
+      configuration,
+      { builder: new V1Builder().withDefaults(), configuration: v1 },
+      {
+        builder: new V2Builder()
+          .withDefaults()
+          .withSync(SyncService.makeEventLessSyncService, SyncService.makeEventLessSyncCapability)
+          .withStartAuxDefaults()
+          .withMigration(migration),
+        configuration: v2,
+      },
+    );
+  };
+
+  /** Stops a wallet the restore produced, so a test that expected a refusal leaves nothing running when it fails. */
+  const stopIfRestored = (restored: Either.Either<{ stop(): Promise<void> }, unknown>): Promise<void> =>
+    Either.match(restored, { onLeft: () => Promise.resolve(), onRight: (wallet) => wallet.stop() });
+
+  it('is refused by a wallet that replays dust events, which would read the block height as an event id', async () => {
+    const restored = DustWallet(configuration).tryRestore(projectionsSnapshot());
+    await stopIfRestored(restored);
+
+    expect(Option.getOrUndefined(Either.getLeft(restored))).toMatchObject({
+      _tag: 'Wallet.SnapshotSyncMismatch',
+      syncKind: 'projections',
+      resumesFrom: 'events',
+    });
+  });
+
+  it('is accepted by a wallet that synchronizes by projections, the one that recorded it', async () => {
+    const restored = ProjectionsDustWallet().tryRestore(projectionsSnapshot());
+    await stopIfRestored(restored);
+
+    expect(Either.isRight(restored)).toBe(true);
+  });
+
+  it('accepts a dust event position into a wallet that synchronizes by projections, which resumes from its own trees', async () => {
+    const restored = ProjectionsDustWallet().tryRestore(eventsSnapshot());
+    await stopIfRestored(restored);
+
+    expect(Either.isRight(restored)).toBe(true);
   });
 });

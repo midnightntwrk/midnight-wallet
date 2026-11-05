@@ -12,13 +12,14 @@
 // limitations under the License.
 
 /**
- * Reservations taken while the chain is still below `forks.v9`.
+ * Records of balanced transactions taken while the chain is still below `forks.v9`.
  *
  * @remarks
- *   A reservation names the coins balancing booked, and the facade reads those coins off the transaction the unshielded
- *   wallet built. Below the boundary that transaction is a ledger-v8 one, built by the V1 variant, and this wallet's
- *   key has ledger-v8's bare shape, so the facade has to read it as ledger-v8 bytes. Every other reservation suite runs
- *   a chain that is on ledger-v9 from its first block, so this is the only place the ledger-v8 reading is exercised.
+ *   A balanced record names the coins balancing booked, and the facade reads those coins off the transaction the
+ *   unshielded wallet built. Below the boundary that transaction is a ledger-v8 one, built by the V1 variant, and this
+ *   wallet's key has ledger-v8's bare shape, so the facade has to read it as ledger-v8 bytes. Every other suite of
+ *   balanced records runs a chain that is on ledger-v9 from its first block, so this is the only place the ledger-v8
+ *   reading is exercised.
  *
  *   The facade is `forkingFacadeAt`'s: the shipped forking unshielded wallet syncing a ledger-v8 chain that never reaches
  *   the boundary, with the shielded and dust wallets driven at the chain's version. A transfer of Night that pays no
@@ -26,13 +27,12 @@
  */
 
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
-import { type FinalizedTx, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { type FacadeState, type WalletFacade } from '../src/index.js';
-import { forkingFacadeAt, forkingFacadeSchedule, tokenValue } from './utils/index.js';
+import { type FacadeState } from '../src/index.js';
+import { forkingFacadeAt, forkingFacadeSchedule, liveRecordsOf, tokenValue } from './utils/index.js';
 
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -49,14 +49,10 @@ const V8_NIGHT = ledgerV8.nativeToken().raw;
 const utxoKey = (coin: { utxo: { intentHash: string; outputNo: number } }): string =>
   `${coin.utxo.intentHash}#${coin.utxo.outputNo}`;
 
-/** The pending set as the facade's pending-transactions service holds it, which is where reservations live. */
-const pendingSet = (facade: WalletFacade): Effect.Effect<PendingTransactions.PendingTransactions<FinalizedTx>> =>
-  Effect.promise(() => rx.firstValueFrom(facade.pendingTransactionsService.state()));
-
 /** A fork-aware facade over a ledger-v8 chain that has paid this wallet Night, with the unshielded wallet syncing it. */
 const facadeBelowTheFork = () => forkingFacadeAt({ seed: SEED, chainVersion: v8Version });
 
-describe('A reservation taken below forks.v9', () => {
+describe('A balanced record taken below forks.v9', () => {
   it('names exactly the coins the V1 wallet booked for the transfer', () =>
     Effect.gen(function* () {
       const facade = yield* facadeBelowTheFork();
@@ -78,8 +74,8 @@ describe('A reservation taken below forks.v9', () => {
       );
       const booked = after.unshielded.pendingCoins.map(utxoKey).toSorted();
 
-      const pending = yield* pendingSet(facade);
-      expect(pending.reservations).toHaveLength(1);
-      expect(pending.reservations[0].inputs.unshielded.toSorted()).toEqual(booked);
+      const live = yield* liveRecordsOf(facade);
+      expect(live).toHaveLength(1);
+      expect(live[0].inputs.unshielded.toSorted()).toEqual(booked);
     }).pipe(Effect.scoped, Effect.runPromise));
 });

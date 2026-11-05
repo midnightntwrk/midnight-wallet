@@ -10,51 +10,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import {
-  type DustInitialNonce,
-  type DustNullifier,
-  type DustNonce,
-  type DustPublicKey,
-  type Utxo,
-} from '@midnightntwrk/ledger-v9';
+import { type DustNullifier } from '@midnightntwrk/ledger-v9';
+import { type Dust } from '../../types/DustWalletTypes.js';
 
-export type Dust = {
-  initialValue: bigint;
-  owner: DustPublicKey;
-  nonce: DustNonce;
-  seq: number;
-  ctime: Date;
-  backingNight: DustInitialNonce;
-  mtIndex: bigint;
-};
+export type {
+  Dust,
+  DustFullInfo,
+  DustGenerationDetails,
+  DustGenerationInfo,
+  UtxoWithMeta,
+} from '../../types/DustWalletTypes.js';
 
-export type DustWithNullifier = Dust & {
+/** A Dust coin a pending transaction has spent: one booking of that coin, which a revert of that transaction releases. */
+export type PendingDust = Readonly<{
+  /** The coin as it was before the spend. Its own `ctime` is when the coin was created, not when it was spent. */
+  coin: Dust;
   nullifier: DustNullifier;
-};
-
-export type DustFullInfo = DustGenerationDetails & {
-  token: Dust;
-};
-
-/** Details of Dust generation/decay */
-export type DustGenerationDetails = {
-  /** When the backing Night UTxO was spent */
-  dtime: Date | undefined;
-  /** Maximum capacity (in Specks) `gen.value * night_dust_ratio` */
-  maxCap: bigint;
-  /** When the maximum capacity is reached. `ctime + timeToCapSeconds` */
-  maxCapReachedAt: Date;
-  /** Current amount of Dust available (in Specks) */
-  generatedNow: bigint;
-  /** The slope of generation and decay for this specific Dust UTxO (`gen.value * generation_decay_rate`) */
-  rate: bigint;
-};
-
-export type DustGenerationInfo = {
-  value: bigint;
-  owner: DustPublicKey;
-  nonce: DustInitialNonce;
-  dtime: Date | undefined;
-};
-
-export type UtxoWithMeta = Utxo & { ctime: Date; registeredForDustGeneration: boolean };
+  /**
+   * The time the spending transaction declared in `dustActions.ctime`, in whole seconds as the ledger keeps it. The
+   * ledger locks the coin until `declaredTime + dustGracePeriodSeconds`, and a coin can only be booked again after
+   * that, so this tells one booking of a coin from a later one.
+   */
+  declaredTime: Date;
+}>;

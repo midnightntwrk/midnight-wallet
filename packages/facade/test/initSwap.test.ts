@@ -18,7 +18,7 @@ import {
   ProtocolVersion,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
@@ -39,7 +39,6 @@ import {
   deriveWalletKeys,
   makeSimulatorFacade,
   registerForDust,
-  SilentPendingTransactions,
   tokenValue,
   waitForShieldedCoins,
   waitForUnshieldedBalance,
@@ -97,11 +96,11 @@ const dustImbalanceAfterFee = (tx: ledger.UnprovenTransaction, fee: bigint): big
  * torn down when the scope closes.
  */
 const runWithMaker = (
-  genesisMints: [GenesisMint, ...GenesisMint[]],
-  assert: (facade: WalletFacade, env: { simulator: Simulator }) => Promise<void>,
+  genesisMints: [V9.GenesisMint, ...V9.GenesisMint[]],
+  assert: (facade: WalletFacade, env: { simulator: V9.Simulator }) => Promise<void>,
 ) =>
   Effect.gen(function* () {
-    const simulator = yield* Simulator.init({ genesisMints, blockProducer: immediateBlockProducer() });
+    const simulator = yield* V9.Simulator.init({ genesisMints, blockProducer: V9.immediateBlockProducer() });
     const config: SimulatorConfig = {
       simulator,
       networkId: NETWORK_ID,
@@ -112,14 +111,14 @@ const runWithMaker = (
     yield* Effect.promise(() => assert(facade, { simulator }));
   }).pipe(Effect.scoped, Effect.runPromise);
 
-const shieldedGenesis = (amount: bigint): GenesisMint => ({
+const shieldedGenesis = (amount: bigint): V9.GenesisMint => ({
   type: 'shielded',
   tokenType: shieldedTokenType,
   amount,
   recipient: KEYS.shieldedKeys,
 });
 
-const nightGenesis = (amount: bigint): GenesisMint => ({
+const nightGenesis = (amount: bigint): V9.GenesisMint => ({
   type: 'unshielded',
   tokenType: nightTokenType,
   amount,
@@ -316,7 +315,6 @@ describe('WalletFacade.initSwap rejects a swap with no legs', () => {
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(KEYS.unshieldedKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(KEYS.seeds.dust),
       provingService: () => createV8MockProvingService(),
-      pendingTransactionsService: () => new SilentPendingTransactions(),
       submissionService: () => ({
         submitTransaction: (): Promise<never> => Promise.reject(new Error('not under test')),
         close: () => Promise.resolve(),

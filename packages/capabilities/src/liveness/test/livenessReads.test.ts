@@ -105,17 +105,17 @@ describe('makeDefaultLivenessReads', () => {
     });
 
     it('should keep a client whose build outlived an abandoned poll, rather than stranding it and rebuilding', async () => {
-      // The poll fails fast: when the indexer read fails, the in-flight node read is interrupted. A client build is
-      // uninterruptible once its acquire has started, so the interrupt lands *between* the acquire completing and the
-      // cache write — leaving the built client stranded (its release parked on the sync-lifetime scope, the cache
-      // still empty) and the next poll building another. During an indexer outage that is one full handshake and one
-      // stranded client per poll, without bound.
+      // The poll fails fast: when the indexer read fails, the in-flight node read is interrupted. An interrupt that lands
+      // *between* the build completing and the cache write leaves the built client stranded (its release parked on the
+      // sync-lifetime scope, the cache still empty) and the next poll building another. During an indexer outage that
+      // is one full handshake and one stranded client per poll, without bound.
       const program = Effect.gen(function* () {
         const builds = yield* Ref.make(0);
         const factory: NodeClientFactory = () =>
           Effect.acquireRelease(
-            // The sleep sits inside the acquire, which `acquireRelease` runs uninterruptibly — the same shape as the
-            // real client's bounded connect. The interrupt below therefore arrives once the build is already done.
+            // An uninterruptible acquire is a way to make the interrupt below land after a build that completed: the
+            // window between build and cache write that the wrapper protects. It does not model the real client,
+            // whose unfinished handshake an interrupt abandons.
             Ref.update(builds, (n) => n + 1).pipe(
               Effect.zipRight(Effect.sleep(Duration.millis(50))),
               Effect.as(stubReader),

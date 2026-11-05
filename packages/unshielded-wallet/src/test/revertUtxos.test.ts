@@ -32,7 +32,14 @@ import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import { V2Tag } from '../v2/RunningV2Variant.js';
-import { bookedUtxosOf, type CarriedUtxo, type ForkWallet, makeForkWallet, utxosOf } from './forkHarness.js';
+import {
+  bookedUtxosOf,
+  type CarriedUtxo,
+  type ForkWallet,
+  makeForkWallet,
+  utxosOf,
+  eitherCoreStateOf,
+} from './forkHarness.js';
 import { timelineTokenType, timelineTransaction, v2Identity } from './forkTimeline.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
@@ -108,20 +115,20 @@ const releasesOnlyTheNamedBookedCoin = (wallet: ForkWallet) =>
   Effect.gen(function* () {
     const booked = yield* publicState(wallet.unshielded);
     // The premise, asserted rather than assumed: the transfer booked every coin, leaving nothing available.
-    expect(valuesOf(bookedUtxosOf(booked.state))).toEqual([100n, 200n, 300n]);
-    expect(valuesOf(utxosOf(booked.state))).toEqual([]);
+    expect(valuesOf(bookedUtxosOf(eitherCoreStateOf(booked)))).toEqual([100n, 200n, 300n]);
+    expect(valuesOf(utxosOf(eitherCoreStateOf(booked)))).toEqual([]);
 
     yield* Effect.promise(() => wallet.unshielded.revertUtxos([`${'f'.repeat(64)}#0`]));
     const afterUnknown = yield* publicState(wallet.unshielded);
-    expect(bookedUtxosOf(afterUnknown.state)).toEqual(bookedUtxosOf(booked.state));
-    expect(utxosOf(afterUnknown.state)).toEqual([]);
+    expect(bookedUtxosOf(eitherCoreStateOf(afterUnknown))).toEqual(bookedUtxosOf(eitherCoreStateOf(booked)));
+    expect(utxosOf(eitherCoreStateOf(afterUnknown))).toEqual([]);
 
-    const released = bookedUtxosOf(booked.state).find((utxo) => utxo.value === 200n);
+    const released = bookedUtxosOf(eitherCoreStateOf(booked)).find((utxo) => utxo.value === 200n);
     expect(released).toBeDefined();
     yield* Effect.promise(() => wallet.unshielded.revertUtxos([idOf(released!)]));
     const afterRelease = yield* publicState(wallet.unshielded);
-    expect(valuesOf(utxosOf(afterRelease.state))).toEqual([200n]);
-    expect(valuesOf(bookedUtxosOf(afterRelease.state))).toEqual([100n, 300n]);
+    expect(valuesOf(utxosOf(eitherCoreStateOf(afterRelease)))).toEqual([200n]);
+    expect(valuesOf(bookedUtxosOf(eitherCoreStateOf(afterRelease)))).toEqual([100n, 300n]);
   });
 
 describe('an unshielded wallet releasing booked coins by id', () => {

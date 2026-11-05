@@ -10,40 +10,29 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import type * as ledger from '@midnightntwrk/ledger-v9';
-import { Duration, Array as EArray, Effect, Schedule, Schema } from 'effect';
+import { Duration, Array as EArray, Effect, Schedule, type Schema } from 'effect';
 import { TransactionHistoryDetail } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { BlocklessFinalizedEntryError, TransactionHistoryError } from './WalletError.js';
 
-export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
-  type: Schema.String,
-  nonce: Schema.String,
-  value: Schema.BigInt,
-  mtIndex: Schema.BigInt,
-});
+import {
+  type ShieldedSectionSchema,
+  type ShieldedHistoryStorage,
+  type ShieldedTransactionHistoryEntry,
+} from '../types/ShieldedWalletTypes.js';
 
-export const ShieldedSectionSchema = Schema.Struct({
-  receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
-  spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
-});
+export {
+  QualifiedShieldedCoinInfoSchema,
+  ShieldedSectionSchema,
+  ShieldedTransactionHistoryEntrySchema,
+  mergeShieldedSections,
+  type ShieldedHistoryStorage,
+  type ShieldedTransactionHistoryEntry,
+} from '../types/ShieldedWalletTypes.js';
 
 type ShieldedSection = Schema.Schema.Type<typeof ShieldedSectionSchema>;
-
-/**
- * Shielded entry schema. Extends the common entry shape with an optional `shielded` section. Tightening — required
- * `shielded` plus required `protocolVersion`/`status` — happens at the writer-input type, not on the stored shape.
- */
-export const ShieldedTransactionHistoryEntrySchema = TransactionHistoryStorage.extendEntrySchema({
-  shielded: Schema.optional(ShieldedSectionSchema),
-});
-
-export type ShieldedTransactionHistoryEntry = Schema.Schema.Type<typeof ShieldedTransactionHistoryEntrySchema>;
-
-export type ShieldedHistoryStorage =
-  TransactionHistoryStorage.TransactionHistoryReader<TransactionHistoryStorage.TransactionHistoryEntryWithHash> &
-    TransactionHistoryStorage.TransactionHistoryWriter<ShieldedTransactionHistoryEntry>;
 
 /**
  * Writer input for shielded's `gotFinalized`. The stored shape leaves fields optional, but at write time we know
@@ -66,8 +55,6 @@ export type DefaultTransactionHistoryConfiguration = {
    */
   transactionDetailsRetryWindow?: Duration.DurationInput;
 };
-
-const coinEquals = Schema.equivalence(QualifiedShieldedCoinInfoSchema);
 
 const isFinalized = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryCommon | undefined,
@@ -95,11 +82,6 @@ export type TransactionHistoryService = {
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<TransactionDetails, TransactionHistoryError | BlocklessFinalizedEntryError>;
 };
-
-export const mergeShieldedSections = (existing: ShieldedSection, incoming: ShieldedSection): ShieldedSection => ({
-  receivedCoins: EArray.unionWith(existing.receivedCoins, incoming.receivedCoins, coinEquals),
-  spentCoins: EArray.unionWith(existing.spentCoins, incoming.spentCoins, coinEquals),
-});
 
 const convertUpdateToFinalizedInput = (
   changes: ledger.ZswapStateChanges,

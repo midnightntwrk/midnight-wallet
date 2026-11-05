@@ -10,8 +10,4 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export type TotalCostParameters = {
-  additionalFeeOverhead?: bigint;
-  // a number of blocks we expect for finalization.
-  feeBlocksMargin: number;
-};
+export type { TotalCostParameters } from '../../types/DustWalletTypes.js';

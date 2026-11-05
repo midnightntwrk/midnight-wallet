@@ -936,7 +936,11 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
           : CoreWallet.applyEventsWithChanges(state, update.secretKey, events, lastAppliedBlock!.timestamp);
 
       const updatedState = CoreWallet.updateProgress(annotateVersion(newState, observedVersion), {
+        // The simulator is the chain itself, so reaching it is being connected. Its tip is counted as the cursor is,
+        // by the next block to process, so a wallet that has applied every block is exactly at it.
         appliedIndex: lastAppliedBlock === undefined ? state.progress.appliedIndex : lastAppliedBlock.number + 1n,
+        highestRelevantWalletIndex: lastBlock.number + 1n,
+        isConnected: true,
       });
       return [
         updatedState,

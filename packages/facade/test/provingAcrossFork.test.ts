@@ -35,12 +35,11 @@ import {
   ProtocolVersion,
   ProtocolVersionMismatchError,
   WalletTransaction,
-  type FinalizedTx,
   type UnprovenTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
-  type V9UnboundTransaction,
-  type VersionedProvingService,
+  type AnyVersionUnboundTransaction,
+  type AnyVersionUnprovenTransaction,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DustWallet, type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet, type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
@@ -69,9 +68,10 @@ import {
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
-  SilentPendingTransactions,
+  DrivenLifecycle,
   sleep,
   unshieldedAt,
+  type AnyVersionProvingService,
 } from './utils/index.js';
 
 /** The boundary this chain forks at. */
@@ -93,7 +93,7 @@ const deferred = (): { readonly promise: Promise<void>; readonly settle: () => v
 };
 
 /** A prover that holds every transaction until the suite releases it, then proves it as the mock prover would. */
-class PausableProving implements VersionedProvingService<V9UnboundTransaction> {
+class PausableProving implements AnyVersionProvingService {
   readonly #proving = createV8MockProvingService();
   readonly #reached = deferred();
   readonly #released = deferred();
@@ -107,28 +107,12 @@ class PausableProving implements VersionedProvingService<V9UnboundTransaction> {
   }
 
   async prove(
-    transaction: ledgerV9.UnprovenTransaction,
+    transaction: AnyVersionUnprovenTransaction,
     protocolVersion: ProtocolVersion.ProtocolVersion,
-  ): Promise<V9UnboundTransaction> {
+  ): Promise<AnyVersionUnboundTransaction> {
     this.#reached.settle();
     await this.#released.promise;
     return await this.#proving.prove(transaction, protocolVersion);
-  }
-}
-
-/** Records what the facade asks to be tracked as pending, and at which version. */
-class RecordingPendingTransactions extends SilentPendingTransactions {
-  readonly added: {
-    tx: FinalizedTx;
-    protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>;
-  }[] = [];
-
-  override addPendingTransaction(
-    tx: FinalizedTx,
-    protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
-  ): Promise<void> {
-    this.added.push({ tx, protocolVersion });
-    return Promise.resolve();
   }
 }
 
@@ -136,7 +120,7 @@ describe('a transaction proved while the wallets move', () => {
   let configuration: ResolvedConfiguration;
   let facade: WalletFacade;
   let proving: PausableProving;
-  let pending: RecordingPendingTransactions;
+  let lifecycle: DrivenLifecycle;
   let shieldedStates: rx.BehaviorSubject<ShieldedWalletState>;
   let unshieldedStates: rx.BehaviorSubject<UnshieldedWalletState>;
   let dustStates: rx.BehaviorSubject<DustWalletState>;
@@ -172,7 +156,7 @@ describe('a transaction proved while the wallets move', () => {
     drivenBy(dust, dustStates);
 
     proving = new PausableProving();
-    pending = new RecordingPendingTransactions();
+    lifecycle = new DrivenLifecycle();
 
     facade = await WalletFacade.init({
       configuration,
@@ -180,7 +164,7 @@ describe('a transaction proved while the wallets move', () => {
       unshielded: () => unshielded,
       dust: () => dust,
       provingService: () => proving,
-      pendingTransactionsService: () => pending,
+      transactionLifecycleService: () => lifecycle,
     });
   });
 
@@ -222,7 +206,7 @@ describe('a transaction proved while the wallets move', () => {
     expect(finalized.protocolVersion).toBe(tx.protocolVersion);
   });
 
-  it('records the pending transaction at the version it was authored at, so orphaning judges by that', async () => {
+  it('records the finalized transaction at the version it was authored at, so orphaning judges by that', async () => {
     const tx = v8Transaction();
     const finalizing = facade.finalizeTransaction(tx);
     await proving.reached;
@@ -231,7 +215,10 @@ describe('a transaction proved while the wallets move', () => {
 
     const finalized = await finalizing;
 
-    expect(pending.added).toStrictEqual([{ tx: finalized, protocolVersion: Option.some(v8Version) }]);
+    expect(finalized.protocolVersion).toBe(v8Version);
+    expect(lifecycle.states.value.records.map((record) => [record.state, record.protocolVersion])).toStrictEqual([
+      [{ _tag: 'Finalized' }, Option.some(v8Version)],
+    ]);
   });
 
   it('refuses a transaction whose epoch the wallets left while it was being proved', async () => {
@@ -274,7 +261,7 @@ describe('a transaction proved while the wallets move', () => {
     expect(dustRevert).toHaveBeenCalledWith(tx);
   });
 
-  it('tracks nothing as pending for a transaction no chain the wallets are on can include', async () => {
+  it('records nothing for a transaction no chain the wallets are on can include', async () => {
     const finalizing = facade.finalizeTransaction(v8Transaction());
     await proving.reached;
     await walletsReach(v9Version);
@@ -282,7 +269,7 @@ describe('a transaction proved while the wallets move', () => {
 
     await expect(finalizing).rejects.toBeInstanceOf(ProtocolVersionMismatchError);
 
-    expect(pending.added).toStrictEqual([]);
+    expect(lifecycle.states.value.records).toStrictEqual([]);
   });
 
   it('stamps a recipe finalized across a move within the epoch at the version the recipe was built for', async () => {
@@ -299,8 +286,7 @@ describe('a transaction proved while the wallets move', () => {
     const finalized = await finalizing;
 
     expect(finalized.protocolVersion).toBe(v8Version);
-    expect(pending.added.map((entry) => entry.protocolVersion)).toStrictEqual([
-      Option.some(v8Version),
+    expect(lifecycle.states.value.records.map((record) => record.protocolVersion)).toStrictEqual([
       Option.some(v8Version),
     ]);
   });

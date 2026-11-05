@@ -29,7 +29,7 @@ import type {
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryClient, SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Cause, Chunk, Effect, Exit, Option, Stream } from 'effect';
+import { Cause, Chunk, Effect, Either, Exit, Option, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import {
@@ -46,12 +46,15 @@ import {
   type BlockData,
   type CollapsedMerkleTree,
   type DustGenerationsSubscription,
+  type NewDustGeneration,
   DustGenerationsSyncUpdate,
   type NullifierRegularTransaction,
   type DustSpendProcessedEvent,
   DustUtxoMap,
   StateUpdate,
 } from '../SyncSchema.js';
+import { leBigintToHex } from '../Utils.js';
+import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -222,6 +225,148 @@ describe('V2 projections sync capability', () => {
     expect(state.state.syncTime).toEqual(inputSyncTime);
     expect(state.state.serialize()).toEqual(serializedInput);
     expect(state.progress).toBe(inputProgress);
+  });
+});
+
+describe('V2 projections sync of pending Dust', () => {
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const created = new Date(1_000_000_000);
+  const secondsAfterCreation = (seconds: number): Date => new Date(created.getTime() + seconds * 1000);
+
+  // An own coin created with no value whose backing Night was spent 100 s later: it generates for 100 s, then decays
+  // back to nothing over the same span, so it is worth nothing 200 s after creation.
+  const backingNight = 'aa'.repeat(32);
+  const decayingQdo = {
+    initialValue: 0n,
+    owner: secretKey.publicKey,
+    nonce: dustFirstNonce(backingNight, secretKey.publicKey),
+    seq: 0,
+    ctime: created,
+    backingNight,
+    mtIndex: 0n,
+  };
+  const decaying: NewDustGeneration = {
+    dustNullifier: dustNullifier(decayingQdo, secretKey),
+    genInfo: {
+      value: 5_000_000_000_000n,
+      owner: secretKey.publicKey,
+      nonce: backingNight,
+      dtime: secondsAfterCreation(100),
+    },
+    generationMtIndex: 0,
+    qdo: decayingQdo,
+    transactionId: 7,
+    transactionHash: 'cd'.repeat(32),
+  };
+
+  const syncedWallet = (): CoreWallet => {
+    const utxos = DustUtxoMap.create([decaying]);
+    const withUtxos = CoreWallet.applyNewDustUtxos(CoreWallet.initEmpty(dustParameters, secretKey, networkId), utxos);
+    return CoreWallet.applyDustGenerations(CoreWallet.applyDustCommitments(withUtxos, utxos, []), [], [decaying], []);
+  };
+
+  const rootHex = (root: bigint | undefined): string => (root !== undefined ? leBigintToHex(root) : '');
+
+  // A projections update that adds and spends nothing, at `timestamp`, carrying the roots the wallet already holds.
+  const emptyUpdateAt = (wallet: CoreWallet, timestamp: Date) =>
+    StateUpdate({
+      dustGenerations: { rawUpdates: [], newGenerations: [], generationDtimeUpdates: [] },
+      newUtxos: DustUtxoMap.create([]),
+      spentUtxos: DustUtxoMap.create([]),
+      collapsedCommitments: [],
+      latestBlock: {
+        height: 2,
+        hash: '00'.repeat(32),
+        protocolVersion: V9_NATIVE,
+        ledgerParameters: LedgerParameters.initialParameters(),
+        timestamp,
+        zswapEndIndex: 0,
+        dustCommitmentEndIndex: 1,
+        dustGenerationEndIndex: 1,
+        dustCommitmentMerkleTreeRoot: rootHex(wallet.state.commitmentTreeRoot()),
+        dustGenerationMerkleTreeRoot: rootHex(wallet.state.generatingTreeRoot()),
+      },
+    });
+
+  it('should stop counting a pending coin once the ledger drops it as worth nothing, so a decayed coin does not stay pending for good', () => {
+    const spendTime = secondsAfterCreation(150);
+    const [, spent] = CoreWallet.spendCoins(syncedWallet(), secretKey, [{ token: decaying.qdo, value: 1n }], spendTime);
+    // Well past the point the coin is worth nothing, and still inside the lock taken at `spendTime`.
+    const afterDecay = secondsAfterCreation(400);
+
+    expect(spent.pendingDust.map(({ coin }) => coin.nonce)).toEqual([decaying.qdo.nonce]);
+    const lockEnd = new Date(spendTime.getTime() + Number(dustParameters.dustGracePeriodSeconds) * 1000);
+    expect(afterDecay.getTime()).toBeLessThan(lockEnd.getTime());
+
+    const [synced] = makeEventLessSyncCapability().applyUpdate(spent, emptyUpdateAt(spent, afterDecay), fullSpan);
+
+    // The ledger has dropped the coin from the state as worth nothing, so nothing is left for it to be pending against:
+    // a locked coin comes back among the utxos once its lock ends, and this one does not.
+    expect(synced.state.processTtls(lockEnd).utxos).toEqual([]);
+    expect(synced.state.utxos).toEqual([]);
+    expect(synced.state.walletBalance(afterDecay)).toBe(0n);
+    expect(synced.pendingDust).toEqual([]);
+  });
+
+  describe('a coin that keeps its value', () => {
+    // An own coin created with no value whose backing Night is never spent: it keeps generating, so it never decays.
+    const generatingNight = 'bb'.repeat(32);
+    const generatingQdo = {
+      initialValue: 0n,
+      owner: secretKey.publicKey,
+      nonce: dustFirstNonce(generatingNight, secretKey.publicKey),
+      seq: 0,
+      ctime: created,
+      backingNight: generatingNight,
+      mtIndex: 0n,
+    };
+    const generating: NewDustGeneration = {
+      dustNullifier: dustNullifier(generatingQdo, secretKey),
+      genInfo: { value: 5_000_000_000_000n, owner: secretKey.publicKey, nonce: generatingNight, dtime: undefined },
+      generationMtIndex: 0,
+      qdo: generatingQdo,
+      transactionId: 7,
+      transactionHash: 'cd'.repeat(32),
+    };
+
+    const syncedGeneratingWallet = (): CoreWallet => {
+      const utxos = DustUtxoMap.create([generating]);
+      const withUtxos = CoreWallet.applyNewDustUtxos(CoreWallet.initEmpty(dustParameters, secretKey, networkId), utxos);
+      return CoreWallet.applyDustGenerations(
+        CoreWallet.applyDustCommitments(withUtxos, utxos, []),
+        [],
+        [generating],
+        [],
+      );
+    };
+
+    const spendTime = secondsAfterCreation(150);
+    const lockEnd = new Date(spendTime.getTime() + Number(dustParameters.dustGracePeriodSeconds) * 1000);
+    const spentGenerating = (): CoreWallet =>
+      CoreWallet.spendCoins(syncedGeneratingWallet(), secretKey, [{ token: generating.qdo, value: 1n }], spendTime)[1];
+
+    it('should stop counting a pending coin once its lock runs out, so a coin back among the utxos is not also pending', () => {
+      const spent = spentGenerating();
+      expect(spent.pendingDust.map(({ coin }) => coin.nonce)).toEqual([generating.qdo.nonce]);
+      expect(spent.state.utxos).toEqual([]);
+
+      const [synced] = makeEventLessSyncCapability().applyUpdate(spent, emptyUpdateAt(spent, lockEnd), fullSpan);
+
+      expect(synced.state.utxos.map((utxo) => utxo.nonce)).toEqual([generating.qdo.nonce]);
+      expect(synced.pendingDust).toEqual([]);
+    });
+
+    it('should keep a coin pending while its lock holds and it still has value, because the transaction that spent it may yet land', () => {
+      const spent = spentGenerating();
+      const withinLock = new Date(lockEnd.getTime() - 1000);
+      expect(withinLock.getTime()).toBeGreaterThan(spendTime.getTime());
+
+      const [synced] = makeEventLessSyncCapability().applyUpdate(spent, emptyUpdateAt(spent, withinLock), fullSpan);
+
+      expect(synced.state.utxos).toEqual([]);
+      expect(synced.state.walletBalance(withinLock)).toBe(0n);
+      expect(synced.pendingDust.map(({ coin }) => coin.nonce)).toEqual([generating.qdo.nonce]);
+    });
   });
 });
 
@@ -952,6 +1097,107 @@ describe('V2 projections indexer request shape', () => {
       { start: 0, end: 4 },
       { start: 6, end: 8 },
       { start: 10, end: 11 },
+    ]);
+  });
+});
+
+/**
+ * Where a projections pass resumes after the wallet was saved and restored.
+ *
+ * @remarks
+ *   A pass asks the indexer for the dtime updates of the wallet's own generations after the block it last synced to — its
+ *   `dtimeCutoffHeight` — and `0` asks for all of them. The trees' first free indices, the rest of where a pass stands,
+ *   live in the ledger state and survive any restore; the height does not, unless the snapshot records it. Without it,
+ *   every restart of a long-lived wallet replays its whole dtime history again.
+ */
+describe('V2 projections resume height across a restore', () => {
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const serialization = makeDefaultV2SerializationCapability();
+  const lastSyncedHeight = 169_512;
+
+  const notCalled = (name: string) => (): never => {
+    throw new Error(`${name} must not be called in this scenario`);
+  };
+
+  const rootHex = (root: bigint | undefined): string => (root !== undefined ? leBigintToHex(root) : '');
+
+  /** A block whose dust trees are empty, so a pass over an empty wallet has nothing to fetch but the generations. */
+  const blockAt = (height: number, wallet: CoreWallet): BlockData => ({
+    height,
+    hash: '00'.repeat(32),
+    protocolVersion: V9_NATIVE,
+    ledgerParameters: LedgerParameters.initialParameters(),
+    timestamp: new Date(1_700_000_000_000),
+    zswapEndIndex: 0,
+    dustCommitmentEndIndex: 0,
+    dustGenerationEndIndex: 0,
+    dustCommitmentMerkleTreeRoot: rootHex(wallet.state.commitmentTreeRoot()),
+    dustGenerationMerkleTreeRoot: rootHex(wallet.state.generatingTreeRoot()),
+  });
+
+  /**
+   * A wallet whose last projections pass finished at `height`: the update a pass ends with, adding and spending
+   * nothing.
+   */
+  const syncedByProjectionsTo = (height: number): CoreWallet => {
+    const empty = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const [synced] = makeEventLessSyncCapability().applyUpdate(
+      empty,
+      StateUpdate({
+        dustGenerations: { rawUpdates: [], newGenerations: [], generationDtimeUpdates: [] },
+        newUtxos: DustUtxoMap.create([]),
+        spentUtxos: DustUtxoMap.create([]),
+        collapsedCommitments: [],
+        latestBlock: blockAt(height, empty),
+      }),
+      fullSpan,
+    );
+    return synced;
+  };
+
+  const restored = (wallet: CoreWallet): CoreWallet =>
+    Either.getOrThrow(serialization.deserialize(null, serialization.serialize(wallet)));
+
+  /** Runs the next projections pass on `wallet` and returns the heights it asked for dtime updates after. */
+  const dtimeCutoffsOfNextPass = async (wallet: CoreWallet): Promise<readonly number[]> => {
+    const recorded: { cutoffs: number[] } = { cutoffs: [] };
+
+    const indexerSyncService: IndexerSyncService = {
+      // The chain has moved on since the pass that wrote the snapshot.
+      blockData: () => Effect.succeed(blockAt(lastSyncedHeight + 88, wallet)),
+      subscribeDustGenerations: (_address, dtimeCutoffHeight) => {
+        recorded.cutoffs.push(dtimeCutoffHeight);
+        return Stream.empty;
+      },
+      // An empty wallet tracks no nullifiers and its block has no commitments, so neither phase reaches the indexer.
+      subscribeDustNullifierTransactions: notCalled('subscribeDustNullifierTransactions'),
+      dustCommitmentMerkleTreeUpdate: notCalled('dustCommitmentMerkleTreeUpdate'),
+      connectionLayer: notCalled('connectionLayer'),
+      subscribeWallet: notCalled('subscribeWallet'),
+      queryClient: notCalled('queryClient'),
+    };
+
+    await doEventlessSync(wallet, secretKey, 7, indexerSyncService).pipe(
+      Stream.runDrain,
+      Effect.provideService(QueryClient, { query: notCalled('QueryClient.query') }),
+      Effect.provideService(SubscriptionClient, {
+        subscribe: notCalled('SubscriptionClient.subscribe'),
+        subscribeWithBackpressure: notCalled('SubscriptionClient.subscribeWithBackpressure'),
+      }),
+      Effect.scoped,
+      Effect.runPromise,
+    );
+
+    return recorded.cutoffs;
+  };
+
+  it('should resume from the height its last pass reached, so a restart does not replay its dtime updates from block 0', async () => {
+    expect(await dtimeCutoffsOfNextPass(restored(syncedByProjectionsTo(lastSyncedHeight)))).toEqual([lastSyncedHeight]);
+  });
+
+  it('should resume from block 0 when no projections pass wrote the snapshot, because then no height was recorded', async () => {
+    expect(await dtimeCutoffsOfNextPass(restored(CoreWallet.initEmpty(dustParameters, secretKey, networkId)))).toEqual([
+      0,
     ]);
   });
 });

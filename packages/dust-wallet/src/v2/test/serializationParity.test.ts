@@ -109,14 +109,9 @@ describe('the Dust a wallet has spent but not yet seen confirmed', () => {
     expect(spent.pendingDust.length).toBe(1);
   });
 
-  // EXPECTED RED, and deliberately not skipped: `pendingDust` is absent from the snapshot schema, and the restore path
-  // hands `CoreWallet.restore` an empty array outright. So a wallet that has spent Dust presents that Dust as
-  // available again after any restart, which is a wallet believing it can spend what it has already spent.
-  //
-  // Left failing rather than fixed on purpose. Simply carrying the entry conflicts with the sync-recovery problem of
-  // pending state that survives serialization and can never be cleared, so whatever lands has to carry the entry AND
-  // give it a way to expire — or record that dropping it is deliberate. That is a scope decision, not a test decision.
-  it.fails('is carried across serialize then deserialize', () => {
+  // Carried so a restored wallet can still release it. It cannot outlive its coin: a sync settles it once the chain
+  // spends the coin, the coin's lock runs out, or the coin decays to nothing.
+  it('is carried across serialize then deserialize', () => {
     const [, spent] = CoreWallet.spendCoins(
       funded,
       fixtureSecretKey(),

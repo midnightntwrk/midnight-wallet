@@ -13,7 +13,7 @@
 import { Either, pipe, Schema } from 'effect';
 import { type SignatureKind } from '@midnightntwrk/ledger-v9';
 import { type WalletError } from './WalletError.js';
-import { assertKeyAddressConsistency } from '../SchemeConsistency.js';
+import { assertKeyAddressConsistency } from './SchemeConsistency.js';
 import { CoreWallet } from './CoreWallet.js';
 import { SNAPSHOT_FORMAT_VERSION, V1_SNAPSHOT_FORMAT_VERSION, upgradeSnapshotV1ToV2 } from '../SnapshotFormat.js';
 // Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
@@ -145,7 +145,7 @@ export const makeDefaultV2SerializationCapability = ({
         // Enforce scheme consistency at the deserialization trust boundary: the
         // stored address must derive from the stored verifying key. This rejects
         // relabelled or spliced snapshots — a key whose encoding does not match
-        // its scheme tag fails to decode (SnapshotRestoreError), and a key/address
+        // its scheme tag fails to decode (OtherWalletError), and a key/address
         // scheme mismatch is reported as a SchemeMismatchError.
         Either.flatMap((read) =>
           pipe(

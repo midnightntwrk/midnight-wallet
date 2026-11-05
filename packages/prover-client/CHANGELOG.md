@@ -1,5 +1,43 @@
 # @midnightntwrk/wallet-sdk-prover-client
 
+## 2.0.0-rc.1
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 1.x
+
+  - `HttpProverClient`, `proveTransaction` and `asProvingProvider()` work with `@midnightntwrk/ledger-v9` transactions.
+    `ProverClient.Service` adds `asV8ProvingProvider()` and `asV9ProvingProvider()`, which implementers must provide.
+  - `WasmProver.makeDefaultKeyMaterialProvider()` serves ledger-v9's key material (circuit generation 10); 1.x served
+    ledger-v8's. For ledger-v8, use `WasmProver.makeV8KeyMaterialProvider()` (generation 9).
+  - Depends on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` beside `@midnight-ntwrk/ledger-v8`, on `@midnight-ntwrk/zkir-v2`
+    `2.2.0-rc.6`, and on `@effect/platform` `^0.97`.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 1.x
+
+  - `WasmProver.makeV8KeyMaterialProvider()` and `WasmProver.makeV9KeyMaterialProvider()` read each ledger version's key
+    material from `https://srs.midnight.network/`, the host the ledger's own data provider reads. `KeyMaterialConfig`'s
+    `source` reads the same files from a host of your own, such as a mirror or a browser page's own origin.
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 1.x
+
+  - The bundled key material providers (`makeDefaultKeyMaterialProvider`, `makeV8KeyMaterialProvider`,
+    `makeV9KeyMaterialProvider`) check what they read before it is used. Every file is checked against the SHA-256 its
+    ledger release declares, and a mismatch fails with `KeyMaterialIntegrityError`. An error answer from the host is no
+    longer taken for key material: it fails with `KeyMaterialFetchError` (5xx and 429 answers are retried first), and an
+    unreachable host fails with `KeyMaterialTransferError` (also retried). A parameter size the ledger does not publish
+    fails with `UnknownPublicParametersError`. Through `proveTransaction` they surface as a `ClientError` whose `cause`
+    is the ledger's own error, which names the key material error in its message. These providers need Web Crypto.
+  - The default key material is read from the ledger's public host rather than a development bucket.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0-rc.1
+
 ## 2.0.0-rc.0
 
 ### Patch Changes

@@ -11,8 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { CustomDustWallet, type DefaultDustConfiguration } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { CustomDustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import {
+  type DefaultV2Configuration as DefaultDustV2Configuration,
   TransactionHistory as DustTransactionHistory,
   V2Builder as DustV2Builder,
 } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
@@ -85,7 +86,7 @@ const unshieldedConfiguration = (): DefaultUnshieldedConfiguration => ({
   ),
 });
 
-const dustConfiguration = (): DefaultDustConfiguration => ({
+const dustConfiguration = (): DefaultDustV2Configuration => ({
   ...baseConfiguration,
   txHistoryStorage: new InMemoryTransactionHistoryStorage(DustTransactionHistory.DustTransactionHistoryEntrySchema),
   costParameters: { feeBlocksMargin: 0 },
@@ -111,7 +112,7 @@ const unshieldedV2Only = () =>
   );
 
 const dustV2Only = () =>
-  CustomDustWallet<DefaultDustConfiguration>(dustConfiguration(), new DustV2Builder().withDefaults());
+  CustomDustWallet<DefaultDustV2Configuration>(dustConfiguration(), new DustV2Builder().withDefaults());
 
 /** The key a snapshot carries, however the writer of the day spelled it. */
 const keyOf = (serialized: string): unknown =>

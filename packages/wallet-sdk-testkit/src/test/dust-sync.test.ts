@@ -10,10 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { type DustGenerationRates } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type CanAssign, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { describe, expect, it } from 'vitest';
 import {
   DUST_SYNC_ENV_VAR,
-  dustSnapshotPath,
   dustSyncModelFromEnv,
   dustSyncModelOf,
   type DustWalletFactory,
@@ -93,13 +94,10 @@ describe('dustSyncModelOf', () => {
   });
 });
 
-describe('dustSnapshotPath', () => {
-  it('gives each sync model its own dust snapshot', () => {
-    const paths = (['events', 'projections', 'custom'] as const).map((model) =>
-      dustSnapshotPath('/cache', 'abc1234-testnet.state', model),
-    );
-    expect(new Set(paths).size).toBe(paths.length);
-    expect(paths[0]).toBe('/cache/dust-events-abc1234-testnet.state');
+describe('DustWalletFactory', () => {
+  it('starts a wallet against plain dust rates, so passing custom ones imports no ledger', () => {
+    type StartRates = Parameters<ReturnType<DustWalletFactory>['startWithSeed']>[1];
+    type _1 = Expect<CanAssign<DustGenerationRates, StartRates>>;
   });
 });
 

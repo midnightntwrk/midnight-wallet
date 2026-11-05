@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Scope, type Types, type Either } from 'effect';
+import { Effect, Either, Scope, type Types } from 'effect';
 import { type Expect, type ItemType } from '@midnightntwrk/wallet-sdk-utilities/types';
 import {
   type DustParameters,
@@ -33,6 +33,7 @@ import {
   type DefaultSyncConfiguration,
   makeDefaultSyncCapability,
   makeDefaultSyncService,
+  resumableBy,
 } from './Sync.js';
 import { type WalletSyncUpdate } from './SyncSchema.js';
 import {
@@ -67,12 +68,13 @@ export type BaseV2Configuration = {
    * The dust parameters a state built from nothing is valued against.
    *
    * @remarks
-   *   Consulted by the migration seam alone — nothing else in the variant reads it. It exists because dust's local state
-   *   is parameterised where shielded's is not: generation and decay rates live on the state, so an empty dust wallet
-   *   cannot be built without a set of them. Optional, and defaulting to `LedgerParameters.initialParameters().dust`,
-   *   because it is the empty-wallet fallback that needs it, and that fallback is what every builder written before
-   *   migrations were configurable silently relies on. A variant registered as the target of a real fork does not use
-   *   this field at all: {@link makeCrossLedgerMigration} carries its own, required, parameters.
+   *   Read by the migration seam, and by a single-variant `CustomDustWallet`'s start that names no parameters of its own;
+   *   nothing else in the variant reads it. It exists because dust's local state is parameterised where shielded's is
+   *   not: generation and decay rates live on the state, so an empty dust wallet cannot be built without a set of them.
+   *   Optional, and defaulting to `LedgerParameters.initialParameters().dust`, because it is the empty-wallet fallback
+   *   that needs it, and that fallback is what every builder written before migrations were configurable silently
+   *   relies on. A variant registered as the target of a real fork does not use this field at all:
+   *   {@link makeCrossLedgerMigration} carries its own, required, parameters.
    */
   dustParameters?: DustParameters;
 };
@@ -626,9 +628,12 @@ export class V2Builder<
       // when a fresh state was stamped from it. The runtime starts at this version rather than the variant's lower bound.
       protocolVersionOf: (state: CoreWallet) => state.protocolVersion,
 
-      deserializeState: (serialized: TSerialized): Either.Either<CoreWallet, WalletError> => {
-        return v2Context.serializationCapability.deserialize(null, serialized);
-      },
+      // A snapshot is only restorable if this variant's sync can resume from the position it carries; one that cannot
+      // is refused here, because once running a sync that misreads its position fails quietly and retries forever.
+      deserializeState: (serialized: TSerialized): Either.Either<CoreWallet, WalletError> =>
+        Either.flatMap(v2Context.serializationCapability.deserialize(null, serialized), (wallet) =>
+          resumableBy(wallet, v2Context.syncService.resumesFrom),
+        ),
     };
   }
 

@@ -13,7 +13,16 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { describe, expect, it } from 'vitest';
-import type { AnyTransaction, WalletFacade } from '../src/index.js';
+import type {
+  AnyLedgerParameters,
+  AnyTransaction,
+  AnyVersionValidatableTransaction,
+  DefaultConfiguration,
+  InitParams,
+  ValidateTxOptions,
+  VersionedValidationService,
+  WalletFacade,
+} from '../src/index.js';
 
 const NETWORK_ID = NetworkId.NetworkId.Undeployed;
 
@@ -33,6 +42,28 @@ export type FeeParameterIsTheAlias = AssertAssignable<
 export type AliasIsTheRevertParameter = AssertAssignable<
   AnyTransaction,
   Parameters<WalletFacade['revertTransaction']>[0]
+>;
+
+// The validation types the facade re-exports take type arguments, and the facade exports those too: a caller can name
+// what `validateTransaction` takes and what a `validationService` factory hands back without importing a ledger.
+type ValidationServiceFactoryReturns = Awaited<
+  ReturnType<NonNullable<InitParams<DefaultConfiguration>['validationService']>>
+>;
+export type OptionsAreTheValidateParameter = AssertAssignable<
+  ValidateTxOptions<AnyLedgerParameters>,
+  Parameters<WalletFacade['validateTransaction']>[1]
+>;
+export type ValidateParameterIsTheOptions = AssertAssignable<
+  Parameters<WalletFacade['validateTransaction']>[1],
+  ValidateTxOptions<AnyLedgerParameters>
+>;
+export type ServiceIsWhatTheFactoryReturns = AssertAssignable<
+  VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>,
+  ValidationServiceFactoryReturns
+>;
+export type FactoryReturnsTheService = AssertAssignable<
+  ValidationServiceFactoryReturns,
+  VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>
 >;
 
 describe('Naming the transactions the facade accepts, from the facade alone', () => {

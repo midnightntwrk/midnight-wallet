@@ -38,26 +38,26 @@ import {
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import {
-  asV8DustParameters,
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
+  type DustKeysByEpoch,
+  dustVariantConfigurations,
   DustWallet,
   type DustWalletAPI,
-  makeEventLessSyncCapability,
-  makeEventLessSyncService,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
-import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { SyncService, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   type DefaultConfiguration,
   type FacadeState,
+  isAwaiting,
   type WalletEntry,
   WalletFacade,
 } from '@midnightntwrk/wallet-sdk-facade';
 import { type ForkFixture, useForkFixture } from './fork-fixture.js';
 import * as utils from './utils.js';
 import { carried } from './helpers/transactions.js';
-import { rootsEqual, sameDustCoins } from './helpers/dustComparison.js';
+import { rootsEqual, sameDustCoins, dustLocalStateOf } from './helpers/dustComparison.js';
 import { logger } from './logger.js';
 
 /** The dev preset's funded account. */
@@ -120,6 +120,18 @@ const phaseOf = (state: FacadeState): string =>
     ? `Settled@${state.protocol.version}`
     : `Crossing ${state.protocol.from}->${state.protocol.to} behind=[${state.protocol.behind.join(',')}]`;
 
+/**
+ * A shielded or dust wallet's sync position: how far it has applied, how far the source says there is, and whether it
+ * is connected.
+ */
+const syncPositionOf = (
+  progress: Readonly<{ appliedIndex: bigint; highestRelevantWalletIndex: bigint; isConnected: boolean }>,
+) => ({
+  applied: progress.appliedIndex,
+  highest: progress.highestRelevantWalletIndex,
+  connected: progress.isConnected,
+});
+
 const summarize = (state: FacadeState): string =>
   asJson({
     phase: phaseOf(state),
@@ -133,7 +145,19 @@ const summarize = (state: FacadeState): string =>
     },
     shieldedBalances: state.shielded.balances,
     unshieldedBalances: state.unshielded.balances,
-    pending: state.pending.length,
+    awaiting: state.lifecycle.filter(isAwaiting).length,
+    // Each wallet's own sync position, because `synced` is the conjunction of all three: when it stays false, these say
+    // which wallet is behind, and whether the gap is in what it has applied or in what it has been told exists.
+    progress: {
+      shielded: syncPositionOf(state.shielded.progress),
+      unshielded: {
+        applied: state.unshielded.progress.appliedId,
+        highest: state.unshielded.progress.highestTransactionId,
+        connected: state.unshielded.progress.isConnected,
+        liveness: state.unshielded.progress.indexerLiveness._tag,
+      },
+      dust: syncPositionOf(state.dust.progress),
+    },
   });
 
 /** How a UTxO is named in both the wallet's state and a transaction's inputs. */
@@ -240,7 +264,7 @@ const trackPhases = (facade: WalletFacade): rx.Observable<Tracked> =>
  *   The one composition no other suite reaches. `projectionsBasedSync.undeployed.test.ts` exercises projections on a
  *   chain that is on ledger-v9 from its first block, so it can use a single-variant wallet and never crosses anything;
  *   the shipped `DustWallet` crosses but syncs by events on both sides. This one does both: the V1 variant reads the
- *   chain by event replay, hands its state to {@link Migration.makeCrossLedgerMigration}, and everything after the
+ *   chain by event replay, hands its state to the V2 variant's cross-ledger migration, and everything after the
  *   boundary is read by `makeEventLessSyncService` — which means a synced ledger-v9 state _is_ the proof that the
  *   projections path ran on a migrated state.
  *
@@ -249,26 +273,23 @@ const trackPhases = (facade: WalletFacade): rx.Observable<Tracked> =>
  *   starts on. Leaving it out keeps the crossing this test is about the only thing being tested.
  */
 const projectionsTwinDustWallet = (configuration: DefaultDustConfiguration) => {
-  const dustParameters = configuration.dustParameters ?? ledgerV9.LedgerParameters.initialParameters().dust;
+  // Each variant's own ledger version's dust parameters, made from the configured rates as the shipped composition makes
+  // them.
+  const { v1, v2, migration } = dustVariantConfigurations(configuration);
   return CustomForkingDustWallet(
     configuration,
-    {
-      builder: new V1Builder().withDefaults(),
-      // The one field that cannot be shared, exactly as the shipped composition handles it: `dustParameters` is a WASM
-      // object of whichever ledger module produced it, so the V1 variant gets the ledger-v8 rebuild of the rates.
-      configuration: { ...configuration, dustParameters: asV8DustParameters(dustParameters) },
-    },
+    { builder: new V1Builder().withDefaults(), configuration: v1 },
     {
       builder: new V2Builder()
         .withDefaults()
-        .withSync(makeEventLessSyncService, makeEventLessSyncCapability)
+        .withSync(SyncService.makeEventLessSyncService, SyncService.makeEventLessSyncCapability)
         // Restated because `withSync` drops it: a sync service names the key material it is started with, so choosing
         // one un-chooses whatever derivation the previous choice had. This service is started with the same
         // `DustSecretKey` the default one is, and a two-variant wallet needs the derivation by name — it is how a
         // start from a seed answers for both sides of the boundary at once.
         .withStartAuxDefaults()
-        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters })),
-      configuration,
+        .withMigration(migration),
+      configuration: v2,
     },
   );
 };
@@ -323,7 +344,7 @@ describe.sequential('Hard fork crossing @fork', () => {
   let twin: utils.WalletInit;
   let twinTracked: rx.Observable<Tracked>;
   let twinSubscription: rx.Subscription;
-  let withoutV8History: DustWalletAPI | undefined;
+  let withoutV8History: DustWalletAPI<DustKeysByEpoch> | undefined;
 
   /**
    * Both wallets' dust holdings at one of the comparison points, so a failure has the numbers next to it.
@@ -336,12 +357,16 @@ describe.sequential('Hard fork crossing @fork', () => {
    */
   const logDustCounts = (label: string, eventsState: FacadeState, twinState: FacadeState): void => {
     logger.info(
-      `${label} dust coins: events=${eventsState.dust.state.state.utxos.length}` +
-        ` projections=${twinState.dust.state.state.utxos.length};` +
-        ` seq events=[${eventsState.dust.state.state.utxos.map((utxo) => utxo.seq).join(',')}]` +
-        ` projections=[${twinState.dust.state.state.utxos.map((utxo) => utxo.seq).join(',')}];` +
-        ` highestIndex events=${eventsState.dust.state.progress.highestIndex}` +
-        ` projections=${twinState.dust.state.progress.highestIndex}`,
+      `${label} dust coins: events=${dustLocalStateOf(eventsState.dust).utxos.length}` +
+        ` projections=${dustLocalStateOf(twinState.dust).utxos.length};` +
+        ` seq events=[${dustLocalStateOf(eventsState.dust)
+          .utxos.map((utxo) => utxo.seq)
+          .join(',')}]` +
+        ` projections=[${dustLocalStateOf(twinState.dust)
+          .utxos.map((utxo) => utxo.seq)
+          .join(',')}];` +
+        ` highestIndex events=${eventsState.dust.progress.highestIndex}` +
+        ` projections=${twinState.dust.progress.highestIndex}`,
     );
   };
 
@@ -406,7 +431,8 @@ describe.sequential('Hard fork crossing @fork', () => {
     return await stateWhere(
       `the wallet to settle on the Night transfer ${label}`,
       wallet,
-      (state) => state.isSynced && state.pending.length === 0 && state.unshielded.balances[NIGHT] !== nightBefore,
+      (state) =>
+        state.isSynced && !state.lifecycle.some(isAwaiting) && state.unshielded.balances[NIGHT] !== nightBefore,
     );
   };
 
@@ -493,12 +519,12 @@ describe.sequential('Hard fork crossing @fork', () => {
       logDustCounts('A ledger-v8', eventsState, twinState);
       logger.info(
         'A the cursor the twin will carry across the fork, and the one its first projections pass will resume from:' +
-          ` ${twinState.dust.state.progress.highestIndex}`,
+          ` ${twinState.dust.progress.highestIndex}`,
       );
 
       expect(twinState.protocolVersion.dust).toBeLessThan(ProtocolVersion.V9NativeForkVersion);
-      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
-      expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(sameDustCoins(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
+      expect(rootsEqual(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
     },
     CROSSING_TIMEOUT_MS,
   );
@@ -617,7 +643,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       expect(twinState.isSynced).toBe(true);
       // The twin's V2 variant has exactly one synchronization — the projections one — so a settled ledger-v9
       // state is itself the proof that the projections path ran, and ran on a state produced by the migration.
-      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(sameDustCoins(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
     },
     CROSSING_TIMEOUT_MS + 60_000,
   );
@@ -636,7 +662,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       [NIGHT]: v8State.unshielded.balances[NIGHT] - TRANSFER_AMOUNT,
     });
     expect(v9State.shielded.balances).toEqual(v8State.shielded.balances);
-    expect(v9State.pending.length).toBe(0);
+    expect(v9State.lifecycle.filter(isAwaiting)).toStrictEqual([]);
   });
 
   test('restores a V2 snapshot on the version it declares', async () => {
@@ -743,9 +769,9 @@ describe.sequential('Hard fork crossing @fork', () => {
         `C dust balances: events=${eventsState.dust.balance(now)} projections=${twinState.dust.balance(now)}`,
       );
 
-      expect(eventsState.dust.state.state.utxos.length).toBeGreaterThan(0);
-      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
-      expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(dustLocalStateOf(eventsState.dust).utxos.length).toBeGreaterThan(0);
+      expect(sameDustCoins(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
+      expect(rootsEqual(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
       expect(twinState.dust.balance(now)).toBe(eventsState.dust.balance(now));
     },
     DUST_TIMEOUT_MS + 60_000,
@@ -815,7 +841,7 @@ describe.sequential('Hard fork crossing @fork', () => {
         (state) =>
           state.isSynced &&
           state.unshielded.pendingCoins.length === 0 &&
-          state.pending.length === 0 &&
+          !state.lifecycle.some(isAwaiting) &&
           state.unshielded.balances[NIGHT] !== nightBefore,
       );
       logger.info(`AFTER UNSHIELDED SPEND ${summarize(afterUnshieldedSpend)}`);
@@ -824,7 +850,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       // Fees are dust, so the Night that left the wallet is exactly what was transferred.
       expect(afterUnshieldedSpend.unshielded.balances[NIGHT]).toBe(nightBefore - TRANSFER_AMOUNT);
       expect(afterUnshieldedSpend.unshielded.pendingCoins.length).toBe(0);
-      expect(afterUnshieldedSpend.pending.length).toBe(0);
+      expect(afterUnshieldedSpend.lifecycle.filter(isAwaiting)).toStrictEqual([]);
 
       const receiverAfter = await stateWhere(
         'the receiver to see the transferred Night',
@@ -897,7 +923,7 @@ describe.sequential('Hard fork crossing @fork', () => {
         (state) =>
           state.isSynced &&
           state.shielded.pendingCoins.length === 0 &&
-          state.pending.length === 0 &&
+          !state.lifecycle.some(isAwaiting) &&
           state.shielded.balances[shieldedToken] !== shieldedBefore,
       );
       logger.info(`AFTER SHIELDED SPEND ${summarize(afterShieldedSpend)}`);
@@ -905,7 +931,7 @@ describe.sequential('Hard fork crossing @fork', () => {
 
       expect(afterShieldedSpend.shielded.balances[shieldedToken]).toBe(shieldedBefore - TRANSFER_AMOUNT);
       expect(afterShieldedSpend.shielded.pendingCoins.length).toBe(0);
-      expect(afterShieldedSpend.pending.length).toBe(0);
+      expect(afterShieldedSpend.lifecycle.filter(isAwaiting)).toStrictEqual([]);
 
       const receiverAfter = await stateWhere(
         'the receiver to see the transferred shielded token',
@@ -931,9 +957,9 @@ describe.sequential('Hard fork crossing @fork', () => {
         `D dust balances: events=${eventsState.dust.balance(now)} projections=${twinState.dust.balance(now)}`,
       );
 
-      expect(eventsState.dust.state.state.utxos.length).toBeGreaterThan(0);
-      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
-      expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(dustLocalStateOf(eventsState.dust).utxos.length).toBeGreaterThan(0);
+      expect(sameDustCoins(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
+      expect(rootsEqual(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
       expect(twinState.dust.balance(now)).toBe(eventsState.dust.balance(now));
     },
     DUST_TIMEOUT_MS + 60_000,
@@ -953,11 +979,11 @@ describe.sequential('Hard fork crossing @fork', () => {
       const first = await rx.firstValueFrom(withoutV8History.state);
       logger.info(
         `E start without ledger-v8 dust history: protocol version ${first.protocolVersion},` +
-          ` cursor ${first.state.progress.appliedIndex}`,
+          ` cursor ${first.progress.appliedIndex}`,
       );
       expect(Number(first.protocolVersion)).toBeGreaterThanOrEqual(Number(ProtocolVersion.V9NativeForkVersion));
 
-      await withoutV8History.start(ledgerV9.DustSecretKey.fromSeed(seeds.dust));
+      await withoutV8History.start(utils.dustKeysFromSeed(seeds.dust));
       const synced = await within(
         'the wallet that skipped ledger-v8 to sync',
         DUST_TIMEOUT_MS,
@@ -966,9 +992,9 @@ describe.sequential('Hard fork crossing @fork', () => {
       const eventsState = await wallet.waitForSyncedState();
       const now = new Date();
 
-      expect(eventsState.dust.state.state.utxos.length).toBeGreaterThan(0);
-      expect(sameDustCoins(eventsState.dust.state.state, synced.state.state)).toBe(true);
-      expect(rootsEqual(eventsState.dust.state.state, synced.state.state)).toBe(true);
+      expect(dustLocalStateOf(eventsState.dust).utxos.length).toBeGreaterThan(0);
+      expect(sameDustCoins(dustLocalStateOf(eventsState.dust), dustLocalStateOf(synced))).toBe(true);
+      expect(rootsEqual(dustLocalStateOf(eventsState.dust), dustLocalStateOf(synced))).toBe(true);
       expect(synced.balance(now)).toBe(eventsState.dust.balance(now));
     },
     DUST_TIMEOUT_MS + 60_000,

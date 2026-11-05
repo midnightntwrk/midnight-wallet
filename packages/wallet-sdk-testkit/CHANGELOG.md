@@ -1,5 +1,96 @@
 # @midnightntwrk/wallet-sdk-testkit
 
+## 1.0.0-rc.2
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 0.2
+
+  - Wallets are built for a chain that runs ledger-v8 below `forks.v9` and ledger-v9 from it: the package depends on
+    `@midnightntwrk/ledger-v9` `1.0.0-rc.7` instead of `@midnight-ntwrk/ledger-v8`, environments set `forks` to
+    `V9NativeForkSchedule`, and `WalletInit` gains `seeds` and `dustSyncModel`. The key objects in `WalletInit`, and the
+    transaction `waitForStateAfterDustRegistration` takes, are ledger-v9's.
+  - `saveState(walletInit, dir, name)` takes what `provideWallet` or `initWalletWithSeed` returned, not the facade. It
+    writes the shielded and Dust states to one file per Dust sync model (`snapshotPath`), under a temporary name renamed
+    over the previous snapshot, so a save that fails part-way leaves the previous one intact, and it rejects when a
+    state cannot be serialized or written instead of logging. The unshielded state, which a restore never read, is no
+    longer saved. Snapshots in the 0.2 layout are ignored, so a carried cache rebuilds from scratch once.
+  - The Dust and token-transfer scenarios build their wallets on the projections Dust sync; pass
+    `{ dustWallet: eventBasedDustWallet }` in their `walletOptions` to keep the event stream. They save a snapshot only
+    after their tests pass, and time out after 15 minutes instead of an hour.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 0.2
+
+  - `DUST_SYNC` selects the Dust sync model for a whole run, `events` or `projections`, and an unrecognized value is
+    rejected rather than defaulted. Unset, it means `events` for the wallets `provideWallet` and `initWalletWithSeed`
+    build and `projections` for the Dust and token-transfer scenarios; an explicit `dustWallet` option pins a model
+    whatever the environment. Exports for it include `eventLessDustWallet`, `eventBasedDustWallet`, `DustWalletFactory`,
+    `dustWalletFor`, `dustWalletFromEnv`, `dustSyncModelFromEnv`, `parseDustSyncModel`, `projectionsDustSyncOptions`,
+    `manualProjectionsDustSyncOptions` and `snapshotPath`.
+  - `provideWallet` returns `restored`, saying whether the wallet came from the snapshot, and stops a restored facade
+    that fails its sync check, or does not catch up within ten minutes, before it falls back or rejects.
+  - `createWalletLifecycle` saves and stops together the wallets a `beforeEach` adopts, reports every failure, and stops
+    a wallet that finishes starting after its test was torn down.
+  - `parseMidnightNetwork` rejects an unrecognized `NETWORK` by name, and `stagenet` is a preset network.
+  - `waitForStableState` resolves once a predicate has held for a settling window, with the newest value that satisfies
+    it.
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 0.2
+
+  - The package installs from npm: 0.2.0 shipped its internal dependencies as `workspace:^`, which npm and Yarn reject.
+    Its internal dependencies are now exact versions, and `effect`, which the token-transfer scenario imports, is
+    declared as a dependency, so the package resolves under strict package managers.
+  - The state waiters wait for what they name. `waitForTxInHistory` waits past a pending entry and stops only at a final
+    outcome, and `waitForStateAfterDustRegistration` requires a successful entry. `waitForFacadePendingClear` and
+    `waitForUnshieldedCoinUpdate` apply their settling window to the condition instead of debouncing the source, and
+    `waitForFinalizedShieldedBalance` gains one; each answers with the newest value that satisfies the condition, so a
+    wallet syncing in the background no longer starves them, and none answers with the pre-transaction state. The
+    settling waiters time out after 180 seconds, and `waitForFacadePending` fails after two minutes instead of hanging.
+  - The token-transfer healthcheck settles pending coins before asserting on them.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-facade@5.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-hd@4.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0-rc.1
+
 ## 1.0.0-rc.1
 
 ### Patch Changes

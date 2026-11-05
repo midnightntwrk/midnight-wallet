@@ -10,16 +10,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Data, Deferred, Effect, Encoding, Exit, pipe, Scope } from 'effect';
+import { Cause, Data, Effect, Encoding, Exit, Fiber, pipe, Scope } from 'effect';
 import {
   NodeClient,
-  type NodeClientError,
+  NodeClientError,
   PolkadotNodeClient,
   SubmissionEvent as SubmissionEventImported,
 } from '@midnightntwrk/wallet-sdk-node-client/effect';
+import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type FinalizedTransaction } from '@midnightntwrk/ledger-v9';
-import { type SimulatorState, getLastBlock } from '../simulation/v9/Simulator.js';
+import { type SimulatorState, getLastBlock } from '../simulation/v9/SimulatorState.js';
 
 export const SubmissionEvent = SubmissionEventImported;
 export type SubmissionEvent = SubmissionEventImported.SubmissionEvent;
@@ -73,38 +74,56 @@ export type DefaultSubmissionConfiguration = {
   relayURL: URL;
 };
 
+/** A transaction either ledger version has proved and bound, and so one a node will put in a block. */
+export type AnyVersionFinalizedTransaction = ledgerV8.FinalizedTransaction | ledgerV9.FinalizedTransaction;
+
+/**
+ * Submits transactions to a node through its relay.
+ *
+ * @remarks
+ *   The node takes a transaction's bytes, whichever ledger version wrote them, so left unnamed the transaction type is
+ *   either ledger version's finalized transaction: never one still to be proved or bound, which no block would take.
+ * @example
+ *   ```typescript
+ *   const submission = makeDefaultSubmissionServiceEffect({ relayURL: new URL('ws://localhost:9944') });
+ *   const inBlock = yield* submission.submitTransaction(finalizedTransaction, 'InBlock');
+ *   yield* submission.close();
+ *   ```;
+ *
+ * @param config The relay to submit through.
+ * @returns A submission service that closes its connection on `close`.
+ */
 export const makeDefaultSubmissionServiceEffect = <
-  TTransaction extends { serialize: () => Uint8Array; toString: () => string } = FinalizedTransaction,
+  TTransaction extends { serialize: () => Uint8Array; toString: () => string } = AnyVersionFinalizedTransaction,
 >(
   config: DefaultSubmissionConfiguration,
 ): SubmissionServiceEffect<TTransaction> => {
-  //Using Deferred under the hood + allowing for "close" method in the service allows to keep resource usage in check and a synchronous API
-  type ScopeAndClient = { scope: Scope.CloseableScope; client: NodeClient.Service };
+  // The client is built in the background, so the service is usable at once, and in a scope the service owns. Closing
+  // interrupts a build still waiting for the node, which stops its connection attempt, then releases a built client.
+  const scope = Scope.make().pipe(Effect.runSync);
+  const clientBuild = PolkadotNodeClient.make({ nodeURL: config.relayURL }).pipe(
+    Effect.provideService(Scope.Scope, scope),
+    Effect.runFork,
+  );
 
-  const scopeAndClientDeferred = Deferred.make<ScopeAndClient, NodeClientError.NodeClientError>().pipe(Effect.runSync);
-
-  const makeScopeAndClient: Effect.Effect<ScopeAndClient, NodeClientError.NodeClientError> = Effect.gen(function* () {
-    const scope = yield* Scope.make();
-    const client = yield* PolkadotNodeClient.make({
-      nodeURL: config.relayURL,
-    }).pipe(Effect.provideService(Scope.Scope, scope));
-
-    return { scope, client };
-  });
-
-  void pipe(scopeAndClientDeferred, Deferred.complete(makeScopeAndClient), Effect.runPromise);
+  // A build interrupted by `close` never produced a client, so a submission arriving after it fails instead of waiting.
+  const client: Effect.Effect<NodeClient.Service, NodeClientError.NodeClientError> = pipe(
+    Fiber.await(clientBuild),
+    Effect.flatMap((exit) =>
+      Exit.isFailure(exit) && Cause.isInterruptedOnly(exit.cause)
+        ? Effect.fail(
+            new NodeClientError.ConnectionError({
+              message: `The submission service was closed before it connected to ${config.relayURL.toString()}`,
+            }),
+          )
+        : exit,
+    ),
+  );
 
   const submit = (transaction: TTransaction, waitForStatus: SubmissionEvent['_tag'] = 'InBlock') => {
     return pipe(
       NodeClient.sendMidnightTransactionAndWait(SerializedTransaction.from(transaction), waitForStatus),
-      Effect.provideServiceEffect(
-        NodeClient.NodeClient,
-        pipe(
-          scopeAndClientDeferred,
-          Deferred.await,
-          Effect.map(({ client }) => client),
-        ),
-      ),
+      Effect.provideServiceEffect(NodeClient.NodeClient, client),
       Effect.mapError((err) => new SubmissionError({ message: 'Transaction submission error', cause: err })),
     );
   };
@@ -112,18 +131,27 @@ export const makeDefaultSubmissionServiceEffect = <
   return {
     submitTransaction: submit as SubmitTransactionMethodEffect<TTransaction>,
     close(): Effect.Effect<void> {
-      return pipe(
-        scopeAndClientDeferred,
-        Deferred.await,
-        Effect.flatMap(({ scope }) => Scope.close(scope, Exit.void)),
-        Effect.ignoreLogged,
-      );
+      // Releasing the client is the last use of it, so a release that fails is logged rather than failing the caller.
+      return pipe(Fiber.interrupt(clientBuild), Effect.zipRight(Scope.close(scope, Exit.void)), Effect.ignoreLogged);
     },
   };
 };
 
+/**
+ * The promise-facing surface of {@link makeDefaultSubmissionServiceEffect}.
+ *
+ * @example
+ *   ```typescript
+ *   const submission = makeDefaultSubmissionService({ relayURL: new URL('ws://localhost:9944') });
+ *   const inBlock = await submission.submitTransaction(finalizedTransaction, 'InBlock');
+ *   await submission.close();
+ *   ```;
+ *
+ * @param config The relay to submit through.
+ * @returns A submission service that closes its connection on `close`.
+ */
 export const makeDefaultSubmissionService = <
-  TTransaction extends { serialize: () => Uint8Array } = FinalizedTransaction,
+  TTransaction extends { serialize: () => Uint8Array } = AnyVersionFinalizedTransaction,
 >(
   config: DefaultSubmissionConfiguration,
 ): SubmissionService<TTransaction> => {
@@ -138,17 +166,34 @@ export const makeDefaultSubmissionService = <
   };
 };
 
-export type SimulatorSubmissionConfiguration<TTransaction> = {
+/** The ledger-v9 simulator a {@link makeV9SimulatorSubmissionService} submits to and reads blocks from. */
+export type V9SimulatorSubmissionConfiguration<TTransaction> = {
   simulator: {
     submitTransaction: (transaction: TTransaction) => Effect.Effect<void, Error>;
     getLatestState: () => Effect.Effect<SimulatorState>;
   };
 };
-export const makeSimulatorSubmissionService =
+
+/**
+ * Submits transactions to the in-memory ledger-v9 simulator, answering as a node would.
+ *
+ * @remarks
+ *   The simulator has no relay to report progress, so every submission answers with the one status this service was built
+ *   for, read off the simulator's latest block once the transaction is in.
+ * @example
+ *   ```typescript
+ *   const submission = makeV9SimulatorSubmissionService<ledger.ProofErasedTransaction>('InBlock')({ simulator });
+ *   const inBlock = yield* submission.submitTransaction(proofErasedTransaction);
+ *   ```;
+ *
+ * @param waitForStatus The status every submission reports. Defaults to `InBlock`, as a node's does.
+ * @returns A function from the simulator to the submission service over it.
+ */
+export const makeV9SimulatorSubmissionService =
   <TTransaction extends { serialize: () => Uint8Array }>(
     waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock',
   ) =>
-  (config: SimulatorSubmissionConfiguration<TTransaction>): SubmissionServiceEffect<TTransaction> => {
+  (config: V9SimulatorSubmissionConfiguration<TTransaction>): SubmissionServiceEffect<TTransaction> => {
     const submit = (transaction: TTransaction): Effect.Effect<SubmissionEvent, SubmissionError> => {
       return pipe(
         config.simulator.submitTransaction(transaction),

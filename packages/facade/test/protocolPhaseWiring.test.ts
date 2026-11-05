@@ -55,7 +55,6 @@ import {
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
-  SilentPendingTransactions,
   unshieldedAt,
 } from './utils/index.js';
 
@@ -119,7 +118,6 @@ describe('three wallets that disagree about which side of the boundary the chain
       unshielded: () => unshielded,
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
-      pendingTransactionsService: () => new SilentPendingTransactions(),
     });
   });
 

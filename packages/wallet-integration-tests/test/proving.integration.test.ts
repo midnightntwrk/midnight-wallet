@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
-  type ProvingServiceEffect,
+  type V9ProvingServiceEffect,
   makeV8ServerProvingServiceEffect,
   makeV9WasmProvingServiceEffect,
   fromV9ProvingProvider,
@@ -27,7 +27,7 @@ import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
 import { getNonDustImbalance } from './utils.js';
 
-const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:9.0.0-rc.7';
+const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:9.0.0-rc.10';
 /** The proof server of the epoch before the boundary: no image serves both sides, so the ledger-v8 case needs its own. */
 const V8_PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:8.1.0';
 const PROOF_SERVER_PORT: number = 6300;
@@ -67,9 +67,10 @@ const proofServerContainerResource = Effect.acquireRelease(
   Effect.retry(Schedule.spaced(Duration.millis(10))),
 );
 
-function runInterfaceTests<
-  T extends ProvingServiceEffect<ledgerV9.Transaction<ledgerV9.SignatureEnabled, ledgerV9.Proof, ledgerV9.PreBinding>>,
->(implName: string, makeService: () => Effect.Effect<T, unknown, Scope.Scope>) {
+function runInterfaceTests<T extends V9ProvingServiceEffect>(
+  implName: string,
+  makeService: () => Effect.Effect<T, unknown, Scope.Scope>,
+) {
   describe(`${implName} implementation of ProvingServiceEffect`, () => {
     const testUnprovenTx = makeTransaction();
 

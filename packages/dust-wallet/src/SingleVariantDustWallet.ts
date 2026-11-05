@@ -33,7 +33,7 @@ import {
 import {
   type AnyTx,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   type UnprovenTx,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
@@ -49,27 +49,21 @@ import {
 import { type Clock, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
-import {
-  claimableFeePayment,
-  type DefaultDustConfiguration,
-  type DustWalletAPI,
-  DustWalletState,
-} from './DustWalletAPI.js';
+import { claimableFeePayment, type DustWalletAPI, DustWalletState } from './DustWalletAPI.js';
 import { runPromiseThrowingFailure } from './PromiseBoundary.js';
 import { CoreWallet } from './v2/CoreWallet.js';
 import { type RunningV2Variant, V2Tag } from './v2/RunningV2Variant.js';
 import { type WalletSyncUpdate } from './v2/SyncSchema.js';
-import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
-import { type UtxoWithMeta } from './v2/types/Dust.js';
+import { type NightUtxoSplitForDustRegistration, type UtxoWithMeta } from './types/DustWalletTypes.js';
 import { type AnyTransaction } from './v2/types/ledger.js';
-import { type BaseV2Configuration, type V2Variant } from './v2/V2Builder.js';
+import { type BaseV2Configuration, type DefaultV2Configuration, type V2Variant } from './v2/V2Builder.js';
 
 export type CustomizedDustWallet<
   TStartAux = DustSecretKey,
   TTransaction = FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> = DustWalletAPI<TStartAux, TSerialized> &
+> = DustWalletAPI<Readonly<{ v9: TStartAux }>, TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
 export interface CustomizedDustWalletClass<
@@ -77,7 +71,7 @@ export interface CustomizedDustWalletClass<
   TTransaction = FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-  TConfig extends BaseV2Configuration = DefaultDustConfiguration,
+  TConfig extends BaseV2Configuration = DefaultV2Configuration,
 > extends WalletLike.BaseWalletClass<
   [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
 > {
@@ -94,7 +88,7 @@ export interface CustomizedDustWalletClass<
 }
 
 export function CustomDustWallet<
-  TConfig extends BaseV2Configuration = DefaultDustConfiguration,
+  TConfig extends BaseV2Configuration = DefaultV2Configuration,
   TStartAux extends DustSecretKey = DustSecretKey,
   TTransaction = FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
@@ -123,12 +117,19 @@ export function CustomDustWallet<
     ProtocolVersion.MinSupportedVersion,
   );
 
+  /**
+   * What a start that names no dust parameters values its empty state against: the configured ones, else the ledger's
+   * own initial parameters, so an application starting a wallet need not import a ledger version for them.
+   */
+  const defaultDustParameters: DustParameters =
+    configuration.dustParameters ?? LedgerParameters.initialParameters().dust;
+
   /** Seals a transaction this wallet built, at the version its one variant answers from. */
   const seal = (transaction: UnprovenTransaction): UnprovenTx =>
     WalletTransaction.adopt('Unproven', transaction, ProtocolVersion.MinSupportedVersion);
 
   /** Reads a transaction a caller handed in, which a single-variant wallet accepts at any version. */
-  const carried = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+  const carried = <T>(handle: AnyTx): Effect.Effect<T, WalletTransactionUnwrapError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, wholeTimeline));
 
   /**
@@ -150,9 +151,7 @@ export function CustomDustWallet<
   {
     static startWithSeed(
       seed: Uint8Array,
-      // The ledger's own initial parameters when a caller names none: three rates that do not depend on this wallet,
-      // and asking for them made an application import a ledger version to start one.
-      dustParameters: DustParameters = LedgerParameters.initialParameters().dust,
+      dustParameters: DustParameters = defaultDustParameters,
     ): CustomDustWalletImplementation {
       const dustSecretKey = DustSecretKey.fromSeed(seed);
       return CustomDustWalletImplementation.startFirst(
@@ -163,7 +162,7 @@ export function CustomDustWallet<
 
     static startWithSecretKey(
       secretKey: DustSecretKey,
-      dustParameters: DustParameters = LedgerParameters.initialParameters().dust,
+      dustParameters: DustParameters = defaultDustParameters,
     ): CustomDustWalletImplementation {
       return CustomDustWalletImplementation.startFirst(
         CustomDustWalletImplementation,
@@ -220,7 +219,15 @@ export function CustomDustWallet<
       );
     }
 
-    start(secretKey: TStartAux): Promise<void> {
+    /**
+     * Starts background synchronization from the ledger-v9 key, the only side the one variant runs on.
+     *
+     * @remarks
+     *   Takes it out of a product rather than bare, so a caller holding keys for more ledger versions — a facade, which
+     *   derives one per side of every boundary — hands this wallet the same value it hands one that spans them.
+     * @param keys The ledger-v9's dust secret key, under `v9`.
+     */
+    start({ v9: secretKey }: Readonly<{ v9: TStartAux }>): Promise<void> {
       return Effect.gen(this, function* () {
         yield* Ref.set(this.#retainedAux, Option.some(secretKey));
 
@@ -252,7 +259,13 @@ export function CustomDustWallet<
       await super.stop();
     }
 
-    stepSync(secretKey: TStartAux): Promise<void> {
+    /**
+     * Runs one synchronization pass with the ledger-v9 key, taken out of a product for the same reason {@link start}
+     * takes it so.
+     *
+     * @param keys The ledger-v9's dust secret key, under `v9`.
+     */
+    stepSync({ v9: secretKey }: Readonly<{ v9: TStartAux }>): Promise<void> {
       return this.runtime.dispatch({ [V2Tag]: (v2) => v2.sync(secretKey) }).pipe(Effect.runPromise);
     }
 
@@ -379,7 +392,7 @@ export function CustomDustWallet<
       transactions: ReadonlyArray<AnyTx>,
       ttl: Date,
       currentTime?: Date,
-    ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData }> {
+    ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData<LedgerParameters> }> {
       return this.runtime
         .dispatch({
           [V2Tag]: (v2) =>
@@ -417,9 +430,7 @@ export function CustomDustWallet<
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<DustWalletState<TSerialized>> {
-      return rx.firstValueFrom(
-        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
-      );
+      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.progress.isCompleteWithin(allowedGap))));
     }
 
     async waitForGeneratedDust(

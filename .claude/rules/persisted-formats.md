@@ -6,7 +6,7 @@ paths:
   - 'packages/*/src/v1/Serialization.ts'
   - 'packages/*/src/v2/Serialization.ts'
   - 'packages/*/src/SnapshotFormat.ts'
-  - 'packages/capabilities/src/pendingTransactions/**'
+  - 'packages/capabilities/src/transactionLifecycle/**'
   - 'packages/serialization-tests/**'
 ---
 
@@ -19,9 +19,9 @@ it was written, by a version we no longer ship.
 | --- | --- | --- |
 | Shielded snapshot | `shielded-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v1` (both) |
 | Unshielded snapshot | `unshielded-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v1` (V1), `v2` (V2) |
-| Dust snapshot | `dust-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v1` (both) |
+| Dust snapshot | `dust-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v2` (both) |
 | Transaction history | `abstractions/src/InMemoryTransactionHistoryStorage.ts` | `v2` |
-| Pending transactions | `capabilities/src/pendingTransactions/pendingTransactions.ts` | `v1` |
+| Transaction lifecycle | `capabilities/src/transactionLifecycle/lifecycle.ts` | `v2` |
 
 The three snapshot surfaces have two writers each — the V1 variant on ledger-v8 and the V2 variant on ledger-v9 — and
 each package keeps its version constants, and any upgrade step, in a ledger-free `src/SnapshotFormat.ts` that both
@@ -53,11 +53,11 @@ That is safe only because **every reader carries the fields it does not know**. 
 carrying a newer optional field keeps it and writes it back unchanged, so a rollback, or two builds sharing one storage,
 never strips it. Snapshots keep the unknown top-level fields on the core wallet's `unknownFields`
 (`SnapshotFormat.readSnapshotWithUnknownFields` / `writeSnapshot`), and every function that rebuilds a core wallet must
-carry that bag; the transaction history keeps them on its envelope and on each entry; pending transactions on the
+carry that bag; the transaction history keeps them on its envelope and on each entry; transaction lifecycle records on the
 state's `unknownFields`. A new reader or writer for any surface must do the same. Bumping on every added field was
 rejected: it would make rolling back impossible after any field is added, and owe a frozen fixture for each one.
 
-Only **top-level** fields are carried: of each snapshot, of the pending-transactions state, of the history envelope and
+Only **top-level** fields are carried: of each snapshot, of the transaction lifecycle state, of the history envelope and
 of each history entry. So an optional field still needs a version bump when it is added **nested** below those levels
 (inside `shielded`, `dust`, `lifecycle` and the like), or when its value is derived from state an older build keeps
 changing — carried through unread, it would come back stale.

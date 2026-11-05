@@ -13,12 +13,7 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import * as otherLedger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import {
-  Simulator,
-  type SimulatorState,
-  V8 as OtherSimulation,
-  getLastBlockEvents,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V8 as OtherSimulation, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, Option, Stream, identity } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
@@ -45,7 +40,7 @@ const MINT_COUNT = 6;
 const MINT_TOTAL = 2100n;
 
 const mintingSimulator = (protocolVersion?: ProtocolVersion.ProtocolVersion) =>
-  Simulator.init({
+  V9.Simulator.init({
     ...(protocolVersion === undefined ? {} : { protocolVersion }),
     genesisMints: Array.from({ length: MINT_COUNT }, (_, i) => ({
       type: 'shielded' as const,
@@ -55,7 +50,7 @@ const mintingSimulator = (protocolVersion?: ProtocolVersion.ProtocolVersion) =>
     })) as never,
   });
 
-const simulatorStateAt = (protocolVersion?: ProtocolVersion.ProtocolVersion): Promise<SimulatorState> =>
+const simulatorStateAt = (protocolVersion?: ProtocolVersion.ProtocolVersion): Promise<V9.SimulatorState> =>
   Effect.gen(function* () {
     const simulator = yield* mintingSimulator(protocolVersion);
     return Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
@@ -84,7 +79,7 @@ let otherLedgerEventHex: string;
 
 beforeAll(async () => {
   const state = await simulatorStateAt();
-  eventHex = getLastBlockEvents(state).map((event) => hex(event.serialize()));
+  eventHex = V9.getLastBlockEvents(state).map((event) => hex(event.serialize()));
   expect(eventHex.length).toBe(MINT_COUNT);
 
   otherLedgerEventHex = await Effect.gen(function* () {
@@ -522,5 +517,42 @@ describe('makeSimulatorSyncCapability.applyUpdate boundary handling', () => {
     expect(coinIndices(state)).toEqual([]);
     expect(state.state.firstFree).toBe(0n);
     expect(result.changes).toEqual([]);
+  });
+});
+
+// The simulator is the chain itself, so reaching it is being connected, and its last block is the tip. Progress is
+// read in the cursor's own unit — the next block to process — so a wallet that has applied everything is exactly at it.
+describe('makeSimulatorSyncCapability.applyUpdate progress', () => {
+  const capability = makeSimulatorSyncCapability();
+
+  it('should report the wallet synced once it has applied every block the simulator holds', async () => {
+    const simulatorState = await simulatorStateAt(ProtocolVersion.ProtocolVersion(3n));
+
+    const [state] = capability.applyUpdate(
+      freshWallet(),
+      SimulatorSyncUpdate.create(simulatorState, secretKeys()),
+      activeRange,
+    );
+
+    // One genesis block, so the next block to process past the simulator's tip is 1.
+    expect(state.progress.appliedIndex).toBe(1n);
+    expect(state.progress.highestRelevantWalletIndex).toBe(1n);
+    expect(state.progress.isConnected).toBe(true);
+    expect(state.progress.isStrictlyComplete()).toBe(true);
+  });
+
+  it("should not report the wallet synced while the simulator holds blocks beyond the active range, because those are the next variant's to apply", async () => {
+    const simulatorState = await simulatorStateAt(ProtocolVersion.ProtocolVersion(9n));
+
+    const [state] = capability.applyUpdate(
+      freshWallet(),
+      SimulatorSyncUpdate.create(simulatorState, secretKeys()),
+      activeRange,
+    );
+
+    expect(state.progress.appliedIndex).toBe(0n);
+    expect(state.progress.highestRelevantWalletIndex).toBe(1n);
+    expect(state.progress.isConnected).toBe(true);
+    expect(state.progress.isStrictlyComplete()).toBe(false);
   });
 });

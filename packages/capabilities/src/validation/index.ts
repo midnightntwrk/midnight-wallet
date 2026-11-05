@@ -13,4 +13,5 @@
 export * from './blockData.js';
 export * from './v8ValidationService.js';
 export * from './validationService.js';
+export * from './v9ValidationService.js';
 export * from './versionedValidation.js';

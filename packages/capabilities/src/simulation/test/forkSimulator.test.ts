@@ -40,14 +40,10 @@ import {
   ForkSimulator,
   LedgerTranslationError,
   V8,
-  genesisStrictness,
-  getBlockByNumber,
-  getCurrentBlockNumber,
-  getLastBlock,
-  immediateBlockProducer,
   translatorFromAsync,
   unavailableTranslator,
   type LedgerStateTranslator,
+  V9,
 } from '../index.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
@@ -97,7 +93,7 @@ const baseConfig = {
   v8Version,
   v8GenesisMints: v8GenesisMints,
   v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-  v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+  v9BlockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
 };
 
 describe('ForkSimulator', () => {
@@ -161,8 +157,8 @@ describe('ForkSimulator', () => {
       const next = yield* v9Chain.produceEmptyBlock();
 
       // The boundary height is re-delivered ledger-v9 with v9 content.
-      expect(getCurrentBlockNumber(atFork)).toBe(forkBlock);
-      expect(getLastBlock(atFork).protocolVersion).toBe(forkVersion);
+      expect(V9.getCurrentBlockNumber(atFork)).toBe(forkBlock);
+      expect(V9.getLastBlock(atFork).protocolVersion).toBe(forkVersion);
       expect(atFork.protocolVersion).toBe(forkVersion);
       expect(next.number).toBe(forkBlock + 1n);
       expect(next.protocolVersion).toBe(forkVersion);
@@ -180,7 +176,7 @@ describe('ForkSimulator', () => {
       expect(txBlock.transactions.length).toBeGreaterThan(0);
       const preState = yield* fork.v8.getLatestState();
       expect(V8.getCurrentBlockNumber(preState)).toBe(forkBlock);
-      expect(getCurrentBlockNumber(yield* v9Chain.getLatestState())).toBe(forkBlock);
+      expect(V9.getCurrentBlockNumber(yield* v9Chain.getLatestState())).toBe(forkBlock);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('resolves awaitV9 when transaction-driven production reaches the fork block', async () =>
@@ -198,7 +194,7 @@ describe('ForkSimulator', () => {
       const state = yield* v9Chain.getLatestState();
 
       expect(Option.getOrThrow(yield* fork.v9())).toBe(v9Chain);
-      expect(getCurrentBlockNumber(state)).toBe(forkBlock);
+      expect(V9.getCurrentBlockNumber(state)).toBe(forkBlock);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it.each([
@@ -222,7 +218,7 @@ describe('ForkSimulator', () => {
 
       expect(V8.getBlockByNumber(preState, forkBlock - 1n)?.protocolVersion).toBe(pre);
       expect(V8.getBlockByNumber(preState, forkBlock)?.protocolVersion).toBe(post);
-      expect(getLastBlock(postState).protocolVersion).toBe(post);
+      expect(V9.getLastBlock(postState).protocolVersion).toBe(post);
     }).pipe(Effect.scoped, Effect.runPromise),
   );
 
@@ -293,8 +289,8 @@ describe('ForkSimulator state-translation handover', () => {
 
       expect(state.ledger.serialize()).toEqual(translated.serialize());
       // The boundary invariants hold on the translation path exactly as on the re-mint path.
-      expect(getCurrentBlockNumber(state)).toBe(forkBlock);
-      expect(getLastBlock(state).protocolVersion).toBe(forkVersion);
+      expect(V9.getCurrentBlockNumber(state)).toBe(forkBlock);
+      expect(V9.getLastBlock(state).protocolVersion).toBe(forkVersion);
       expect(state.protocolVersion).toBe(forkVersion);
     }).pipe(Effect.scoped, Effect.runPromise));
 
@@ -316,7 +312,7 @@ describe('ForkSimulator state-translation handover', () => {
       const state = yield* v9Chain.getLatestState();
 
       expect(state.ledger.serialize()).toEqual(translated.serialize());
-      expect(getCurrentBlockNumber(state)).toBe(forkBlock);
+      expect(V9.getCurrentBlockNumber(state)).toBe(forkBlock);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('surfaces a failing translation instead of never forking', async () =>
@@ -392,6 +388,6 @@ describe('getBlockByNumber on a forked timeline', () => {
 
       // Same height, two chains, two codecs.
       expect(V8.getBlockByNumber(preState, forkBlock)?.protocolVersion).toBe(forkVersion);
-      expect(getBlockByNumber(postState, forkBlock)?.protocolVersion).toBe(forkVersion);
+      expect(V9.getBlockByNumber(postState, forkBlock)?.protocolVersion).toBe(forkVersion);
     }).pipe(Effect.scoped, Effect.runPromise));
 });

@@ -20,7 +20,7 @@ import {
 import { Effect, HashMap } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { type SyncProgressData } from './SyncProgress.js';
-import { createKeystore, PublicKey } from '../KeyStore.js';
+import { createKeystore, PublicKey } from './KeyStore.js';
 import { UnshieldedState, UtxoWithMeta } from './UnshieldedState.js';
 import { type WalletError } from './WalletError.js';
 

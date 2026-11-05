@@ -166,9 +166,10 @@ describe('LivenessServiceImpl', () => {
   });
 
   it('should publish Unavailable at the poll timeout even when the hung read cannot be interrupted', async () => {
-    // A read that hangs inside an uninterruptible region — the node client's connection build is one — cannot be cut
-    // short, and a timeout that interrupts and then awaits its loser inherits that wait: the bound becomes as soft as
-    // the read is long. The verdict must still land at the deadline, with the read left to finish in the background.
+    // A read that hangs inside an uninterruptible region — the node client's build is one once it has connected —
+    // cannot be cut short, and a timeout that interrupts and then awaits its loser inherits that wait: the bound becomes
+    // as soft as the read is long. The verdict must still land at the deadline, with the read left to finish in the
+    // background.
     const program = Effect.gen(function* () {
       const reads = sameChainReads({
         finalizedBlock: () =>
