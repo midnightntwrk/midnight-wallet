@@ -355,6 +355,16 @@ describe('RunningV1Variant.balanceTransactions spend time', () => {
     expect(result.calls).toHaveLength(1);
   });
 
+  it('should stop waiting once two minutes have passed, because callers rely on the documented bound', async () => {
+    const result = await Effect.gen(function* () {
+      const { fiber } = yield* balancing(behind(), [blockAt(TIP_TIME, rootsOf(caughtUp()))]);
+      yield* TestClock.adjust(Duration.seconds(121));
+      return yield* Fiber.poll(fiber);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(Option.flatMap(result, failureTagOf)).toEqual(Option.some('Wallet.Sync'));
+  });
+
   it('should fail with a sync error naming both root pairs, spending nothing, when the local trees never reach the newest block’s roots, so lag and a broken encoding can be told apart', async () => {
     const result = await Effect.gen(function* () {
       const { transacting, fiber } = yield* balancing(behind(), [blockAt(TIP_TIME, rootsOf(caughtUp()))]);
