@@ -112,11 +112,13 @@ const testWrongCredentialType =
         continue;
       }
       const asBech32 = toBech32(data);
-      const withChangedCredential = new MidnightBech32m('foo', asBech32.network, asBech32.data).toString();
+      const changedType = 'foo';
+      const withChangedCredential = new MidnightBech32m(changedType, asBech32.network, asBech32.data).toString();
 
+      // The codec's own type check must be what rejects, not an earlier parse failure.
       expect(() =>
         data[Bech32m].decode({ networkId: asBech32.network }, MidnightBech32m.parse(withChangedCredential)),
-      ).toThrow();
+      ).toThrow(new Error(`Expected type ${data[Bech32m].type}, got ${changedType}`));
     }
   };
 
@@ -129,8 +131,12 @@ const testWrongNetwork =
         continue;
       }
       const asBech32 = toBech32(data);
-      const withChangedNetwork = new MidnightBech32m(asBech32.type, 'foo', asBech32.data).toString();
-      expect(() => data[Bech32m].decode({ networkId: null }, MidnightBech32m.parse(withChangedNetwork))).toThrow();
+      const changedNetwork = 'foo';
+      const withChangedNetwork = new MidnightBech32m(asBech32.type, changedNetwork, asBech32.data).toString();
+      // The codec's own network check must be what rejects; a null network id is mainnet.
+      expect(() => data[Bech32m].decode({ networkId: null }, MidnightBech32m.parse(withChangedNetwork))).toThrow(
+        new Error(`Expected mainnet address, got ${changedNetwork} one`),
+      );
     }
   };
 
