@@ -193,7 +193,8 @@ GitHub nests the per-file jobs under one collapsible check.
 The required status check for merge is the aggregate **`Tests`** job. It always requires `Test Scope`, Build and General
 Checks to pass. When `Test Scope` decides the tests run, `Tests` passes only when **all** tiers pass — unit,
 integration, smoke e2e and the serialization-format check. When `Test Scope` decides they are skipped, `Tests` passes
-only when every one of those jobs was skipped.
+only when every one of those jobs was skipped. These rules live in `.github/scripts/ci-tests-gate.sh`, pinned by its
+table test `.github/scripts/ci-tests-gate.test.sh`, which `Test Scope` runs.
 
 **PRs to `main` that change no code skip the test jobs.** `Test Scope` runs alongside Build and diffs the PR branch
 against its merge-base with `main`. When every changed file is on the skip list, Build and General Checks still run (the
@@ -211,9 +212,10 @@ update this copy. The skip list:
 
 Any other file, in any amount, runs everything. Only a PR that targets `main` can skip: a PR to any other base (a
 stacked PR, say), pushes to `main`, manual runs and the changesets release PRs (`changeset-release/*`) always run
-everything. `Test Scope` runs the copy of the script from the PR's base, not the branch's, so a branch cannot loosen the
-gate it is checked by; a change to the skip list takes effect once it is on `main`. The `Test Scope` log lists the files
-that decided it.
+everything. `Test Scope` runs the copy of the script from the PR's base, not the branch's, so a change to the skip list
+takes effect once it is on `main` and cannot skip the tests of the PR that makes it. That guards against accidents, not
+intent: a branch can still edit `.github/workflows/ci.yml`, so review of changes there is what keeps the gate honest.
+The `Test Scope` log lists the files that decided it.
 
 To force a full run on a skipped branch, start CI by hand: **Actions → CI → Run workflow**, picking the branch
 (`workflow_dispatch`). The manual run and the PR run sit in separate concurrency groups, so neither cancels the other.
