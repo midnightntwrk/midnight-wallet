@@ -127,7 +127,7 @@ jobs:
       # Covers the node, indexer-standalone and proof-server images. The toolkit image is Docker Hub
       # (`midnightntwrk/midnight-node-toolkit`) and is pulled anonymously — see the header note on rate limits.
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
