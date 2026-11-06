@@ -32,7 +32,7 @@
     "@midnightntwrk/wallet-sdk-utilities": "workspace:^",
     "@types/node": "24.19.2",
     "@vitest/ui": "4.1.12",
-    "eslint": "10.13.0",
+    "eslint": "10.14.0",
     "pino": "10.4.0",
     "pino-pretty": "13.2.0",
     "prettier": "3.9.10",
