@@ -1,0 +1,2085 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="111" failures="1" errors="0" time="3161.357089167">
+    <testsuite name="src/tests/balancing.undeployed.test.ts" timestamp="2026-11-06T08:58:35.039Z" hostname="local" tests="4" failures="0" errors="0" skipped="0" time="193.23817325">
+        <testcase classname="src/tests/balancing.undeployed.test.ts" name="Transaction balancing examples &gt; shielded transfer uses lowest coin first" time="34.076800458">
+            <system-err>
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/balancing.undeployed.test.ts" name="Transaction balancing examples &gt; shielded token transfer with lowest native coin" time="29.377988542">
+            <system-err>
+2026-11-06 08:53:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/balancing.undeployed.test.ts" name="Transaction balancing examples &gt; Token transfer involving multiple token types and recipients in one transaction" time="30.857822834">
+            <system-err>
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:53:47        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/balancing.undeployed.test.ts" name="Transaction balancing examples &gt; Should error when trying to make transaction with wallet containing no Dust" time="0.556235916">
+            <system-err>
+2026-11-06 08:54:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:54:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:54:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+2026-11-06 08:54:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49884/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/dust.undeployed.test.ts" timestamp="2026-11-06T08:58:35.053Z" hostname="local" tests="4" failures="0" errors="0" skipped="0" time="282.150427417">
+        <testcase classname="src/tests/dust.undeployed.test.ts" name="Dust tests &gt; Able to register Night tokens for Dust generation after receiving unshielded tokens" time="82.921825208">
+            <system-err>
+2026-11-06 08:51:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:51:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:51:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:51:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:51:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:51:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/dust.undeployed.test.ts" name="Dust tests &gt; Able to deregister night tokens for dust decay" time="46.618272708">
+            <system-err>
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/dust.undeployed.test.ts" name="Dust tests &gt; Able to spend all shielded tokens" time="100.855896292">
+            <system-err>
+2026-11-06 08:53:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:53:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:53:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:53:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:53:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:53:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:53:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:53:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:54:31        RPC-CORE: chain(): Text:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;system_chain&quot;,&quot;params&quot;:[]}
+
+2026-11-06 08:54:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:54:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:54:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:54:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:54:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:54:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:54:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:54:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/dust.undeployed.test.ts" name="Dust tests &gt; Able to spend all unshielded tokens with generated Dust" time="36.008223334">
+            <system-err>
+2026-11-06 08:55:11        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:55:11        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:55:11        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:55:11        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:55:11        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:55:11        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:55:12        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+2026-11-06 08:55:12        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49674/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/dustDeregistration.undeployed.test.ts" timestamp="2026-11-06T08:58:35.054Z" hostname="local" tests="2" failures="0" errors="0" skipped="0" time="48.306806958">
+        <testcase classname="src/tests/dustDeregistration.undeployed.test.ts" name="Dust Deregistration &gt; deregisters from dust generation" time="19.1055655">
+            <system-err>
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49857/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49857/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49857/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49857/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/dustDeregistration.undeployed.test.ts" name="Dust Deregistration &gt; books Night UTxOs at build time so a concurrent overlapping deregistration fails fast" time="1.113045083">
+            <system-err>
+2026-11-06 08:51:50        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49857/: 1000:: Normal Closure
+
+2026-11-06 08:51:50        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49857/: 1000:: Normal Closure
+
+2026-11-06 08:51:50        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49857/: 1000:: Normal Closure
+
+2026-11-06 08:51:50        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49857/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/dustRegistration.undeployed.test.ts" timestamp="2026-11-06T08:58:35.054Z" hostname="local" tests="3" failures="0" errors="0" skipped="0" time="128.3418095">
+        <testcase classname="src/tests/dustRegistration.undeployed.test.ts" name="Dust Registration &gt; registers dust generation after receiving unshielded tokens" time="48.27847025">
+            <system-err>
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/dustRegistration.undeployed.test.ts" name="Dust Registration &gt; books Night UTxOs at build time so a concurrent overlapping call fails fast" time="18.700817708">
+            <system-err>
+2026-11-06 08:52:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/dustRegistration.undeployed.test.ts" name="Dust Registration &gt; allows to transfer all Night utxos held and then use them for a registration" time="35.990769625">
+            <system-err>
+2026-11-06 08:52:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+2026-11-06 08:52:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49879/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/ecdsaSpend.undeployed.test.ts" timestamp="2026-11-06T08:58:35.055Z" hostname="local" tests="3" failures="0" errors="0" skipped="1" time="306.582048167">
+        <testcase classname="src/tests/ecdsaSpend.undeployed.test.ts" name="ECDSA unshielded spend (undeployed) &gt; ECDSA-SPEND-01/02: an ECDSA wallet spends Night, authorized by its ECDSA key" time="136.877283208">
+            <system-err>
+2026-11-06 08:51:26        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:51:26        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:51:26        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:51:26        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:51:26        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:51:26        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/ecdsaSpend.undeployed.test.ts" name="ECDSA unshielded spend (undeployed) &gt; ECDSA-MM-07: a Schnorr signature for the ECDSA wallet is rejected before submission" time="149.033259584">
+            <system-err>
+2026-11-06 08:53:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:53:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:53:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:53:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:53:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:53:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:53:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+2026-11-06 08:53:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49859/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/ecdsaSpend.undeployed.test.ts" name="ECDSA connector signData (undeployed) — blocked on dapp-connector-api#31 &gt; ECDSA-F-01/S-01: signData keyType ecdsa, prefixed and non-replayable" time="0">
+            <skipped/>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/emptyWallet.universal.test.ts" timestamp="2026-11-06T08:58:35.056Z" hostname="local" tests="25" failures="0" errors="0" skipped="0" time="38.17836725">
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Valid Midnight wallet can be built from a BIP32 compatible mnemonic seed phrase" time="1.340026416">
+            <system-err>
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: chain(): Text:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;system_chain&quot;,&quot;params&quot;:[]}
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Unable to start wallet with invalid seed" time="0.44129175">
+            <system-err>
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Shielded wallet state can be serialized and then restored" time="0.462758458">
+            <system-err>
+2026-11-06 08:51:28        RPC-CORE: getFinalizedHead(): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Unshielded wallet state can be serialized and then restored" time="0.609834292">
+            <system-err>
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:29        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: getBlockHash(blockNumber?: BlockNumber): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:29        RPC-CORE: getRuntimeVersion(at?: BlockHash): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:29        RPC-CORE: properties(): ChainProperties:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        API/INIT: Error: FATAL: Unable to initialize the API: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: chain(): Text:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;system_chain&quot;,&quot;params&quot;:[]}
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Dust wallet state can be serialized and then restored" time="0.462258792">
+            <system-err>
+2026-11-06 08:51:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Shielded wallet state returns coinPublicKey hex string" time="0.360427333">
+            <system-err>
+2026-11-06 08:51:30        RPC-CORE: getFinalizedHead(): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:30        RPC-CORE: getBlockHash(blockNumber?: BlockNumber): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:30        RPC-CORE: getRuntimeVersion(at?: BlockHash): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:30        RPC-CORE: properties(): ChainProperties:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:30        API/INIT: Error: FATAL: Unable to initialize the API: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Shielded wallet state returns encryptionPublicKey hex string" time="0.411048167">
+            <system-err>
+2026-11-06 08:51:30        RPC-CORE: getBlockHash(blockNumber?: BlockNumber): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:30        RPC-CORE: getRuntimeVersion(at?: BlockHash): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:30        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:30        RPC-CORE: properties(): ChainProperties:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:30        RPC-CORE: methods(): RpcMethods:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:30        API/INIT: Error: FATAL: Unable to initialize the API: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:30        RPC-CORE: getFinalizedHead(): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:30        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Shielded midnight wallet returns empty object of balances" time="0.440037625">
+            <system-err>
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:31        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Shielded midnight wallet returns no coins" time="0.659667417">
+            <system-err>
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:31        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: call(method: Text, data: Bytes, at?: BlockHash): Bytes:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        API/INIT: error with state_call::Metadata_metadata_at_version, rpc::state::get_metadata will be used
+
+2026-11-06 08:51:32        RPC-CORE: getMetadata(at?: BlockHash): Metadata:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+
+2026-11-06 08:51:32        API/INIT: Error: FATAL: Unable to initialize the API: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Shielded midnight wallet returns no available coins" time="0.763482542">
+            <system-err>
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: getBlockHash(blockNumber?: BlockNumber): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:32        RPC-CORE: getRuntimeVersion(at?: BlockHash): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:32        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:32        RPC-CORE: properties(): ChainProperties:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:32        RPC-CORE: methods(): RpcMethods:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        API/INIT: Error: FATAL: Unable to initialize the API: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Shielded midnight wallet returns no pending coins" time="0.716281542">
+            <system-err>
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:32        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Shielded midnight wallet returns no tx history" time="0.772769208">
+            <system-err>
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:33        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: getBlockHash(blockNumber?: BlockNumber): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:33        RPC-CORE: getRuntimeVersion(at?: BlockHash): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:33        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:33        RPC-CORE: properties(): ChainProperties:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:33        RPC-CORE: methods(): RpcMethods:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        API/INIT: Error: FATAL: Unable to initialize the API: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Shielded midnight wallet returns coin public key" time="0.498676667">
+            <system-err>
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:34        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:34        RPC-CORE: call(method: Text, data: Bytes, at?: BlockHash): Bytes:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:34        API/INIT: error with state_call::Metadata_metadata_at_version, rpc::state::get_metadata will be used
+
+2026-11-06 08:51:34        RPC-CORE: getMetadata(at?: BlockHash): Metadata:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+
+2026-11-06 08:51:34        API/INIT: Error: FATAL: Unable to initialize the API: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Shielded midnight wallet returns encryption public key" time="0.664902792">
+            <system-err>
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Unshielded midnight wallet returns valid bech32 public coin address" time="0.826329791">
+            <system-err>
+2026-11-06 08:51:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:35        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:36        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:36        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:36        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:36        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:36        RPC-CORE: chain(): Text:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;system_chain&quot;,&quot;params&quot;:[]}
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Unshielded midnight wallet returns returns no available coins" time="0.502767292">
+            <system-err>
+2026-11-06 08:51:36        RPC-CORE: call(method: Text, data: Bytes, at?: BlockHash): Bytes:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:36        API/INIT: error with state_call::Metadata_metadata_at_version, rpc::state::get_metadata will be used
+
+2026-11-06 08:51:36        RPC-CORE: getMetadata(at?: BlockHash): Metadata:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+
+2026-11-06 08:51:36        API/INIT: Error: FATAL: Unable to initialize the API: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:36        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:36        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:36        RPC-CORE: chain(): Text:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;system_chain&quot;,&quot;params&quot;:[]}
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Unshielded midnight wallet returns returns no balances" time="0.505160292">
+            <system-err>
+2026-11-06 08:51:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Unshielded midnight wallet returns returns no pending coins" time="0.436274167">
+            <system-err>
+2026-11-06 08:51:37        RPC-CORE: getRuntimeVersion(at?: BlockHash): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:37        RPC-CORE: getHeader(hash?: BlockHash): Header:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:37        RPC-CORE: properties(): ChainProperties:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:37        RPC-CORE: methods(): RpcMethods:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:37        API/INIT: Error: FATAL: Unable to initialize the API: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Unshielded midnight wallet returns returns no total coins" time="0.65614075">
+            <system-err>
+2026-11-06 08:51:37        RPC-CORE: getBlockHash(blockNumber?: BlockNumber): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:37        RPC-CORE: getRuntimeVersion(at?: BlockHash): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:37        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:37        RPC-CORE: properties(): ChainProperties:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:37        RPC-CORE: methods(): RpcMethods:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:37        API/INIT: Error: FATAL: Unable to initialize the API: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:38        RPC-CORE: chain(): Text:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;system_chain&quot;,&quot;params&quot;:[]}
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Dust wallet returns empty balance" time="0.603226792">
+            <system-err>
+2026-11-06 08:51:38        RPC-CORE: call(method: Text, data: Bytes, at?: BlockHash): Bytes:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:38        API/INIT: error with state_call::Metadata_metadata_at_version, rpc::state::get_metadata will be used
+
+2026-11-06 08:51:38        RPC-CORE: getMetadata(at?: BlockHash): Metadata:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+
+2026-11-06 08:51:38        API/INIT: Error: FATAL: Unable to initialize the API: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Dust wallet returns valid public key" time="0.483286208">
+            <system-err>
+2026-11-06 08:51:39        RPC-CORE: call(method: Text, data: Bytes, at?: BlockHash): Bytes:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:39        API/INIT: error with state_call::Metadata_metadata_versions, rpc::state::get_metadata will be used
+
+2026-11-06 08:51:39        RPC-CORE: getMetadata(at?: BlockHash): Metadata:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+
+2026-11-06 08:51:39        API/INIT: Error: FATAL: Unable to initialize the API: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:39        RPC-CORE: getRuntimeVersion(at?: BlockHash): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:39        RPC-CORE: getHeader(hash?: BlockHash): Header:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Dust wallet returns valid address" time="0.696083958">
+            <system-err>
+2026-11-06 08:51:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:39        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:39        RPC-CORE: getBlockHash(blockNumber?: BlockNumber): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:39        RPC-CORE: getRuntimeVersion(at?: BlockHash): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:39        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:39        RPC-CORE: properties(): ChainProperties:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:39        RPC-CORE: methods(): RpcMethods:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:39        API/INIT: Error: FATAL: Unable to initialize the API: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:40        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:40        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:40        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:40        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Dust wallet returns no available coins" time="0.470954375">
+            <system-err>
+2026-11-06 08:51:40        RPC-CORE: getFinalizedHead(): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:40        RPC-CORE: call(method: Text, data: Bytes, at?: BlockHash): Bytes:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:40        API/INIT: error with state_call::Metadata_metadata_at_version, rpc::state::get_metadata will be used
+
+2026-11-06 08:51:40        RPC-CORE: getMetadata(at?: BlockHash): Metadata:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+
+2026-11-06 08:51:40        API/INIT: Error: FATAL: Unable to initialize the API: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:40        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:40        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:40        RPC-CORE: chain(): Text:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;system_chain&quot;,&quot;params&quot;:[]}
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Dust wallet returns no total coins" time="0.628731083">
+            <system-err>
+2026-11-06 08:51:41        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:41        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:41        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:41        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/emptyWallet.universal.test.ts" name="Fresh wallet with empty state &gt; Dust wallet returns no pending coins" time="0.610654625">
+            <system-err>
+2026-11-06 08:51:41        RPC-CORE: getFinalizedHead(): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:41        RPC-CORE: getBlockHash(blockNumber?: BlockNumber): BlockHash:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:41        RPC-CORE: getRuntimeVersion(at?: BlockHash): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:41        RPC-CORE: chain(): Text:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:41        RPC-CORE: properties(): ChainProperties:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+2026-11-06 08:51:41        RPC-CORE: methods(): RpcMethods:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:41        API/INIT: Error: FATAL: Unable to initialize the API: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:51:41        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:41        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:41        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+2026-11-06 08:51:41        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49806/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/facadeTransfer.undeployed.test.ts" timestamp="2026-11-06T08:58:35.061Z" hostname="local" tests="5" failures="0" errors="0" skipped="0" time="397.679352292">
+        <testcase classname="src/tests/facadeTransfer.undeployed.test.ts" name="Wallet Facade Transfer &gt; allows to transfer shielded tokens only @smoke" time="125.621559542">
+            <system-out>
+timestamp=2026-11-06T08:51:49.128Z level=WARN fiber=#642 message=&quot;Could not fetch https://srs.midnight.network/zswap/10/spend.bzkir: TypeError: fetch failed (asking again while retries remain)&quot;
+
+timestamp=2026-11-06T08:51:57.140Z level=WARN fiber=#649 message=&quot;Could not fetch https://srs.midnight.network/bls_midnight_2p14: TypeError: fetch failed (asking again while retries remain)&quot;
+
+            </system-out>
+            <system-err>
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/facadeTransfer.undeployed.test.ts" name="Wallet Facade Transfer &gt; allows to transfer unshielded tokens" time="36.005687334">
+            <system-err>
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/facadeTransfer.undeployed.test.ts" name="Wallet Facade Transfer &gt; allows to balance and submit an arbitrary shielded transaction" time="96.17774725">
+            <system-err>
+2026-11-06 08:54:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:54:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:54:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:54:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:54:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:54:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:54:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:54:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/facadeTransfer.undeployed.test.ts" name="Wallet Facade Transfer &gt; allows to balance and submit an arbitrary unshielded transaction" time="29.416255875">
+            <system-err>
+2026-11-06 08:55:49        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:55:49        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:55:49        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:55:49        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:55:49        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:55:49        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:55:49        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:55:49        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/facadeTransfer.undeployed.test.ts" name="Wallet Facade Transfer &gt; records shielded, unshielded, and dust sections in tx history for a combined transfer matches expected structure" time="84.405039875">
+            <system-err>
+2026-11-06 08:56:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:56:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:56:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:56:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:56:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:56:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:56:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+2026-11-06 08:56:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49802/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/fundedWallet.undeployed.test.ts" timestamp="2026-11-06T08:58:35.062Z" hostname="local" tests="6" failures="0" errors="0" skipped="0" time="22.950712125">
+        <testcase classname="src/tests/fundedWallet.undeployed.test.ts" name="Funded wallet &gt; Wallet balance for native token is 25B tDUST and there are two other token types" time="0.708638292">
+            <system-err>
+2026-11-06 08:51:26        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:26        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/fundedWallet.undeployed.test.ts" name="Funded wallet &gt; funded wallet facade returns total coins" time="0.763212916">
+            <system-err>
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:27        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/fundedWallet.undeployed.test.ts" name="Funded wallet &gt; funded wallet facade eturns available coins" time="0.532707875">
+            <system-err>
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/fundedWallet.undeployed.test.ts" name="Funded wallet &gt; Wallet has no pending coins" time="0.415710834">
+            <system-err>
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:28        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/fundedWallet.undeployed.test.ts" name="Funded wallet &gt; Unshielded transaction history entries contain createdUtxos and spentUtxos" time="0.41004475">
+            <system-err>
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/fundedWallet.undeployed.test.ts" name="Funded wallet &gt; Shielded transaction history entries contain receivedCoins and spentCoins" time="0.454092958">
+            <system-err>
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+2026-11-06 08:51:29        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49877/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/multipleWallets.undeployed.test.ts" timestamp="2026-11-06T08:58:35.063Z" hostname="local" tests="2" failures="1" errors="0" skipped="1" time="77.088257125">
+        <testcase classname="src/tests/multipleWallets.undeployed.test.ts" name="Syncing &gt; Syncing is working for multiple wallets concurrently" time="0">
+            <skipped/>
+        </testcase>
+        <testcase classname="src/tests/multipleWallets.undeployed.test.ts" name="Syncing" time="77.087754208">
+            <failure message="Port 6300/tcp not bound after 60000ms" type="Error">
+Error: Port 6300/tcp not bound after 60000ms
+ ❯ ../../node_modules/testcontainers/build/wait-strategies/host-port-wait-strategy.js:50:19
+ ❯ IntervalRetry.retryUntil ../../node_modules/testcontainers/build/common/retry.js:29:24
+ ❯ HostPortWaitStrategy.waitForPort ../../node_modules/testcontainers/build/wait-strategies/host-port-wait-strategy.js:47:9
+ ❯ HostPortWaitStrategy.waitForInternalPorts ../../node_modules/testcontainers/build/wait-strategies/host-port-wait-strategy.js:41:13
+ ❯ HostPortWaitStrategy.waitUntilReady ../../node_modules/testcontainers/build/wait-strategies/host-port-wait-strategy.js:13:9
+ ❯ waitForContainer ../../node_modules/testcontainers/build/wait-strategies/wait-for-container.js:8:9
+ ❯ ../../node_modules/testcontainers/build/docker-compose-environment/docker-compose-environment.js:144:17
+            </failure>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/optionalBalancing.undeployed.test.ts" timestamp="2026-11-06T08:58:35.064Z" hostname="local" tests="21" failures="0" errors="0" skipped="0" time="239.748629458">
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceUnprovenTransaction &gt; only balances shielded when tokenKindsToBalance is [&quot;shielded&quot;]" time="0.868664792">
+            <system-err>
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:31        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceUnprovenTransaction &gt; allows to progress to signing when only shielded tokens are being utilized" time="0.816879834">
+            <system-err>
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceUnprovenTransaction &gt; only balances unshielded when tokenKindsToBalance is [&quot;unshielded&quot;]" time="0.934046542">
+            <system-err>
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceUnprovenTransaction &gt; only adds dust fees when tokenKindsToBalance is [&quot;dust&quot;]" time="0.730080166">
+            <system-err>
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceUnprovenTransaction &gt; balances all when tokenKindsToBalance is &quot;all&quot; (default)" time="0.782373792">
+            <system-err>
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:34        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceUnboundTransaction &gt; only balances shielded when tokenKindsToBalance is [&quot;shielded&quot;]" time="59.702258791">
+            <system-err>
+2026-11-06 08:51:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:36        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:51:36        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceUnboundTransaction &gt; allows to progress to signing when only shielded tokens are being utilized" time="0.607943459">
+            <system-err>
+2026-11-06 08:52:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:52:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:52:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:52:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceUnboundTransaction &gt; only balances unshielded when tokenKindsToBalance is [&quot;unshielded&quot;]" time="36.184444416">
+            <system-err>
+2026-11-06 08:52:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:52:35        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:52:36        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:52:36        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceUnboundTransaction &gt; only adds dust fees when tokenKindsToBalance is [&quot;dust&quot;]" time="36.493300583">
+            <system-err>
+2026-11-06 08:53:11        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:53:11        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:53:12        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:53:12        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceUnboundTransaction &gt; balances all when tokenKindsToBalance is &quot;all&quot; (default)" time="36.547796792">
+            <system-err>
+2026-11-06 08:53:48        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:53:48        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:53:48        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:53:48        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceFinalizedTransaction &gt; only balances shielded when tokenKindsToBalance is [&quot;shielded&quot;]" time="0.347519666">
+            <system-err>
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceFinalizedTransaction &gt; allows to progress to signing when only shielded tokens are being utilized" time="0.297565875">
+            <system-err>
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceFinalizedTransaction &gt; only balances unshielded when tokenKindsToBalance is [&quot;unshielded&quot;]" time="0.280503875">
+            <system-err>
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceFinalizedTransaction &gt; only balances dust when tokenKindsToBalance is [&quot;dust&quot;]" time="0.287858458">
+            <system-err>
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; balanceFinalizedTransaction &gt; balances all when tokenKindsToBalance is &quot;all&quot; (default)" time="0.29978575">
+            <system-err>
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; initSwap &gt; does not pay fees when payFees is false" time="0.2972515">
+            <system-err>
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; initSwap &gt; pays fees when payFees is true" time="0.307407625">
+            <system-err>
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; initSwap &gt; allows to continue with signing even when no signatures are needed and `payFees` is false" time="0.292245">
+            <system-err>
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; transferTransaction &gt; does not pay fees when payFees is false" time="0.294561917">
+            <system-err>
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; transferTransaction &gt; pays fees when payFees is true" time="0.30020975">
+            <system-err>
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/optionalBalancing.undeployed.test.ts" name="Optional Balancing &gt; transferTransaction &gt; allows to continue with signing even when no signatures are needed and `payFees` is false" time="0.294430625">
+            <system-err>
+2026-11-06 08:55:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+2026-11-06 08:55:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49784/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/projectionsBasedSync.undeployed.test.ts" timestamp="2026-11-06T08:58:35.067Z" hostname="local" tests="5" failures="0" errors="0" skipped="0" time="225.823239125">
+        <testcase classname="src/tests/projectionsBasedSync.undeployed.test.ts" name="Projections-based synchronisation model &gt; Projections-based sync recovers a pre-funded wallet with multiple Dust nullifier spends @smoke" time="80.806000417">
+            <system-err>
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:23        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:51:23        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/projectionsBasedSync.undeployed.test.ts" name="Projections-based synchronisation model &gt; Initial projections-based sync of empty wallet (no transaction history) is near-instant" time="1.28748025">
+            <system-err>
+2026-11-06 08:52:42        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:42        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:43        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/projectionsBasedSync.undeployed.test.ts" name="Projections-based synchronisation model &gt; Incremental projections-based sync after new blocks is near-instant" time="13.481025583">
+            <system-err>
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:44        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:45        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:45        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:45        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:45        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:45        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:45        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/projectionsBasedSync.undeployed.test.ts" name="Projections-based synchronisation model &gt; Able to register Night tokens for Dust generation after receiving unshielded tokens using projections sync model @smoke" time="78.109879417">
+            <system-err>
+2026-11-06 08:52:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:52:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/projectionsBasedSync.undeployed.test.ts" name="Projections-based synchronisation model &gt; Projections-based sync resumes correctly from a restored snapshot" time="35.570028">
+            <system-err>
+2026-11-06 08:54:15        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:15        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:15        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:15        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:15        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:15        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+2026-11-06 08:54:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49727/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/smoke.undeployed.test.ts" timestamp="2026-11-06T08:58:35.068Z" hostname="local" tests="4" failures="0" errors="0" skipped="0" time="139.656082667">
+        <testcase classname="src/tests/smoke.undeployed.test.ts" name="Smoke tests &gt; Valid transfer of shielded and unshielded token" time="54.563329625">
+            <system-err>
+2026-11-06 08:51:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:51:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:51:22        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/smoke.undeployed.test.ts" name="Smoke tests &gt; Shielded wallet state can be serialized and then restored" time="1.313147916">
+            <system-err>
+2026-11-06 08:52:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:16        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/smoke.undeployed.test.ts" name="Smoke tests &gt; Unshielded wallet can be serialized and restored" time="66.515349667">
+            <system-err>
+2026-11-06 08:52:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:17        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:52:18        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/smoke.undeployed.test.ts" name="Smoke tests &gt; Dust wallet can be serialized and restored" time="0.772500709">
+            <system-err>
+2026-11-06 08:53:24        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:53:24        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:53:24        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:53:24        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:53:24        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:53:24        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:53:24        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:53:24        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49721/: 1000:: Normal Closure
+
+2026-11-06 08:53:24        RPC-CORE: chain(): Text:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;system_chain&quot;,&quot;params&quot;:[]}
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/swap.undeployed.test.ts" timestamp="2026-11-06T08:58:35.069Z" hostname="local" tests="4" failures="0" errors="0" skipped="1" time="265.1947355">
+        <testcase classname="src/tests/swap.undeployed.test.ts" name="Swaps &gt; can perform a shielded swap" time="125.729246583">
+            <system-out>
+timestamp=2026-11-06T08:51:55.303Z level=WARN fiber=#689 message=&quot;Could not fetch https://srs.midnight.network/bls_midnight_2p14: TypeError: fetch failed (asking again while retries remain)&quot;
+
+            </system-out>
+            <system-err>
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:51:32        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:51:33        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/swap.undeployed.test.ts" name="Swaps &gt; can perform an unshielded swap" time="0">
+            <skipped/>
+        </testcase>
+        <testcase classname="src/tests/swap.undeployed.test.ts" name="Swaps &gt; mixed shielded-&gt;unshielded swap: delivers the unshielded NIGHT want" time="96.051701875">
+            <system-err>
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:53:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:53:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:53:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/swap.undeployed.test.ts" name="Swaps &gt; mixed unshielded-&gt;shielded swap: delivers the shielded want" time="17.376596166">
+            <system-err>
+2026-11-06 08:55:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:55:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:55:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:55:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:55:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:55:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:55:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+2026-11-06 08:55:13        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:49843/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/tokenTransfer.undeployed.test.ts" timestamp="2026-11-06T08:58:35.070Z" hostname="local" tests="18" failures="0" errors="0" skipped="1" time="448.304570875">
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; Is working for shielded token transfer @smoke" time="36.465821417">
+            <system-err>
+2026-11-06 08:51:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:51:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:51:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:51:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:51:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:51:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:51:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:51:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; Is working for unshielded token transfer @smoke" time="23.608923083">
+            <system-err>
+2026-11-06 08:52:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:03        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; Is working for native token transfer @smoke" time="30.726754208">
+            <system-err>
+2026-11-06 08:52:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:25        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:26        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:26        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; can perform a self-transaction" time="24.038082167">
+            <system-err>
+2026-11-06 08:52:56        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:56        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:56        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:56        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:56        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:56        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:56        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:52:56        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; can perform a transaction to two different wallet addresses" time="44.272230458">
+            <system-err>
+2026-11-06 08:53:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:53:21        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; Able to pay fees for already balanced transaction to complete swap" time="221.600385708">
+            <system-err>
+2026-11-06 08:54:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:05        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:06        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:06        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:37        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:38        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:54:39        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; coin becomes available when tx fails on node" time="11.520381084">
+            <system-err>
+2026-11-06 08:57:46        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:46        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:46        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:46        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:46        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:46        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:46        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:46        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:47        RPC-CORE: submitAndWatchExtrinsic(extrinsic: Extrinsic): ExtrinsicStatus:: 1010: Invalid Transaction: Custom error: 138
+
+2026-11-06 08:57:47        RPC-CORE: submitAndWatchExtrinsic(extrinsic: Extrinsic): ExtrinsicStatus:: 1010: Invalid Transaction: Custom error: 138
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; error message when attempting to send an amount greater than available balance" time="0.546865667">
+            <system-err>
+2026-11-06 08:57:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:57        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; error message when attempting to send an amount at max available network supply" time="0.683776709">
+            <system-err>
+2026-11-06 08:57:57        RPC-CORE: call(method: Text, data: Bytes, at?: BlockHash): Bytes:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:57        API/INIT: error with state_call::Metadata_metadata_versions, rpc::state::get_metadata will be used
+
+2026-11-06 08:57:57        RPC-CORE: getMetadata(at?: BlockHash): Metadata:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+
+2026-11-06 08:57:57        API/INIT: Error: FATAL: Unable to initialize the API: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:57:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; error message when attempting to send an invalid amount" time="0.49890575">
+            <system-err>
+2026-11-06 08:57:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:58        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; error message when attempting to send a negative amount" time="0.666926416">
+            <system-err>
+2026-11-06 08:57:59        RPC-CORE: call(method: Text, data: Bytes, at?: BlockHash): Bytes:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        API/INIT: error with state_call::Metadata_metadata_at_version, rpc::state::get_metadata will be used
+
+2026-11-06 08:57:59        RPC-CORE: getMetadata(at?: BlockHash): Metadata:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+
+2026-11-06 08:57:59        API/INIT: Error: FATAL: Unable to initialize the API: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; error message when attempting shielded transfer to send a zero amount" time="0.52223675">
+            <system-err>
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:57:59        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; error message when attempting shielded initSwap with non-positive outputs" time="0.460178459">
+            <system-err>
+2026-11-06 08:58:00        RPC-CORE: call(method: Text, data: Bytes, at?: BlockHash): Bytes:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        API/INIT: error with state_call::Metadata_metadata_at_version, rpc::state::get_metadata will be used
+
+2026-11-06 08:58:00        RPC-CORE: getMetadata(at?: BlockHash): Metadata:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+
+2026-11-06 08:58:00        API/INIT: Error: FATAL: Unable to initialize the API: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;state_getMetadata&quot;,&quot;params&quot;:[]}
+    at ApiPromise.#onProviderConnect (file://node_modules/@polkadot/api/base/Init.js:387:27)
+
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        RPC-CORE: chain(): Text:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;system_chain&quot;,&quot;params&quot;:[]}
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; error message when attempting shielded initSwap with non-positive inputs" time="0.441544958">
+            <system-err>
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:00        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: getFinalizedHead(): BlockHash:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; error message when attempting to send an empty array of outputs" time="0.734500375">
+            <system-err>
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:01        RPC-CORE: chain(): Text:: WebSocket is not connected
+Failed WS Request: {&quot;method&quot;:&quot;system_chain&quot;,&quot;params&quot;:[]}
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; coins become available when native token tx fails on node" time="0">
+            <skipped/>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; coin becomes available when tx does not get proved" time="17.32349525">
+            <system-err>
+2026-11-06 08:58:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+        <testcase classname="src/tests/tokenTransfer.undeployed.test.ts" name="Token transfer &gt; coin becomes available when tx does not get submitted" time="14.448989042">
+            <system-err>
+2026-11-06 08:58:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:19        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+2026-11-06 08:58:20        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://localhost:49758/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/transacting.undeployed.test.ts" timestamp="2026-11-06T08:58:35.074Z" hostname="local" tests="3" failures="0" errors="0" skipped="3" time="0">
+        <testcase classname="src/tests/transacting.undeployed.test.ts" name="Wallet transacting &gt; should create &amp; submit successful transfers transactions" time="0">
+            <skipped/>
+        </testcase>
+        <testcase classname="src/tests/transacting.undeployed.test.ts" name="Wallet transacting &gt; should create and submit a transfer, which is properly received" time="0">
+            <skipped/>
+        </testcase>
+        <testcase classname="src/tests/transacting.undeployed.test.ts" name="Wallet transacting &gt; should init a swap, which could be successfully balanced with other wallet and submitted" time="0">
+            <skipped/>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/unshieldedSyncAfterIdle.undeployed.test.ts" timestamp="2026-11-06T08:58:35.074Z" hostname="local" tests="1" failures="0" errors="0" skipped="0" time="320.364061083">
+        <testcase classname="src/tests/unshieldedSyncAfterIdle.undeployed.test.ts" name="Unshielded sync after an idle period &gt; should report a quiet wallet synchronized within seconds of applying a transfer to it, because a transaction it has applied proves how far its timeline goes" time="292.907528083">
+            <system-err>
+2026-11-06 08:52:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:51115/: 1000:: Normal Closure
+
+2026-11-06 08:52:02        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:51115/: 1000:: Normal Closure
+
+2026-11-06 08:52:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:51115/: 1000:: Normal Closure
+
+2026-11-06 08:52:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:51115/: 1000:: Normal Closure
+
+2026-11-06 08:52:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:51115/: 1000:: Normal Closure
+
+2026-11-06 08:52:04        RPC-CORE: subscribeRuntimeVersion(): RuntimeVersion:: disconnected from ws://127.0.0.1:51115/: 1000:: Normal Closure
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/tests/walletSync.undeployed.test.ts" timestamp="2026-11-06T08:58:35.074Z" hostname="local" tests="1" failures="0" errors="0" skipped="0" time="27.749816375">
+        <testcase classname="src/tests/walletSync.undeployed.test.ts" name="Wallet Sync &gt; should resync an empty wallet" time="0.264565667">
+        </testcase>
+    </testsuite>
+</testsuites>
