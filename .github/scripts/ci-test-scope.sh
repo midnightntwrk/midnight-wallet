@@ -12,23 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Decides whether a pull request's changes can alter a test result.
+# Decides whether a CI run's changes can alter a test result.
 #
-# Usage: ci-test-scope.sh <base-sha> <head-sha>
+# Usage: EVENT_NAME=<event> HEAD_REF=<head-ref> BASE_REF=<base-ref> ci-test-scope.sh
 #
-# Diffs <head-sha> against its merge-base with <base-sha> and prints `run-tests=true` unless every changed file is on
-# the skip list below, then `run-tests=false`. The line also goes to $GITHUB_OUTPUT when that is set. The skip list is
-# an allow-list on purpose: a file nobody thought of runs every test.
+# Takes no arguments. Run it inside the checked-out merge commit of a pull request, where HEAD^1 is the base tip and
+# HEAD^2 the branch tip. The first rule that matches decides, in this order:
+#
+#   1. EVENT_NAME is not `pull_request`                → run-tests=true
+#   2. HEAD_REF matches `changeset-release/*`          → run-tests=true
+#   3. BASE_REF is not `main`                          → run-tests=true
+#   4. no file changed between HEAD^1...HEAD^2         → run-tests=true
+#   5. a changed file is not on the skip list below    → run-tests=true
+#   6. every changed file is on the skip list          → run-tests=false
+#
+# The diff is against the merge-base of the two parents, so code `main` gained after the branch point never counts as
+# the branch's change. Each rule prints its reason, then `run-tests=<value>`; the same line goes to $GITHUB_OUTPUT when
+# that is set. The skip list is an allow-list on purpose: a file nobody thought of runs every test.
 
 set -euo pipefail
 
-if [ "$#" -ne 2 ]; then
-  echo "usage: $0 <base-sha> <head-sha>" >&2
-  exit 2
-fi
-
-# Files no test, build or test fixture reads. Anything else — including every JSON file other than these two, since
-# package.json, tsconfig*.json and turbo.json change the build — runs the full suite. In a `case` pattern `*` also
+# Files no test, test fixture or package build reads; General Checks still reads Markdown (formatting and lint), and it
+# runs on every change. Anything else — including every JSON file other than these two, since package.json,
+# tsconfig*.json and turbo.json change the build — runs the full suite. In a `case` pattern `*` also
 # matches `/`, so `*.md` covers Markdown at any depth and `docs/*` the whole tree.
 on_skip_list() {
   case "$1" in
@@ -42,30 +48,64 @@ on_skip_list() {
   esac
 }
 
+# The only place a decision is written.
 decide() {
-  echo "run-tests=$1"
+  printf 'run-tests=%s\n' "$1"
   if [ -n "${GITHUB_OUTPUT:-}" ]; then
-    echo "run-tests=$1" >> "$GITHUB_OUTPUT"
+    printf 'run-tests=%s\n' "$1" >> "$GITHUB_OUTPUT"
   fi
 }
 
-# --no-renames reports a rename as a deletion plus an addition, so moving `x.ts` to `x.md` still names `x.ts`.
-changed="$(git diff --name-only --no-renames "$1...$2")"
+# Prints each file name on its own indented line. File names go through printf, never echo, so a name such as `-n` is
+# printed rather than read as an option.
+list_files() {
+  local file
+  for file in "$@"; do printf '  %s\n' "$file"; done
+}
 
-if [ -z "$changed" ]; then
-  echo "No changed files against the merge-base; running the full suite."
+if [ "${EVENT_NAME:-}" != "pull_request" ]; then
+  printf 'Event %s is not a pull request; running the full suite.\n' "${EVENT_NAME:-<unset>}"
   decide true
   exit 0
 fi
 
-outside="$(while IFS= read -r file; do on_skip_list "$file" || echo "$file"; done <<< "$changed")"
+case "${HEAD_REF:-}" in
+  changeset-release/*)
+    printf 'Branch %s is a changesets release branch; running the full suite.\n' "$HEAD_REF"
+    decide true
+    exit 0
+    ;;
+esac
 
-if [ -n "$outside" ]; then
+if [ "${BASE_REF:-}" != "main" ]; then
+  printf 'Pull request targets %s, not main; running the full suite.\n' "${BASE_REF:-<unset>}"
+  decide true
+  exit 0
+fi
+
+# -z keeps every name verbatim (no quoting of non-ASCII or special characters, no newline ambiguity). --no-renames
+# reports a rename as a deletion plus an addition, so moving `x.ts` to `x.md` still names `x.ts`. The diff goes to a
+# file first so a git failure stops the script instead of reading as an empty diff.
+diff_file="$(mktemp)"
+trap 'rm -f "$diff_file"' EXIT
+git diff -z --name-only --no-renames 'HEAD^1...HEAD^2' > "$diff_file"
+
+changed=()
+outside=()
+while IFS= read -r -d '' file; do
+  changed+=("$file")
+  on_skip_list "$file" || outside+=("$file")
+done < "$diff_file"
+
+if [ "${#changed[@]}" -eq 0 ]; then
+  echo "No changed files against the merge-base; running the full suite."
+  decide true
+elif [ "${#outside[@]}" -ne 0 ]; then
   echo "Files not on the skip list; running the full suite:"
-  echo "$outside" | sed 's/^/  /'
+  list_files "${outside[@]}"
   decide true
 else
   echo "Every changed file is on the skip list; skipping the test jobs:"
-  echo "$changed" | sed 's/^/  /'
+  list_files "${changed[@]}"
   decide false
 fi
