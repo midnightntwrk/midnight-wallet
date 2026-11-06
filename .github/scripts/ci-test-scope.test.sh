@@ -114,6 +114,12 @@ pr true ".github/workflows/x.yml" add .github/workflows/x.yml
 pr true "src/x.ts renamed to src/x.md (the deleted name counts)" rename src/x.ts src/x.md
 pr true ".changeset/pre.json with src/y.ts" add .changeset/pre.json src/y.ts
 pr true "unknown root file foo" add foo
+# Near misses: each name sits just outside one skip pattern, so widening that pattern fails its row.
+pr true "scripts/x.mjs (outside *.md)" add scripts/x.mjs
+pr true "LICENSE-x.sh (outside LICENSE)" add LICENSE-x.sh
+pr true "docsx/y.ts (outside docs/)" add docsx/y.ts
+pr true ".claudex/y.ts (outside .claude/)" add .claudex/y.ts
+pr true ".github/ISSUE_TEMPLATEx.yml (outside .github/ISSUE_TEMPLATE/)" add .github/ISSUE_TEMPLATEx.yml
 pr true "root file named -n with a.md (file names are never echo options)" add -n a.md
 pr true "empty diff" nothing
 
