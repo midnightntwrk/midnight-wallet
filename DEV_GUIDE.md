@@ -209,6 +209,8 @@ Any other file, in any amount, runs everything. Pushes to `main`, manual runs an
 (`changeset-release/*`) always run everything. The `Test Scope` log lists the files that decided it. To force a full run
 on a skipped branch, start CI by hand: **Actions → CI → Run workflow**, picking the branch (`workflow_dispatch`).
 
+Trial line for the docs-only CI check; this branch is never merged.
+
 **Local setup:** `nvm use && corepack enable`, then `yarn` (or `nix develop` with direnv). For tests requiring
 infrastructure: `cp .env.example .env` and set `APP_INFRA_SECRET` (e.g. `openssl rand -hex 32`).
 
