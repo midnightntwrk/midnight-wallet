@@ -33,7 +33,7 @@ export interface ResolvedEndpoints {
   readonly proverUrl: string;
   readonly indexerHttpUrl: string;
   readonly indexerWsUrl: string;
-  /** Node RPC (relay) URL, e.g. `wss://rpc.devnet.midnight.network`. */
+  /** Node RPC (relay) URL, e.g. `wss://rpc.devnet.shielded.tools`. */
   readonly nodeUrl: string;
 }
 

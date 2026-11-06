@@ -35,19 +35,26 @@ const LOCAL_NODE_PORT_RPC = 9944;
 export const KNOWN_NETWORKS = ['preview', 'preprod', 'devnet', 'qanet', 'undeployed'] as const;
 export type KnownNetwork = (typeof KNOWN_NETWORKS)[number];
 
+type RemoteNetwork = Exclude<KnownNetwork, 'undeployed'>;
+
+// Every remote network's indexer is on shielded.tools; preprod's node is the one host still on midnight.network.
+const indexerDomain = (network: RemoteNetwork): string => `${network}.shielded.tools`;
+
+const nodeDomain = (network: RemoteNetwork): string =>
+  network === 'preprod' ? `${network}.midnight.network` : `${network}.shielded.tools`;
+
 const indexerHttpUrl = (network: KnownNetwork): string =>
   network === 'undeployed'
     ? `http://localhost:${LOCAL_INDEXER_PORT}/api/v4/graphql`
-    : `https://indexer.${network}.midnight.network/api/v4/graphql`;
+    : `https://indexer.${indexerDomain(network)}/api/v4/graphql`;
 
-// qanet's ws endpoint lives on the blue deployment, unlike its http endpoint.
 const indexerWsUrl = (network: KnownNetwork): string =>
   network === 'undeployed'
     ? `ws://localhost:${LOCAL_INDEXER_PORT}/api/v4/graphql/ws`
-    : `wss://${network === 'qanet' ? 'indexer-blue.qanet' : `indexer.${network}`}.midnight.network/api/v4/graphql/ws`;
+    : `wss://indexer.${indexerDomain(network)}/api/v4/graphql/ws`;
 
 const relayUrl = (network: KnownNetwork): string =>
-  network === 'undeployed' ? `ws://localhost:${LOCAL_NODE_PORT_RPC}` : `wss://rpc.${network}.midnight.network`;
+  network === 'undeployed' ? `ws://localhost:${LOCAL_NODE_PORT_RPC}` : `wss://rpc.${nodeDomain(network)}`;
 
 export type Configuration = DefaultConfiguration;
 

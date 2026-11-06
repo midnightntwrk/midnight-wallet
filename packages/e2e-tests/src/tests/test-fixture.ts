@@ -137,16 +137,16 @@ export class TestContainersFixture {
   public getIndexerUri(): string {
     switch (TestContainersFixture.network) {
       case 'devnet': {
-        return 'https://indexer.devnet.midnight.network/api/v4/graphql';
+        return 'https://indexer.devnet.shielded.tools/api/v4/graphql';
       }
       case 'qanet': {
-        return 'https://indexer.qanet.midnight.network/api/v4/graphql';
+        return 'https://indexer.qanet.shielded.tools/api/v4/graphql';
       }
       case 'preview': {
-        return 'https://indexer.preview.midnight.network/api/v4/graphql';
+        return 'https://indexer.preview.shielded.tools/api/v4/graphql';
       }
       case 'preprod': {
-        return 'https://indexer.preprod.midnight.network/api/v4/graphql';
+        return 'https://indexer.preprod.shielded.tools/api/v4/graphql';
       }
       case 'stagenet': {
         return 'https://indexer.stagenet.shielded.tools/api/v4/graphql';
@@ -164,16 +164,16 @@ export class TestContainersFixture {
   public getIndexerWsUri(): string {
     switch (TestContainersFixture.network) {
       case 'devnet': {
-        return 'wss://indexer.devnet.midnight.network/api/v4/graphql/ws';
+        return 'wss://indexer.devnet.shielded.tools/api/v4/graphql/ws';
       }
       case 'qanet': {
-        return 'wss://indexer-blue.qanet.midnight.network/api/v4/graphql/ws';
+        return 'wss://indexer.qanet.shielded.tools/api/v4/graphql/ws';
       }
       case 'preview': {
-        return 'wss://indexer.preview.midnight.network/api/v4/graphql/ws';
+        return 'wss://indexer.preview.shielded.tools/api/v4/graphql/ws';
       }
       case 'preprod': {
-        return 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
+        return 'wss://indexer.preprod.shielded.tools/api/v4/graphql/ws';
       }
       case 'stagenet': {
         return 'wss://indexer.stagenet.shielded.tools/api/v4/graphql/ws';
@@ -191,13 +191,13 @@ export class TestContainersFixture {
   public getNodeUri(): string {
     switch (TestContainersFixture.network) {
       case 'devnet': {
-        return 'wss://rpc.devnet.midnight.network';
+        return 'wss://rpc.devnet.shielded.tools';
       }
       case 'qanet': {
-        return 'wss://rpc.qanet.midnight.network';
+        return 'wss://rpc.qanet.shielded.tools';
       }
       case 'preview': {
-        return 'wss://rpc.preview.midnight.network';
+        return 'wss://rpc.preview.shielded.tools';
       }
       case 'preprod': {
         return 'wss://rpc.preprod.midnight.network';
