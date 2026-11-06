@@ -63,27 +63,26 @@ export const parseMidnightNetwork = (raw: string | undefined): MidnightNetwork =
 export const NETWORK_PRESETS: Record<RemoteNetwork, RemoteNetworkPreset> = {
   devnet: {
     networkId: NetworkId.NetworkId.DevNet,
-    indexerHttpUrl: 'https://indexer.devnet.midnight.network/api/v4/graphql',
-    indexerWsUrl: 'wss://indexer.devnet.midnight.network/api/v4/graphql/ws',
-    nodeUrl: 'wss://rpc.devnet.midnight.network',
+    indexerHttpUrl: 'https://indexer.devnet.shielded.tools/api/v4/graphql',
+    indexerWsUrl: 'wss://indexer.devnet.shielded.tools/api/v4/graphql/ws',
+    nodeUrl: 'wss://rpc.devnet.shielded.tools',
   },
   qanet: {
     networkId: NetworkId.NetworkId.QaNet,
-    indexerHttpUrl: 'https://indexer.qanet.midnight.network/api/v4/graphql',
-    // NB: qanet ws is served from the `indexer-blue` host — preserved from upstream.
-    indexerWsUrl: 'wss://indexer-blue.qanet.midnight.network/api/v4/graphql/ws',
-    nodeUrl: 'wss://rpc.qanet.midnight.network',
+    indexerHttpUrl: 'https://indexer.qanet.shielded.tools/api/v4/graphql',
+    indexerWsUrl: 'wss://indexer.qanet.shielded.tools/api/v4/graphql/ws',
+    nodeUrl: 'wss://rpc.qanet.shielded.tools',
   },
   preview: {
     networkId: NetworkId.NetworkId.Preview,
-    indexerHttpUrl: 'https://indexer.preview.midnight.network/api/v4/graphql',
-    indexerWsUrl: 'wss://indexer.preview.midnight.network/api/v4/graphql/ws',
-    nodeUrl: 'wss://rpc.preview.midnight.network',
+    indexerHttpUrl: 'https://indexer.preview.shielded.tools/api/v4/graphql',
+    indexerWsUrl: 'wss://indexer.preview.shielded.tools/api/v4/graphql/ws',
+    nodeUrl: 'wss://rpc.preview.shielded.tools',
   },
   preprod: {
     networkId: NetworkId.NetworkId.PreProd,
-    indexerHttpUrl: 'https://indexer.preprod.midnight.network/api/v4/graphql',
-    indexerWsUrl: 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws',
+    indexerHttpUrl: 'https://indexer.preprod.shielded.tools/api/v4/graphql',
+    indexerWsUrl: 'wss://indexer.preprod.shielded.tools/api/v4/graphql/ws',
     nodeUrl: 'wss://rpc.preprod.midnight.network',
   },
   stagenet: {
