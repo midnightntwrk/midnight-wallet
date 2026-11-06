@@ -12,12 +12,67 @@ on:
     branches: ['main']
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  # The event is part of the group so a manual run on a pull request's branch neither cancels the pull request's run
+  # nor is cancelled by it; each still replaces an older run of its own event on the same branch.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions: {}
 
 jobs:
+  # Decides whether the test jobs, and the publish jobs behind them, run. Every rule lives in
+  # `.github/scripts/ci-test-scope.sh`: only a pull request targeting `main` whose changed files are all on its skip list
+  # can skip, because such a change cannot alter a test result; it gets Build and General Checks only. Pushes, manual
+  # runs and pull requests targeting any other branch always run everything. The changesets release PRs always run too:
+  # they rewrite versions and `yarn.lock`, which are not on the skip list, and the script names their branch as a second
+  # safeguard.
+  test-scope:
+    name: Test Scope
+    runs-on: ubuntu-latest
+    outputs:
+      run-tests: ${{ steps.scope.outputs.run-tests }}
+    steps:
+      # A pull request needs full history so both parents of the merge commit, and their merge-base, are present;
+      # blob-less because a name-only diff reads trees, not file contents. Any other event runs everything without
+      # diffing, so one commit is enough. The condition is inverted because 0 is falsy in an expression: `cond && 0 || 1`
+      # would always give 1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: ${{ github.event_name != 'pull_request' && 1 || 0 }}
+          filter: blob:none
+
+      # Pins the skip list from both sides, and the `Tests` gate's pass and fail cases: a must-run file the scope script
+      # would skip, or a job result the gate would wave through, fails here. These test the branch's copies, the ones
+      # that become the base's once the branch merges.
+      - name: Test the CI scripts
+        run: |
+          .github/scripts/ci-test-scope.test.sh
+          .github/scripts/ci-tests-gate.test.sh
+
+      # The copy that decides is the base's (`HEAD^1`, the base side of the merge commit), not the branch's, so an edit to
+      # the skip list takes effect only once it is on the base and cannot skip the tests of the PR that makes it. This
+      # guards against accidents, not intent: a branch can still edit this workflow, so review of changes to it is what
+      # keeps the gate honest. Any other event runs everything whichever copy decides, so it uses the branch's.
+      #
+      # `rev-parse` reads trees only, so it tells a base without the script from a failed fetch of its contents in this
+      # blob-less checkout; `git show` then fails the step on a failed fetch instead of falling back to the branch's copy.
+      - name: Decide test scope
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          SCRIPT=.github/scripts/ci-test-scope.sh
+          if [ "$EVENT_NAME" = "pull_request" ] && git rev-parse --verify -q "HEAD^1:$SCRIPT" > /dev/null; then
+            git show "HEAD^1:$SCRIPT" > "$RUNNER_TEMP/ci-test-scope.sh"
+          else
+            # Not a pull request, or a base that predates the script: the branch's copy runs until it lands there.
+            cp "$SCRIPT" "$RUNNER_TEMP/ci-test-scope.sh"
+          fi
+          bash "$RUNNER_TEMP/ci-test-scope.sh"
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -77,7 +132,8 @@ jobs:
   # a broken artifact fails in one obvious place instead of across the integration matrix.
   build-wasm:
     name: Build WASM Translation
-    needs: [build]
+    needs: [test-scope, build]
+    if: needs.test-scope.outputs.run-tests == 'true'
     runs-on: ubuntu-latest
     # A cold build compiles both ledgers with LTO; ~6 min observed, and the cargo cache takes most runs well under it.
     timeout-minutes: 30
@@ -250,7 +306,8 @@ jobs:
 
   test-unit:
     name: Unit Tests
-    needs: [general-checks]
+    needs: [test-scope, general-checks]
+    if: needs.test-scope.outputs.run-tests == 'true'
     runs-on: ubuntu-latest
     # A unit test that loops synchronously cannot be stopped by vitest's own timeout; without this bound it would hold
     # the runner for GitHub's 6-hour default. Recent runs take 3–8 min.
@@ -321,10 +378,11 @@ jobs:
   # job's status is the aggregate gate — green only if every file passed.
   integration:
     name: Integration Tests
-    # Runs in parallel with test-unit and e2e-smoke. build-wasm is gated only on build, so it runs alongside
+    # Runs in parallel with test-unit and e2e-smoke. build-wasm needs only test-scope and build, so it runs alongside
     # general-checks rather than extending the chain; the fork state-translation file needs its artifact, and without
     # the dependency that file would quietly skip instead of failing.
-    needs: [general-checks, build-wasm]
+    needs: [test-scope, general-checks, build-wasm]
+    if: needs.test-scope.outputs.run-tests == 'true'
     # Grant here too: a reusable workflow's token is capped by the caller job's
     # permissions, so checks: write must be granted at the call site as well.
     permissions:
@@ -337,8 +395,10 @@ jobs:
 
   e2e-smoke:
     name: Smoke E2E
-    # Runs in parallel with test-unit and integration (all gated only on general-checks).
-    needs: [general-checks]
+    # Runs in parallel with test-unit and integration: all three start once general-checks passes and test-scope chose to
+    # run the tests (integration also waits for build-wasm, which runs alongside general-checks).
+    needs: [test-scope, general-checks]
+    if: needs.test-scope.outputs.run-tests == 'true'
     runs-on: ubuntu-latest-8-core-x64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -402,10 +462,12 @@ jobs:
   # Persisted-format gate. The compatibility and drift tests themselves run inside `test-unit` along with every other
   # unit test; this job exists for the check that needs git history rather than a test runner — a published fixture
   # records what a shipped SDK actually wrote, so editing one would let a failing compatibility test be "fixed" by
-  # rewriting the evidence. `fetch-depth: 0` is why it is a job of its own: every other job checks out shallow.
+  # rewriting the evidence. `fetch-depth: 0` is why it is a job of its own: every other job checks out shallow, apart
+  # from test-scope, whose pull-request history is blob-less and so holds no file contents to compare.
   serialization-formats:
     name: Serialization Formats
-    needs: [general-checks]
+    needs: [test-scope, general-checks]
+    if: needs.test-scope.outputs.run-tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -435,27 +497,41 @@ jobs:
   # that branch protection requires (the old combined job was also named "Tests"),
   # and stays stable as integration files come and go. `if: always()` so it reports
   # a definitive pass/fail even when a stage fails.
+  #
+  # The rules live in `.github/scripts/ci-tests-gate.sh`, with a table test that Test Scope runs: Test Scope, Build and
+  # General Checks must pass on every run; the test stages must all pass when Test Scope chose to run them, and must all
+  # be skipped when it did not.
+  #
+  # Every test stage gated on `run-tests` must be listed in `needs` and passed to the gate, or its failure gates nothing.
+  # Build WASM Translation is the one gated job not listed: Integration Tests needs it, so its failure surfaces there.
   tests:
     name: Tests
-    needs: [test-unit, integration, e2e-smoke, serialization-formats]
+    needs: [test-scope, build, general-checks, test-unit, integration, e2e-smoke, serialization-formats]
     if: always()
     runs-on: ubuntu-latest
     steps:
+      # Only the gate script is needed, so a sparse, shallow checkout.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
       - name: Aggregate test results
-        run: |
-          echo "unit=${{ needs.test-unit.result }} integration=${{ needs.integration.result }} e2e=${{ needs.e2e-smoke.result }} serialization=${{ needs.serialization-formats.result }}"
-          if [ "${{ needs.test-unit.result }}" != "success" ] || \
-             [ "${{ needs.integration.result }}" != "success" ] || \
-             [ "${{ needs.e2e-smoke.result }}" != "success" ] || \
-             [ "${{ needs.serialization-formats.result }}" != "success" ]; then
-            echo "::error::One or more test stages did not pass."
-            exit 1
-          fi
-          echo "All test stages passed."
+        env:
+          RUN_TESTS: ${{ needs.test-scope.outputs.run-tests }}
+          SCOPE: ${{ needs.test-scope.result }}
+          BUILD: ${{ needs.build.result }}
+          GENERAL: ${{ needs.general-checks.result }}
+          UNIT: ${{ needs.test-unit.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+          E2E: ${{ needs.e2e-smoke.result }}
+          SERIALIZATION: ${{ needs.serialization-formats.result }}
+        run: .github/scripts/ci-tests-gate.sh
 
   build-publish:
     name: Build for Publishing
-    needs: [tests]
+    needs: [test-scope, tests]
+    if: needs.test-scope.outputs.run-tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
