@@ -191,7 +191,23 @@ lives in a reusable workflow (`.github/workflows/integration.yml`) invoked as a 
 GitHub nests the per-file jobs under one collapsible check.
 
 The required status check for merge is the aggregate **`Tests`** job, which passes only when **all** tiers pass — it
-gates on unit, integration, and smoke e2e (`needs: [test-unit, integration, e2e-smoke]`).
+gates on unit, integration, smoke e2e and the serialization-format check, and also requires Build and General Checks to
+pass.
+
+**PRs that change no code skip the test jobs.** The first CI job, `Test Scope`, diffs the PR against its merge-base.
+When every changed file is on the skip list, Build and General Checks still run (the format check and the
+fork-vocabulary check read Markdown), but Build WASM Translation, Unit Tests, Integration Tests, Smoke E2E,
+Serialization Formats, Build for Publishing and Publish Checks are skipped, and `Tests` passes. The skip list, in
+`.github/scripts/ci-test-scope.sh`:
+
+- any `*.md` file, at any depth (READMEs, changesets, `CHANGELOG.md`)
+- `docs/**`
+- `.changeset/pre.json` and `.changeset/config.json`
+- `.claude/**`, `LICENSE`, `.github/ISSUE_TEMPLATE/**`
+
+Any other file, in any amount, runs everything. Pushes to `main`, manual runs and the changesets release PRs
+(`changeset-release/*`) always run everything. The `Test Scope` log lists the files that decided it. To force a full run
+on a skipped branch, start CI by hand: **Actions → CI → Run workflow**, picking the branch (`workflow_dispatch`).
 
 **Local setup:** `nvm use && corepack enable`, then `yarn` (or `nix develop` with direnv). For tests requiring
 infrastructure: `cp .env.example .env` and set `APP_INFRA_SECRET` (e.g. `openssl rand -hex 32`).

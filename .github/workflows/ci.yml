@@ -18,6 +18,40 @@ concurrency:
 permissions: {}
 
 jobs:
+  # Decides whether the test jobs run. A pull request whose changed files are all on the skip list in
+  # `.github/scripts/ci-test-scope.sh` cannot change a test result, so it gets Build and General Checks only. Pushes,
+  # manual runs and the changesets release PRs, which rewrite versions and `yarn.lock`, always run everything.
+  changes:
+    name: Test Scope
+    runs-on: ubuntu-latest
+    outputs:
+      run-tests: ${{ steps.scope.outputs.run-tests }}
+    steps:
+      # Full history so the merge-base is present; blob-less because a name-only diff reads trees, not file contents.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Decide test scope
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "Event is $EVENT_NAME, not a pull request; running the full suite."
+            echo "run-tests=true" | tee -a "$GITHUB_OUTPUT"
+          elif [[ "$HEAD_REF" == changeset-release/* ]]; then
+            echo "Changesets release branch $HEAD_REF; running the full suite."
+            echo "run-tests=true" | tee -a "$GITHUB_OUTPUT"
+          else
+            .github/scripts/ci-test-scope.sh "$BASE_SHA" "$HEAD_SHA"
+          fi
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -77,7 +111,8 @@ jobs:
   # a broken artifact fails in one obvious place instead of across the integration matrix.
   build-wasm:
     name: Build WASM Translation
-    needs: [build]
+    needs: [changes, build]
+    if: needs.changes.outputs.run-tests == 'true'
     runs-on: ubuntu-latest
     # A cold build compiles both ledgers with LTO; ~6 min observed, and the cargo cache takes most runs well under it.
     timeout-minutes: 30
@@ -250,7 +285,8 @@ jobs:
 
   test-unit:
     name: Unit Tests
-    needs: [general-checks]
+    needs: [changes, general-checks]
+    if: needs.changes.outputs.run-tests == 'true'
     runs-on: ubuntu-latest
     # A unit test that loops synchronously cannot be stopped by vitest's own timeout; without this bound it would hold
     # the runner for GitHub's 6-hour default. Recent runs take 3–8 min.
@@ -324,7 +360,8 @@ jobs:
     # Runs in parallel with test-unit and e2e-smoke. build-wasm is gated only on build, so it runs alongside
     # general-checks rather than extending the chain; the fork state-translation file needs its artifact, and without
     # the dependency that file would quietly skip instead of failing.
-    needs: [general-checks, build-wasm]
+    needs: [changes, general-checks, build-wasm]
+    if: needs.changes.outputs.run-tests == 'true'
     # Grant here too: a reusable workflow's token is capped by the caller job's
     # permissions, so checks: write must be granted at the call site as well.
     permissions:
@@ -338,7 +375,8 @@ jobs:
   e2e-smoke:
     name: Smoke E2E
     # Runs in parallel with test-unit and integration (all gated only on general-checks).
-    needs: [general-checks]
+    needs: [changes, general-checks]
+    if: needs.changes.outputs.run-tests == 'true'
     runs-on: ubuntu-latest-8-core-x64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -405,7 +443,8 @@ jobs:
   # rewriting the evidence. `fetch-depth: 0` is why it is a job of its own: every other job checks out shallow.
   serialization-formats:
     name: Serialization Formats
-    needs: [general-checks]
+    needs: [changes, general-checks]
+    if: needs.changes.outputs.run-tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -435,27 +474,57 @@ jobs:
   # that branch protection requires (the old combined job was also named "Tests"),
   # and stays stable as integration files come and go. `if: always()` so it reports
   # a definitive pass/fail even when a stage fails.
+  #
+  # Test Scope, Build and General Checks must pass on every run. The test stages must all pass when Test Scope chose to
+  # run them, and must all be skipped when it did not: "skipped" counts only when the skip was that decision, never
+  # when an earlier job failed, because then Test Scope, Build or General Checks is already a failure here.
   tests:
     name: Tests
-    needs: [test-unit, integration, e2e-smoke, serialization-formats]
+    needs: [changes, build, general-checks, test-unit, integration, e2e-smoke, serialization-formats]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate test results
+        env:
+          RUN_TESTS: ${{ needs.changes.outputs.run-tests }}
+          SCOPE: ${{ needs.changes.result }}
+          BUILD: ${{ needs.build.result }}
+          GENERAL: ${{ needs.general-checks.result }}
+          UNIT: ${{ needs.test-unit.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+          E2E: ${{ needs.e2e-smoke.result }}
+          SERIALIZATION: ${{ needs.serialization-formats.result }}
         run: |
-          echo "unit=${{ needs.test-unit.result }} integration=${{ needs.integration.result }} e2e=${{ needs.e2e-smoke.result }} serialization=${{ needs.serialization-formats.result }}"
-          if [ "${{ needs.test-unit.result }}" != "success" ] || \
-             [ "${{ needs.integration.result }}" != "success" ] || \
-             [ "${{ needs.e2e-smoke.result }}" != "success" ] || \
-             [ "${{ needs.serialization-formats.result }}" != "success" ]; then
-            echo "::error::One or more test stages did not pass."
+          echo "run-tests=$RUN_TESTS scope=$SCOPE build=$BUILD general=$GENERAL"
+          echo "unit=$UNIT integration=$INTEGRATION e2e=$E2E serialization=$SERIALIZATION"
+          if [ "$SCOPE" != "success" ] || [ "$BUILD" != "success" ] || [ "$GENERAL" != "success" ]; then
+            echo "::error::Test Scope, Build or General Checks did not pass."
             exit 1
           fi
-          echo "All test stages passed."
+          if [ "$RUN_TESTS" = "true" ]; then
+            expected=success
+          elif [ "$RUN_TESTS" = "false" ]; then
+            expected=skipped
+          else
+            echo "::error::Test Scope gave no decision (run-tests='$RUN_TESTS')."
+            exit 1
+          fi
+          for result in "$UNIT" "$INTEGRATION" "$E2E" "$SERIALIZATION"; do
+            if [ "$result" != "$expected" ]; then
+              echo "::error::Expected every test stage to be $expected; got $result."
+              exit 1
+            fi
+          done
+          if [ "$expected" = "success" ]; then
+            echo "All test stages passed."
+          else
+            echo "No file this change touches can alter a test result; test stages skipped by design."
+          fi
 
   build-publish:
     name: Build for Publishing
-    needs: [tests]
+    needs: [changes, tests]
+    if: needs.changes.outputs.run-tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
