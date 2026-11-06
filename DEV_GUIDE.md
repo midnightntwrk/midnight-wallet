@@ -190,24 +190,33 @@ wall-clock time stays at the slowest single file regardless of how files are dis
 lives in a reusable workflow (`.github/workflows/integration.yml`) invoked as a single `Integration Tests` job, so
 GitHub nests the per-file jobs under one collapsible check.
 
-The required status check for merge is the aggregate **`Tests`** job, which passes only when **all** tiers pass — it
-gates on unit, integration, smoke e2e and the serialization-format check, and also requires Build and General Checks to
-pass.
+The required status check for merge is the aggregate **`Tests`** job. It always requires `Test Scope`, Build and General
+Checks to pass. When `Test Scope` decides the tests run, `Tests` passes only when **all** tiers pass — unit,
+integration, smoke e2e and the serialization-format check. When `Test Scope` decides they are skipped, `Tests` passes
+only when every one of those jobs was skipped.
 
-**PRs that change no code skip the test jobs.** The first CI job, `Test Scope`, diffs the PR against its merge-base.
-When every changed file is on the skip list, Build and General Checks still run (the format check and the
-fork-vocabulary check read Markdown), but Build WASM Translation, Unit Tests, Integration Tests, Smoke E2E,
-Serialization Formats, Build for Publishing and Publish Checks are skipped, and `Tests` passes. The skip list, in
-`.github/scripts/ci-test-scope.sh`:
+**PRs to `main` that change no code skip the test jobs.** `Test Scope` runs alongside Build and diffs the PR branch
+against its merge-base with `main`. When every changed file is on the skip list, Build and General Checks still run (the
+format check and the fork-vocabulary check read Markdown), but Build WASM Translation, Unit Tests, Integration Tests,
+Smoke E2E, Serialization Formats, Build for Publishing and Publish Checks are skipped, and `Tests` passes.
+
+The source of truth for the skip list is `.github/scripts/ci-test-scope.sh`; the list below is a copy for reading. To
+change it, edit the script and its table test `.github/scripts/ci-test-scope.test.sh` (which `Test Scope` runs), then
+update this copy. The skip list:
 
 - any `*.md` file, at any depth (READMEs, changesets, `CHANGELOG.md`)
 - `docs/**`
 - `.changeset/pre.json` and `.changeset/config.json`
 - `.claude/**`, `LICENSE`, `.github/ISSUE_TEMPLATE/**`
 
-Any other file, in any amount, runs everything. Pushes to `main`, manual runs and the changesets release PRs
-(`changeset-release/*`) always run everything. The `Test Scope` log lists the files that decided it. To force a full run
-on a skipped branch, start CI by hand: **Actions → CI → Run workflow**, picking the branch (`workflow_dispatch`).
+Any other file, in any amount, runs everything. Only a PR that targets `main` can skip: a PR to any other base (a
+stacked PR, say), pushes to `main`, manual runs and the changesets release PRs (`changeset-release/*`) always run
+everything. `Test Scope` runs the copy of the script from the PR's base, not the branch's, so a branch cannot loosen the
+gate it is checked by; a change to the skip list takes effect once it is on `main`. The `Test Scope` log lists the files
+that decided it.
+
+To force a full run on a skipped branch, start CI by hand: **Actions → CI → Run workflow**, picking the branch
+(`workflow_dispatch`). The manual run and the PR run sit in separate concurrency groups, so neither cancels the other.
 
 **Local setup:** `nvm use && corepack enable`, then `yarn` (or `nix develop` with direnv). For tests requiring
 infrastructure: `cp .env.example .env` and set `APP_INFRA_SECRET` (e.g. `openssl rand -hex 32`).
