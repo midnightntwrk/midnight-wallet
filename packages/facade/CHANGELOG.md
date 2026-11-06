@@ -1,5 +1,242 @@
 # @midnightntwrk/wallet-sdk-facade
 
+## 5.0.0
+
+### Major Changes
+
+- 9907a64: build: depend on the final ledger, zkir and proof server releases, all from `@midnightntwrk`
+
+  - `@midnightntwrk/ledger-v9` `^1.0.0` (was `1.0.0-rc.7`). Its key material pins are those `midnight-ledger`
+    `ledger-9.1.0.0` declares, the same circuits as `ledger-9.1.0.0-rc.7`.
+  - `@midnightntwrk/ledger-v8` `^8.1.3` (was `@midnight-ntwrk/ledger-v8` `^8.1.0`), with the same key material as 8.1.0.
+  - `@midnightntwrk/zkir-v2` `^2.2.0` (was `@midnight-ntwrk/zkir-v2` `2.2.0-rc.6`).
+  - The testing helpers' proof server image is `9.0.0` (was `9.0.0-rc.10`).
+
+  Every Midnight package the SDK depends on now installs from the public npmjs registry, without credentials.
+
+  BREAKING CHANGE: ledger-v8 comes from `@midnightntwrk/ledger-v8`. An application that builds ledger-v8 objects and
+  hands them to the wallet imports them from `@midnightntwrk/ledger-v8` as well; objects from
+  `@midnight-ntwrk/ledger-v8` belong to a second copy of the ledger, which the wallet's own does not accept.
+
+- 1e0ea94: Breaking changes since 4.x
+
+  The facade runs `@midnightntwrk/ledger-v8` below the chain's `forks.v9` and `@midnightntwrk/ledger-v9` from it, and
+  follows a live chain across that boundary: balances, coins and transaction history survive the crossing, and a wallet
+  restored from a snapshot crosses too.
+
+  - **Configuration.** `forks: { v9 }` is the protocol version from which ledger-v9 reads the chain. Left out, the
+    facade presets `DefaultForkSchedule` (`ProtocolVersion.V9NativeForkSchedule`, whose `v9` is 2000000, the value a 2.x
+    node reports) and hands the completed configuration to every `InitParams` factory; code outside a factory gets the
+    same from `WalletFacade.resolveConfiguration(configuration)`. Proving names a backend per ledger version,
+    `provers: { v8?, v9 }` (each `{ kind: 'server', url }` or `{ kind: 'wasm' }`), or one proof server under both with
+    `provingServerUrl`; with neither, and no `provingService` factory, `init` throws. A custom
+    `InitParams.provingService` must prove both ledger versions. No published proof-server image serves both, so a chain
+    with ledger-v8 history wants a server per key; the in-process prover serves both.
+  - **Starting.** `start(material, options?)` takes `WalletSeeds` or `FacadeKeysByEpoch`
+    (`{ v8: { shielded, dust }, v9: { shielded, dust } }`) in place of `start(shieldedSecretKeys, dustSecretKey)`. The
+    `secretKeys` argument is gone from `transferTransaction`, `initSwap` and the `balance*Transaction` methods, and
+    `secretKey` from `estimateTransactionFee`. A stopped facade drops its key material, so transacting after `stop()`
+    fails, with `MissingStartAuxError` (from `StartMaterial` in `@midnightntwrk/wallet-sdk/runtime/abstractions`) as the
+    cause. `InitParams.shielded` and `InitParams.dust` return `ShieldedWalletAPI<ShieldedKeysByEpoch>` and
+    `DustWalletAPI<DustKeysByEpoch>`. A shielded or unshielded wallet passed to `init` must implement
+    `revertFailedSegments` (the unshielded one also `revertUtxos` and `releaseRestoredPending`), and a Dust wallet
+    `stepSync` and `ensureFeeCoverage`. `InitParams.submissionService` submits `FinalizedTx` handles rather than ledger
+    transactions.
+  - **Transactions carry the version that built them.** Every method that took or returned a ledger transaction uses a
+    `WalletTransaction` handle (`UnprovenTx`, `UnboundTx`, `FinalizedTx`, `AnyTx`), and the methods that build, sign,
+    prove or submit refuse a handle for the other ledger version (`ProtocolVersionMismatchError`). As in 4.x, an error
+    raised inside a wallet reaches the caller wrapped in Effect's `FiberFailure`; the facade's own checks, in
+    `submitTransaction`, `finalizeTransaction` and `finalizeRecipe`, reject with the error itself. An application that
+    builds its own transactions imports `@midnightntwrk/wallet-sdk/ledger/v8` or `/ledger/v9`, by the protocol version
+    the wallets are acting at, and seals the result with `WalletTransaction.adopt(stage, tx, protocolVersion)`, or reads
+    bytes with `adoptTransaction`. Recipes require `protocolVersion`. `finalizeTransaction` and `finalizeRecipe` keep
+    the version a transaction was built at: if the chain moves to the other ledger version while it is proved, they fail
+    with `ProtocolVersionMismatchError` and release what it booked.
+  - **Asynchronous signers.** `signRecipe`, `signUnprovenTransaction`, `signUnboundTransaction`,
+    `registerNightUtxosForDustGeneration` and `deregisterFromDustGeneration` take a `SignSegment`,
+    `(data: Uint8Array) => Promise<Signature>`, so a signer whose secret never enters the process (MPC, HSM) plugs in; a
+    keystore's `signDataAsync` is one. Verifying keys and signatures are tagged `{ tag, value }` objects.
+  - **One lifecycle record per transaction.** `facade.pendingTransactionsService` is now
+    `facade.transactionLifecycleService`, built by `InitParams.transactionLifecycleService(config, { clock })`.
+    `FacadeState.pending` is replaced by `FacadeState.lifecycle`: one `LifecycleEntry` per transaction, carrying its
+    `identifiers`, the protocol version it was authored for (`authoredFor`, an `Option`), and a `status` of `Balanced`,
+    `Finalized`, `Submitted`, `Confirmed`, `PartialSuccess` (with `segments`), `Rejected` (with a `reason`: `Refused`
+    with `segments`, or `TTLPassed`), `Orphaned`, `Expired` or `Reverted`. Its `transaction` is an `Option` that is
+    `Some` once the transaction is finalized, and stays `none` for one that ended without being finalized or was read
+    from an older store that did not hold it; `submittedAt` is `Some` once it is submitted. Ended entries stay listed
+    until their TTL passes, so wait with `isAwaiting` rather than for an empty list. `FacadeState`'s constructor takes
+    `(shielded, unshielded, dust, lifecycle, forkVersion?)` in place of `(shielded, unshielded, dust, pending)`. The
+    service saves format `v2`: a store saved by 4.x is read and upgraded, and 4.x cannot read `v2`. A custom
+    `TransactionTrait` provides `intentHashes`, `inputs` and `ttl`, and no longer `hasTTLExpired` or
+    `isOneIncludedInOther`.
+  - **Rejections.** A first-time Dust registration whose generated Dust cannot yet pay its own fee rejects with
+    `InsufficientDustForFeeError` rather than a plain `Error`. A builder (`transferTransaction`, `initSwap`, the
+    `balance*Transaction` methods), `finalizeTransaction` or `finalizeRecipe` that fails part-way releases what it
+    booked and rethrows the original error. If a release fails as well, it rejects with an `AggregateError` whose
+    `errors[0]` is the original error, so an `instanceof` check on the rejection must look there too.
+  - **Sync.** `FacadeState.isSynced` and `waitForSyncedState()` also wait for the unshielded wallet's indexer-liveness
+    verdict, on by default: against an indexer known to be stale they keep waiting (see the unshielded wallet's notes).
+  - **Transaction history.** `submitTransaction` records a pending entry, the wallets' sync records it finalized, and a
+    revert, a refusal, a passed TTL or a protocol upgrade records it rejected: an orphaned one with reason
+    `orphaned-by-protocol-upgrade`, a reverted one with the reason given to `revert` or `revertTransaction`, if any.
+    Entries carry a `lifecycle`, and a recorded inclusion wins over a later rejection. `mergeWalletEntries` keeps a
+    finalized entry over a rejected one, keeps the first writer's facts, unions `identifiers` and keeps the fields it
+    does not declare.
+  - **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `^1.0.0` beside `@midnightntwrk/ledger-v8`, so a browser
+    bundle loads both ledgers' WASM modules.
+
+  Migrating from 4.x:
+
+  1. Name the proving backends (`provers`, or keep `provingServerUrl`) and, on a chain whose nodes do not report the 2.x
+     fork version, `forks`.
+  2. Start from seeds. Derive the three wallet seeds once and start every wallet, and the facade, from them:
+
+     ```ts
+     const seeds = WalletSeeds.fromMasterSeed(masterSeed);
+     const keystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, configuration.networkId);
+     const facade = await WalletFacade.init({
+       configuration,
+       shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
+       unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(keystore)),
+       dust: (config) => DustWallet(config).startWithSeed(seeds.dust),
+     });
+     await facade.start(seeds); // 4.x: facade.start(shieldedSecretKeys, dustSecretKey)
+     ```
+
+  3. Drop the secret keys from transacting calls, and sign asynchronously:
+
+     ```ts
+     // 4.x
+     const recipe = await facade.transferTransaction(outputs, { shieldedSecretKeys, dustSecretKey }, { ttl });
+     const signed = await facade.signRecipe(recipe, (data) => keystore.signData(data));
+     // 5.x
+     const recipe = await facade.transferTransaction(outputs, { ttl });
+     const signed = await facade.signRecipe(recipe, keystore.signDataAsync);
+     ```
+
+  4. Read `state.lifecycle` instead of `state.pending`, and wait with `isAwaiting`:
+
+     ```ts
+     // 4.x
+     await firstValueFrom(facade.state().pipe(filter((state) => state.pending.all.length === 0)));
+     // 5.x
+     await firstValueFrom(facade.state().pipe(filter((state) => !state.lifecycle.some(isAwaiting))));
+     ```
+
+  5. Save the lifecycle store with the service, and hand it back on the next start (`TransactionLifecycleServiceImpl`
+     comes from `@midnightntwrk/wallet-sdk/capabilities/transactionLifecycle`):
+
+     ```ts
+     const stored = await facade.transactionLifecycleService.serializeState();
+
+     await WalletFacade.init({
+       // ...
+       transactionLifecycleService: (config, { clock }) =>
+         TransactionLifecycleServiceImpl.restore(stored, lifecycleTransactionTraits(config.forks.v9), config, clock),
+     });
+     ```
+
+### Minor Changes
+
+- 1e0ea94: Additions since 4.x
+
+  - `validateTransaction(tx, { flags, blockData? })` checks that a transaction is well formed before it is submitted,
+    against real ledger parameters, at the protocol version its handle carries. Recipes from the balancing methods carry
+    the `blockData` they were priced with through `signRecipe`, so `balance → validate → submit` fetches no block twice.
+    A ledger-v8 transaction validated without `blockData` once the chain is past `forks.v9` is refused with
+    `LedgerParametersMismatchError`. Failures are tagged errors: `WellFormedError`, `ValidationFetchError`. `InitParams`
+    gains `validationService` and `fetchBlockData`.
+  - `adoptTransaction(bytes, stage)` reads a transaction from bytes that name no protocol version, such as those the
+    DApp Connector API passes, at the version the facade is acting at, and returns the sealed handle. Bytes written by
+    the other ledger version are refused with a `WireFormatError` that names the version.
+  - `FacadeState.protocolVersion`, `activeProtocolVersion` and `protocol` report where the wallets are: `Settled`
+    (`{ version }`) or `Crossing` (`{ from, to, behind }`).
+  - `start(material, { manualSync: true })` leaves the Dust wallet to be synchronized by hand, one pass per
+    `doSync(material)`; this needs a Dust wallet built with the projections sync. Below `forks.v9`, where that sync
+    cannot run, `start` refuses the option before starting anything, and `doSync` rejects, with
+    `ManualSyncUnsupportedError` (`isManualSyncUnsupportedError`).
+  - Lifecycle records cover every transaction the facade balances, finalizes, submits or reverts, Dust (de)registrations
+    included. A balanced transaction is saved with its proofs erased, so the store holds no secret key. A transaction
+    still pending when the chain crosses the v9 fork can never be included: it is orphaned, its coins are released, and
+    history records the rejection with reason `orphaned-by-protocol-upgrade`. `revert` and `revertTransaction` take an
+    optional reason.
+  - New exports include `DefaultForkSchedule`, `ResolvedConfiguration`, `FacadeKeysByEpoch`, `FacadeStartMaterial`,
+    `FacadeStartOptions`, `SignSegment`, `LifecycleEntry`, `LifecycleStatus`, `lifecycleEntriesOf`, `isAwaiting` and
+    `lifecycleTransactionTraits`.
+
+### Patch Changes
+
+- d898335: fix(dust-wallet): date a Dust spend only at a block whose roots the wallet holds
+
+  Paying a fee with Dust no longer dates the spend at a block whose Dust events the wallet has not applied, which the
+  node rejected with `Custom error: 170`. Without a `currentTime`, `balanceTransactions` dates the spend at the newest
+  block when the wallet's Dust tree roots match that block's. A wallet on the event-less sync otherwise dates it at the
+  block its last pass verified, when that block is no more than ten minutes behind the newest and its Dust grace period
+  lasts until the transaction's TTL. When neither holds, balancing reads the newest block again every second, reserving
+  nothing, and after two minutes fails with `SyncWalletError`, whose cause names the wallet's roots, the block's, and
+  why the wallet's own block was refused. A `currentTime` the caller passes is used at once. When the newest block
+  reports no roots at all, as the simulator's do, the spend is dated at it at once and a warning is logged. The V1
+  variant's `BlockData` gains the optional `dustCommitmentMerkleTreeRoot` and `dustGenerationMerkleTreeRoot` the indexer
+  reports. The facade's balancing and transfer methods document the possible wait.
+
+- 1e0ea94: Fixes and other changes since 4.x
+
+  - `initSwap` builds both legs of a mixed shielded/unshielded swap. It built only the leg matching the input kind, so
+    the counter-leg's requested output was silently dropped (#554).
+  - A builder that fails part-way, for example on too little Dust for the fee, releases the coins it booked in the
+    wallets before it; the caller had no transaction to revert them with. Balancing in place releases only the coins the
+    wallet added.
+  - A partially successful transaction releases only the coins of its failed segments, and no Dust, since every Dust
+    spend is in the guaranteed segment. A transaction that failed outright is still released in full.
+  - When finalizing a recipe fails, everything the recipe booked is given back.
+  - The Dust of a transaction balanced but never submitted is released when its TTL passes, not after the Dust wallet's
+    grace period.
+  - Unshielded bookings restored from a snapshot are released at the chain tip unless a live transaction still accounts
+    for them, and shielded bookings last no longer than the TTL the caller gave.
+  - A transaction counts as expired at its earliest intent TTL; only one that spends Dust, carries shielded offers or
+    has no intents is held to the Dust grace period after its creation, if that comes first. 4.x held almost every
+    transaction to the grace period.
+  - `effect`, `@midnightntwrk/wallet-sdk-utilities` and `@midnightntwrk/wallet-sdk-hd` are declared as dependencies, so
+    the facade installs on its own under strict package managers.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [2e933df]
+- Updated dependencies [9907a64]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [d898335]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0
+  - @midnightntwrk/wallet-sdk-hd@4.0.0
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0
+
 ## 5.0.0-rc.3
 
 ### Patch Changes

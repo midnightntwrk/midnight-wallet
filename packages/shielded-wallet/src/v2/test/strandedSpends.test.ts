@@ -28,7 +28,7 @@
  *   coin is still spendable afterwards is one only a chain can.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Either, pipe } from 'effect';

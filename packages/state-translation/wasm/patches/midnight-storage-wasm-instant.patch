@@ -1,25 +1,14 @@
---- a/Cargo.toml	2026-09-23 16:49:13
-+++ b/Cargo.toml	2026-09-23 16:49:14
-@@ -2,8 +2,8 @@
- name = "midnight-storage"
- edition = "2024"
- version = "2.0.4"
--license.workspace = true
--repository.workspace = true
-+license = "Apache-2.0"
-+repository = "https://github.com/midnightntwrk/midnight-ledger"
- description = "Provides data structures and storage primitives for Midnight's ledger."
+--- a/Cargo.toml	2026-11-05 22:55:58
++++ b/Cargo.toml	2026-11-05 22:55:58
+@@ -177,3 +177,6 @@
  
- [features]
-@@ -60,3 +60,6 @@
- name = "stress"
- path = "bin/stress.rs"
- required-features = ["stress-test"]
+ [dev-dependencies.rayon]
+ version = "^1.10.0"
 +
 +[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 +web-time = "^1.1.0"
---- a/src/state_translation.rs	2026-09-23 16:49:13
-+++ b/src/state_translation.rs	2026-09-23 16:49:14
+--- a/src/state_translation.rs	2026-11-05 22:55:58
++++ b/src/state_translation.rs	2026-11-05 22:55:58
 @@ -26,7 +26,12 @@
  use std::io;
  use std::marker::PhantomData;

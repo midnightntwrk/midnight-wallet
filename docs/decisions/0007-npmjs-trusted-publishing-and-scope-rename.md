@@ -120,3 +120,16 @@ unchanged.
 
 Net effect on the topology table: `publish-stable` → canonical via `changeset publish` (+ tags + GitHub Releases) then
 alias; `canary` → canonical snapshot via `changeset publish --no-git-tag` then alias.
+
+## Amendment (2026-11-05): upstream dependencies move to `@midnightntwrk` on npmjs
+
+The ledger now publishes `ledger-v8` and `zkir-v2` under `@midnightntwrk` on npmjs, beside `ledger-v9`, so the exception
+for upstream dashed dependencies above no longer holds:
+
+- **The SDK takes every upstream Midnight dependency from `@midnightntwrk`** — `@midnightntwrk/ledger-v8`,
+  `@midnightntwrk/ledger-v9`, `@midnightntwrk/zkir-v2` — in source, manifests and the lockfile.
+- **Nothing installs from GitHub Packages.** `.yarnrc.yml` no longer routes `@midnight-ntwrk` there, and CI no longer
+  sets an install-time token. `@midnight-ntwrk` packages still reached transitively, by the published releases
+  `serialization-tests` restores from, resolve from npmjs, where the ledger mirrors the same builds.
+- **The alias is unaffected.** `scripts/publish-alias.mjs` rewrites only `@midnightntwrk/wallet-sdk*`, so the
+  `@midnight-ntwrk` alias packages depend on the same `@midnightntwrk` ledger packages as the canonical ones.

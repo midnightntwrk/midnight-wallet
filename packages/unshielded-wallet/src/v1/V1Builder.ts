@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import type * as ledger from '@midnightntwrk/ledger-v8';
 import { Effect, type Either, Scope, type Types } from 'effect';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type Variant, type VariantBuilder, WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';

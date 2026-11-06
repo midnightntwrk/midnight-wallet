@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Either, pipe, Schema } from 'effect';
-import { addressFromKey } from '@midnight-ntwrk/ledger-v8';
+import { addressFromKey } from '@midnightntwrk/ledger-v8';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 import { type PublicKey } from './KeyStore.js';

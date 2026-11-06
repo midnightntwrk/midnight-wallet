@@ -15,7 +15,7 @@
 // and the healing emission that rescues a snapshot restored at a version this variant does not own. How it runs sync:
 // the connection flag follows the subscription, and the liveness feed lives at wallet scope. And that balancing keeps
 // the coins it books, so calls queued on the same wallet never select the same coin.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 import { StateChange, type Variant, VersionChangeType } from '@midnightntwrk/wallet-sdk-runtime/abstractions';

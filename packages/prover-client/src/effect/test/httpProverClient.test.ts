@@ -22,7 +22,7 @@
  *   The requests are observed by standing in for `fetch`, because the client runs each request on its own runtime with
  *   its own HTTP layer, so there is no context a test could provide one through.
  */
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

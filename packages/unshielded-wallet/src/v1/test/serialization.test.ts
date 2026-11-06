@@ -15,7 +15,7 @@
 // there that a snapshot's address really derives from its verifying key, and reports a mismatch as the cross-scheme
 // mix it is. Only the SCHEME LABELLING of that error is v9-only — ledger-v8 has a single signature scheme — so the v8
 // variant makes the same assertion and reports it as an ordinary wallet error.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, HashMap, Option, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';

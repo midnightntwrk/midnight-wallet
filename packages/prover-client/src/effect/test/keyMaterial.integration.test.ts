@@ -21,7 +21,7 @@
  *
  *   Network is needed; Docker is not.
  */
-import { Zkir } from '@midnight-ntwrk/zkir-v2';
+import { Zkir } from '@midnightntwrk/zkir-v2';
 import { describe, expect, it } from 'vitest';
 import * as WasmProver from '../WasmProver.js';
 

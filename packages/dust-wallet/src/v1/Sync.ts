@@ -34,7 +34,7 @@ import {
   type DustStateChanges,
   Event as LedgerEvent,
   LedgerParameters,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { BlockHash, DustLedgerEventTip, DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,

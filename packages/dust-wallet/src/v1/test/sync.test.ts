@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { DustSecretKey, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { DustSecretKey, LedgerParameters } from '@midnightntwrk/ledger-v8';
 import { LedgerParameters as V9LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { LedgerParametersCodec } from '@midnightntwrk/wallet-sdk-capabilities/codecs';

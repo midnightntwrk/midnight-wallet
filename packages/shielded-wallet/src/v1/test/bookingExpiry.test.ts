@@ -28,7 +28,7 @@
  *   sync has caught up, because while a replay is running a booked coin may already have been spent by a transaction
  *   the replay has not delivered yet.
  */
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   BlockHash,

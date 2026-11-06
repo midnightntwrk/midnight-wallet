@@ -30,7 +30,7 @@
  *   its own ledger version; the chain they read is a ledger-v8 one that never reaches the boundary.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, NoOpTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';

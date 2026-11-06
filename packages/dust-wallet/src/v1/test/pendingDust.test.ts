@@ -16,7 +16,7 @@ import {
   nativeToken,
   Transaction,
   UnshieldedOffer,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';

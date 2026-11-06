@@ -17,7 +17,7 @@
  * These tests verify the core functionality of the Simulator from the capabilities package.
  */
 
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';

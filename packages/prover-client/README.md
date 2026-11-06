@@ -59,7 +59,7 @@ framed and read back by that same version. `HttpProverClient` therefore offers o
 const client = await Effect.runPromise(HttpProverClient.create({ url: proofServerUrl }));
 
 client.asV9ProvingProvider(); // frames with @midnightntwrk/ledger-v9; asProvingProvider() is the same provider
-client.asV8ProvingProvider(); // frames with @midnight-ntwrk/ledger-v8
+client.asV8ProvingProvider(); // frames with @midnightntwrk/ledger-v8
 ```
 
 `WasmProver` offers both names too, and returns the same provider for each: the in-process prover drives a zkir runtime
@@ -84,8 +84,8 @@ WasmProver.makeV9KeyMaterialProvider({ source: 'https://example.com/midnight-key
 
 Checking needs Web Crypto (`crypto.subtle`): Node 19 or later, or a browser page served from a secure context.
 
-> This package depends on both ledger runtimes, `@midnight-ntwrk/ledger-v8` and `@midnightntwrk/ledger-v9`. Both are
-> WASM modules, so a direct consumer bundling this package ships both.
+> This package depends on both ledger runtimes, `@midnightntwrk/ledger-v8` and `@midnightntwrk/ledger-v9`. Both are WASM
+> modules, so a direct consumer bundling this package ships both.
 
 ## Exports
 

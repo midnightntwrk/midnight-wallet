@@ -29,7 +29,7 @@
  *   started with, so a start that would leave a restored wallet unable to synchronize cannot be written.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';

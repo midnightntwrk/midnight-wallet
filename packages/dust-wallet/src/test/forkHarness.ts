@@ -39,7 +39,7 @@ import {
   type DustParameters as V8Parameters,
   DustSecretKey as V8SecretKey,
   LedgerParameters as V8LedgerParameters,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import {
   type DustParameters as V9Parameters,
   DustSecretKey as V9SecretKey,
