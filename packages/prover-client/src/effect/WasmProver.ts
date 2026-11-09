@@ -85,14 +85,35 @@ const MessageDataSchema = Schema.Union(LookupKeyRequestSchema, GetParamsRequestS
 
 type MessageData = Schema.Schema.Type<typeof MessageDataSchema>;
 
+/** The ZKIR version a circuit was compiled to, which decides the runtime that can read it. */
+type ZkirVersion = 'v2' | 'v3';
+
+/** The header a serialized ZKIR v3 circuit begins with; a ZKIR v2 circuit's header names `ir-source[v2]` instead. */
+const zkirV3Header = new TextEncoder().encode('midnight:ir-source[v3-generic]:');
+
+/**
+ * Reads which ZKIR version a circuit was compiled to from the header of its serialization. Anything that is not a ZKIR
+ * v3 circuit, including no circuit at all, goes to the ZKIR v2 runtime, whose refusal names what it was given.
+ */
+const zkirVersionOf = (keyMaterial: ProvingKeyMaterial | undefined): ZkirVersion =>
+  keyMaterial !== undefined &&
+  keyMaterial.ir.length >= zkirV3Header.length &&
+  zkirV3Header.every((byte, index) => keyMaterial.ir[index] === byte)
+    ? 'v3'
+    : 'v2';
+
 type CallProverWorker = {
   kmProvider: KeyMaterialProvider;
+  zkir: ZkirVersion;
 } & (ProveOperationSchema | CheckOperationSchema);
 
-const callProverWorker = <RResponse>({ kmProvider, op, args }: CallProverWorker): Promise<RResponse> => {
+const callProverWorker = <RResponse>({ kmProvider, zkir, op, args }: CallProverWorker): Promise<RResponse> => {
   return new Promise((resolve, reject) => {
     const currentFile = import.meta.url;
-    const worker = new Worker(new URL(`../../dist/proof-worker.js`, currentFile), { type: 'module' });
+    const worker =
+      zkir === 'v3'
+        ? new Worker(new URL(`../../dist/proof-worker-zkir-v3.js`, currentFile), { type: 'module' })
+        : new Worker(new URL(`../../dist/proof-worker.js`, currentFile), { type: 'module' });
 
     // initialize worker
     worker.postMessage(
@@ -144,6 +165,26 @@ const callProverWorker = <RResponse>({ kmProvider, op, args }: CallProverWorker)
   });
 };
 
+/**
+ * Looks the circuit at `keyLocation` up to learn which ZKIR version it was compiled to, then runs `run` with that
+ * version and a provider that answers the same lookup from what was read, so the key material is fetched once.
+ */
+const withCircuitRuntime = <A>(
+  kmProvider: KeyMaterialProvider,
+  keyLocation: string,
+  run: (kmProvider: KeyMaterialProvider, zkir: ZkirVersion) => Promise<A>,
+): Promise<A> =>
+  kmProvider.lookupKey(keyLocation).then((keyMaterial) =>
+    run(
+      {
+        lookupKey: (location) =>
+          location === keyLocation ? Promise.resolve(keyMaterial) : kmProvider.lookupKey(location),
+        getParams: (k) => kmProvider.getParams(k),
+      },
+      zkirVersionOf(keyMaterial),
+    ),
+  );
+
 class WasmProverImpl implements Context.Tag.Service<ProverClient> {
   constructor(keyMaterialProvider: KeyMaterialProvider) {
     this.keyMaterialProvider = keyMaterialProvider;
@@ -152,22 +193,23 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
   protected readonly keyMaterialProvider: KeyMaterialProvider;
 
   private wasmProverProvider = (keyMaterialProvider?: KeyMaterialProvider): ledger.ProvingProvider => ({
-    check: async (serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> =>
-      callProverWorker<Array<bigint | undefined>>({
-        kmProvider: keyMaterialProvider ?? this.keyMaterialProvider,
-        op: 'check',
-        args: [serializedPreimage],
-      }),
+    check: async (serializedPreimage: Uint8Array, keyLocation: string): Promise<(bigint | undefined)[]> =>
+      withCircuitRuntime(keyMaterialProvider ?? this.keyMaterialProvider, keyLocation, (kmProvider, zkir) =>
+        callProverWorker<Array<bigint | undefined>>({ kmProvider, zkir, op: 'check', args: [serializedPreimage] }),
+      ),
     prove: async (
       serializedPreimage: Uint8Array,
-      _keyLocation: string,
+      keyLocation: string,
       overwriteBindingInput?: bigint,
     ): Promise<Uint8Array> =>
-      callProverWorker<Uint8Array>({
-        kmProvider: keyMaterialProvider ?? this.keyMaterialProvider,
-        op: 'prove',
-        args: [serializedPreimage, overwriteBindingInput],
-      }),
+      withCircuitRuntime(keyMaterialProvider ?? this.keyMaterialProvider, keyLocation, (kmProvider, zkir) =>
+        callProverWorker<Uint8Array>({
+          kmProvider,
+          zkir,
+          op: 'prove',
+          args: [serializedPreimage, overwriteBindingInput],
+        }),
+      ),
     lookupKey: (keyLocation: string): Promise<ProvingKeyMaterial | undefined> =>
       (keyMaterialProvider ?? this.keyMaterialProvider).lookupKey(keyLocation),
   });
