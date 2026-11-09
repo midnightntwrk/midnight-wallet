@@ -30,6 +30,11 @@ jobs:
     name: Test Scope
     runs-on: ubuntu-24.04
     outputs:
+      use-arc: >-
+        ${{ vars.WALLET_ARC_ENABLED == 'true' && github.repository == 'midnightntwrk/midnight-wallet' &&
+        ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
+        github.actor != 'dependabot[bot]') || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        && github.ref == 'refs/heads/main')) && 'true' || 'false' }}
       run-tests: ${{ steps.scope.outputs.run-tests }}
     steps:
       # A pull request needs full history so both parents of the merge commit, and their merge-base, are present;
@@ -228,14 +233,11 @@ jobs:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-wasm-${{ github.run_attempt }}
 
-  general-checks:
-    name: General Checks
-    needs: [build]
-    runs-on: >-
-      ${{ vars.WALLET_ARC_ENABLED == 'true' && github.repository == 'midnightntwrk/midnight-wallet' &&
-      ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'dependabot[bot]') || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && github.ref == 'refs/heads/main')) && 'arc-wallet-ci' || 'ubuntu-24.04' }}
+  general-checks-hosted:
+    name: General Checks (hosted)
+    needs: [build, test-scope]
+    if: needs.test-scope.outputs.use-arc != 'true'
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -301,15 +303,51 @@ jobs:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
 
-  test-unit:
-    name: Unit Tests
+  general-checks-arc:
+    name: General Checks (ARC)
+    needs: [build, test-scope]
+    if: needs.test-scope.outputs.use-arc == 'true'
+    permissions:
+      contents: read
+      checks: write
+    uses: midnightntwrk/midnight-wallet/.github/workflows/arc-checks.yml@82771c61f8904e0b15c72dba7dd99c162218f9ee
+    with:
+      check: general
+    secrets:
+      MIDNIGHTCI_PACKAGES_READ: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
+
+  general-checks:
+    name: General Checks
+    needs: [test-scope, general-checks-hosted, general-checks-arc]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require the selected check to pass
+        env:
+          USE_ARC: ${{ needs.test-scope.outputs.use-arc }}
+          SCOPE_RESULT: ${{ needs.test-scope.result }}
+          HOSTED_RESULT: ${{ needs.general-checks-hosted.result }}
+          ARC_RESULT: ${{ needs.general-checks-arc.result }}
+          ARC_CHECK_RESULT: ${{ needs.general-checks-arc.outputs.check-result }}
+        run: |
+          test "$SCOPE_RESULT" = success
+          if [ "$USE_ARC" = true ]; then
+            test "$ARC_RESULT" = success
+            test "$ARC_CHECK_RESULT" = success
+            test "$HOSTED_RESULT" = skipped
+          elif [ "$USE_ARC" = false ]; then
+            test "$HOSTED_RESULT" = success
+            test "$ARC_RESULT" = skipped
+          else
+            exit 1
+          fi
+
+  test-unit-hosted:
+    name: Unit Tests (hosted)
     needs: [test-scope, general-checks]
-    if: needs.test-scope.outputs.run-tests == 'true'
-    runs-on: >-
-      ${{ vars.WALLET_ARC_ENABLED == 'true' && github.repository == 'midnightntwrk/midnight-wallet' &&
-      ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'dependabot[bot]') || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && github.ref == 'refs/heads/main')) && 'arc-wallet-ci' || 'ubuntu-24.04' }}
+    if: needs.test-scope.outputs.run-tests == 'true' && needs.test-scope.outputs.use-arc != 'true'
+    runs-on: ubuntu-24.04
     # A unit test that loops synchronously cannot be stopped by vitest's own timeout; without this bound it would hold
     # the runner for GitHub's 6-hour default. Recent runs take 3–8 min.
     timeout-minutes: 20
@@ -372,6 +410,46 @@ jobs:
           annotate_only: true
           report_paths: |
             **/test-report*.xml
+
+  test-unit-arc:
+    name: Unit Tests (ARC)
+    needs: [test-scope, general-checks]
+    if: needs.test-scope.outputs.use-arc == 'true' && needs.test-scope.outputs.run-tests == 'true'
+    permissions:
+      contents: read
+      checks: write
+    uses: midnightntwrk/midnight-wallet/.github/workflows/arc-checks.yml@82771c61f8904e0b15c72dba7dd99c162218f9ee
+    with:
+      check: unit
+    secrets:
+      MIDNIGHTCI_PACKAGES_READ: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
+
+  test-unit:
+    name: Unit Tests
+    needs: [test-scope, test-unit-hosted, test-unit-arc]
+    if: always() && needs.test-scope.outputs.run-tests == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require the selected check to pass
+        env:
+          USE_ARC: ${{ needs.test-scope.outputs.use-arc }}
+          SCOPE_RESULT: ${{ needs.test-scope.result }}
+          HOSTED_RESULT: ${{ needs.test-unit-hosted.result }}
+          ARC_RESULT: ${{ needs.test-unit-arc.result }}
+          ARC_CHECK_RESULT: ${{ needs.test-unit-arc.outputs.check-result }}
+        run: |
+          test "$SCOPE_RESULT" = success
+          if [ "$USE_ARC" = true ]; then
+            test "$ARC_RESULT" = success
+            test "$ARC_CHECK_RESULT" = success
+            test "$HOSTED_RESULT" = skipped
+          elif [ "$USE_ARC" = false ]; then
+            test "$HOSTED_RESULT" = success
+            test "$ARC_RESULT" = skipped
+          else
+            exit 1
+          fi
 
   # The per-file integration matrix lives in a reusable workflow and is invoked
   # here as a single job. GitHub nests the matrix jobs under this one caller in
