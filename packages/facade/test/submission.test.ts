@@ -125,6 +125,9 @@ const failuresNotProvingExclusion: ReadonlyArray<SubmissionFailureCase> = [
   ['an application-supplied service failed in its own way', () => Promise.resolve(new Error('Submission failed'))],
 ];
 
+/** How far ahead a test transaction's TTL lies; ten minutes, longer than any test runs on a slow machine. */
+const SUBMITTED_TTL_MS = 10 * 60_000;
+
 /** The finalized transaction a test submits, adopted under the configuration's network. */
 type SubmittedTransaction = Parameters<WalletFacade['submitTransaction']>[0];
 
@@ -191,7 +194,8 @@ const facadeSubmittingWith = async (
         config.networkId,
         undefined,
         undefined,
-        ledgerV8.Intent.new(new Date(Date.now() + 1000)),
+        // Far enough ahead that no test outlives it: a send after its TTL never releases.
+        ledgerV8.Intent.new(new Date(Date.now() + SUBMITTED_TTL_MS)),
       )
         .mockProve()
         .bind(),
@@ -781,7 +785,7 @@ describe('Facade submission', () => {
       NetworkId.NetworkId.Undeployed,
       undefined,
       undefined,
-      ledgerV8.Intent.new(new Date(Date.now() + 10_000)),
+      ledgerV8.Intent.new(new Date(Date.now() + SUBMITTED_TTL_MS)),
     ).eraseProofs();
     expect(() => proofErased.transactionHash()).toThrow();
     const refusal = await nodeRefusal('1010: Invalid Transaction');
