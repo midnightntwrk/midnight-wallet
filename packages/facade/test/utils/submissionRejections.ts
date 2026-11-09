@@ -31,15 +31,21 @@ export const serviceRejection = (cause: unknown): Promise<Error> =>
 /** The bytes a node error names as the transaction it is about; no test reads them. */
 export const rejectedTxData = SerializedTransaction.of(new Uint8Array([1, 2, 3]));
 
-/** The rejection of a submission the node answered with a refusal, so it never entered the pool. */
-export const nodeRefusal = (message: string): Promise<Error> =>
+/**
+ * The rejection of a submission the node answered with the JSON-RPC error `code`, as its author RPC numbers them
+ * (polkadot-sdk `substrate/client/rpc-api/src/author/error.rs`).
+ */
+export const nodeAnswer = (code: number, message: string): Promise<Error> =>
   serviceRejection(
     new NodeClientError.SubmissionError({
       message: 'Transaction submission failed',
       txData: rejectedTxData,
-      cause: new RpcError(message, 1010),
+      cause: new RpcError(message, code),
     }),
   );
+
+/** The rejection of a submission the node's pool refused as invalid (1010), so it never entered the pool. */
+export const nodeRefusal = (message: string): Promise<Error> => nodeAnswer(1010, message);
 
 /** The rejection of a submission that never reached the node, because no connection to it was made. */
 export const nodeUnreachable = (message: string): Promise<Error> =>

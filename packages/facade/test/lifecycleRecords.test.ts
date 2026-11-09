@@ -601,6 +601,9 @@ describe('A reverted transaction’s lifecycle record', () => {
       const recipe = yield* Effect.promise(() => selfTransfer(facade, ttlOn(facade)));
       const finalizedTx = yield* Effect.promise(() => facade.finalizeRecipe(recipe));
       yield* Effect.flip(Effect.tryPromise(() => facade.submitTransaction(finalizedTx)));
+      expect(recordsCovering(yield* lifecycleOf(facade), finalizedTx).map((record) => record.state)).toStrictEqual([
+        { _tag: 'Reverted' },
+      ]);
 
       // The retry is in flight: it has been handed to the node and no answer has come back.
       void facade.submitTransaction(finalizedTx);
