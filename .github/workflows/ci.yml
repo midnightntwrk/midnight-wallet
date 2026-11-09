@@ -28,7 +28,7 @@ jobs:
   # safeguard.
   test-scope:
     name: Test Scope
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       run-tests: ${{ steps.scope.outputs.run-tests }}
     steps:
@@ -75,7 +75,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -134,7 +134,7 @@ jobs:
     name: Build WASM Translation
     needs: [test-scope, build]
     if: needs.test-scope.outputs.run-tests == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # A cold build compiles both ledgers with LTO; ~6 min observed, and the cargo cache takes most runs well under it.
     timeout-minutes: 30
     env:
@@ -231,7 +231,11 @@ jobs:
   general-checks:
     name: General Checks
     needs: [build]
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.WALLET_ARC_ENABLED == 'true' && github.repository == 'midnightntwrk/midnight-wallet' &&
+      ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]') || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main')) && 'arc-wallet-ci' || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -253,13 +257,6 @@ jobs:
           node --version
           corepack --version
           yarn --version
-
-      - name: Log in to GitHub Container registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: 'https://ghcr.io'
-          username: ${{ github.actor }}
-          password: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -308,7 +305,11 @@ jobs:
     name: Unit Tests
     needs: [test-scope, general-checks]
     if: needs.test-scope.outputs.run-tests == 'true'
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.WALLET_ARC_ENABLED == 'true' && github.repository == 'midnightntwrk/midnight-wallet' &&
+      ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]') || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main')) && 'arc-wallet-ci' || 'ubuntu-24.04' }}
     # A unit test that loops synchronously cannot be stopped by vitest's own timeout; without this bound it would hold
     # the runner for GitHub's 6-hour default. Recent runs take 3–8 min.
     timeout-minutes: 20
@@ -468,7 +469,7 @@ jobs:
     name: Serialization Formats
     needs: [test-scope, general-checks]
     if: needs.test-scope.outputs.run-tests == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -508,7 +509,7 @@ jobs:
     name: Tests
     needs: [test-scope, build, general-checks, test-unit, integration, e2e-smoke, serialization-formats]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # Only the gate script is needed, so a sparse, shallow checkout.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -532,7 +533,7 @@ jobs:
     name: Build for Publishing
     needs: [test-scope, tests]
     if: needs.test-scope.outputs.run-tests == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -587,7 +588,7 @@ jobs:
   publish-checks:
     name: Publish Checks
     needs: [build-publish]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
