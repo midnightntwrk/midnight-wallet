@@ -85,9 +85,11 @@ import {
   tap,
 } from 'rxjs';
 import {
+  classifySubmissionFailure,
   type DefaultTransactionLifecycleServiceConfiguration,
   type InclusionVerdict,
   Lifecycle,
+  SubmissionFailure,
   TransactionTraits,
   type TransactionLifecycleService,
   TransactionLifecycleServiceImpl,
@@ -1976,9 +1978,15 @@ export class WalletFacade {
    * Call {@link validateTransaction} with `{ enforceBalancing: true, verifySignatures: true, enforceLimits: true }`
    * before this method to surface structural errors with a clear diagnostic instead of a cryptic network rejection.
    *
+   * A failed submission releases the coins and Dust the transaction booked only when the failure proves no block holds
+   * it: the node usurped, dropped, invalidated or refused it, or it was never sent. After any other failure, such as a
+   * finality timeout once the transaction is in a block, they stay booked until sync or the transaction's TTL settles
+   * them.
+   *
    * @param tx - The finalized transaction to submit.
    * @returns The transaction identifier.
    * @throws {@link WellFormedError} — call {@link validateTransaction} first to get this error early.
+   * @throws The submission service's error when the submission fails, whether or not the bookings were released.
    */
   async submitTransaction(tx: FinalizedTx): Promise<TransactionIdentifier> {
     const carried = this.accept<Carried>(tx);
@@ -1995,7 +2003,12 @@ export class WalletFacade {
 
       return identifiers.at(-1)!;
     } catch (error) {
-      await this.revert(tx);
+      // Releasing coins a block may have spent would offer them again, so a failure that cannot rule out inclusion
+      // leaves the record live for sync or the TTL to settle.
+      await SubmissionFailure.$match(classifySubmissionFailure(error), {
+        NotIncluded: () => this.revert(tx),
+        Undetermined: () => Promise.resolve(),
+      });
       throw error;
     }
   }

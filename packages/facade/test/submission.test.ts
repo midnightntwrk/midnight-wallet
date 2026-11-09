@@ -21,9 +21,11 @@ import {
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { NodeClientError } from '@midnightntwrk/wallet-sdk-node-client/effect';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { Either } from 'effect';
+import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { Effect, Either } from 'effect';
 import * as crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -34,7 +36,164 @@ import {
   mergeWalletEntries,
 } from '../src/index.js';
 import { txHistoryHash } from '../src/transaction.js';
-import { createV8MockProvingService } from './utils/index.js';
+import {
+  createV8MockProvingService,
+  lifecycleOf,
+  nodeRefusal,
+  nodeUnreachable,
+  rejectedTxData as txData,
+  serviceRejection,
+} from './utils/index.js';
+
+/** Submission failures that prove the transaction is in no block, so nothing it booked is spent. */
+const failuresProvingExclusion: ReadonlyArray<readonly [string, () => Promise<Error>]> = [
+  [
+    'the node reported it usurped',
+    () => serviceRejection(new NodeClientError.TransactionUsurpedError({ message: 'usurped', txData })),
+  ],
+  [
+    'the node reported it dropped',
+    () => serviceRejection(new NodeClientError.TransactionDroppedError({ message: 'dropped', txData })),
+  ],
+  [
+    'the node reported it invalid',
+    () => serviceRejection(new NodeClientError.TransactionInvalidError({ message: 'invalid', txData })),
+  ],
+  ['the node answered the submission with a refusal', () => nodeRefusal('1010: Invalid Transaction')],
+  ['no connection to the node was made, so it was never sent', () => nodeUnreachable('Could not connect')],
+  [
+    'the simulator discarded it',
+    () => serviceRejection(new LedgerOps.LedgerError({ message: 'Transaction was discarded' })),
+  ],
+];
+
+/** Submission failures that leave open whether the transaction is in a block, or show that it already is. */
+const failuresNotProvingExclusion: ReadonlyArray<readonly [string, () => Promise<Error>]> = [
+  [
+    'it was in a block, but finality timed out',
+    () =>
+      serviceRejection(
+        new NodeClientError.TransactionProgressError({
+          message: 'Transaction did not reach finality within expected time, likely consensus issues arised',
+          txData,
+          desiredStage: 'Finalized',
+        }),
+      ),
+  ],
+  [
+    'the submission stream ended before the transaction reached the stage',
+    () =>
+      serviceRejection(
+        new NodeClientError.TransactionProgressError({
+          message: 'Transaction did not reach desired stage and no other error was reported',
+          txData,
+          desiredStage: 'Finalized',
+        }),
+      ),
+  ],
+  [
+    "the block number of the node's report could not be parsed",
+    () => serviceRejection(new NodeClientError.ParseError({ message: 'Failed to parse result provided by node' })),
+  ],
+  [
+    'the socket closed while the node was being handed the transaction',
+    () =>
+      serviceRejection(
+        new NodeClientError.SubmissionError({
+          message: 'Transaction submission failed',
+          txData,
+          cause: new Error('disconnected from ws://localhost:9944: 1006:: Abnormal Closure'),
+        }),
+      ),
+  ],
+  ['an application-supplied service failed in its own way', () => Promise.resolve(new Error('Submission failed'))],
+];
+
+/** A facade whose submission service rejects with `rejection`, over real wallets whose reverts are watched. */
+const facadeRejectingSubmissionWith = async (rejection: Error) => {
+  const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
+  const config = {
+    networkId: NetworkId.NetworkId.Undeployed,
+    forks: ProtocolVersion.V9NativeForkSchedule,
+    relayURL: new URL('http://localhost:9944'),
+    indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
+    provingServerUrl: new URL('http://localhost:6300'),
+    costParameters: { feeBlocksMargin: 0 },
+    txHistoryStorage,
+  };
+  const seed = crypto.randomBytes(32);
+  const shielded = await ShieldedWallet(config).startWithSeed(seed);
+  const unshielded = await UnshieldedWallet(config).startWithPublicKey(
+    PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
+  );
+  const dust = await DustWallet(config).startWithSeed(seed, ledgerV9.LedgerParameters.initialParameters().dust);
+  const submissionService = new (class implements SubmissionService<ledgerV9.FinalizedTransaction> {
+    submitTransaction = () => Promise.reject(rejection);
+    close = () => Promise.resolve();
+  })();
+  const facade = await WalletFacade.init({
+    configuration: config,
+    shielded: () => shielded,
+    unshielded: () => unshielded,
+    dust: () => dust,
+    provingService: () => createV8MockProvingService(),
+    submissionService: () => submissionService,
+  });
+  const reverts = [
+    vi.spyOn(shielded, 'revertTransaction'),
+    vi.spyOn(unshielded, 'revertTransaction'),
+    vi.spyOn(dust, 'revertTransaction'),
+  ];
+  const transaction = WalletTransaction.adopt(
+    'Finalized',
+    ledgerV8.Transaction.fromParts(
+      config.networkId,
+      undefined,
+      undefined,
+      ledgerV8.Intent.new(new Date(Date.now() + 1000)),
+    )
+      .mockProve()
+      .bind(),
+    ProtocolVersion.MinSupportedVersion,
+  );
+  return { facade, reverts, transaction, txHistoryStorage };
+};
+
+describe('Facade submission failures', () => {
+  it.each(failuresProvingExclusion)(
+    'should release everything the transaction booked when %s, because no block spent it',
+    async (_, makeRejection) => {
+      const rejection = await makeRejection();
+      const { facade, reverts, transaction, txHistoryStorage } = await facadeRejectingSubmissionWith(rejection);
+
+      await expect(facade.submitTransaction(transaction)).rejects.toBe(rejection);
+
+      reverts.forEach((revert) => expect(revert).toHaveBeenCalled());
+      const lifecycle = await Effect.runPromise(lifecycleOf(facade));
+      expect(lifecycle.records.map((record) => record.state._tag)).toStrictEqual(['Reverted']);
+      const entries = await txHistoryStorage.getAll();
+      expect(entries.map((entry) => entry.lifecycle.status)).toStrictEqual(['rejected']);
+      await facade.stop();
+    },
+  );
+
+  it.each(failuresNotProvingExclusion)(
+    'should keep everything the transaction booked when %s, because a block may have spent it',
+    async (_, makeRejection) => {
+      const rejection = await makeRejection();
+      const { facade, reverts, transaction, txHistoryStorage } = await facadeRejectingSubmissionWith(rejection);
+
+      await expect(facade.submitTransaction(transaction)).rejects.toBe(rejection);
+
+      reverts.forEach((revert) => expect(revert).not.toHaveBeenCalled());
+      const lifecycle = await Effect.runPromise(lifecycleOf(facade));
+      expect(lifecycle.records.map((record) => record.state._tag)).toStrictEqual(['Submitted']);
+      const entries = await txHistoryStorage.getAll();
+      expect(entries.map((entry) => isPendingWalletEntry(entry))).toStrictEqual([true]);
+      await facade.stop();
+    },
+  );
+});
 
 /**
  * `vi.mockObject` does not carry accessors across, and a wallet's `state` is one. The facade watches all three wallets'
@@ -109,7 +268,7 @@ describe('Facade submission', () => {
     expect(fakeSubmission.gotClosed).toBe(true);
   });
 
-  it('reverts transaction, which failed submission', async () => {
+  it('should record a transaction the node refused as rejected under the key it was submitted with', async () => {
     const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
     const config = {
       networkId: NetworkId.NetworkId.Undeployed,
@@ -130,8 +289,9 @@ describe('Facade submission', () => {
       PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
     );
     const dust = await DustWallet(config).startWithSeed(seed, ledgerV9.LedgerParameters.initialParameters().dust);
+    const invalid = await serviceRejection(new NodeClientError.TransactionInvalidError({ message: 'invalid', txData }));
     const fakeSubmission = new (class implements SubmissionService<ledgerV9.FinalizedTransaction> {
-      submitTransaction = () => Promise.reject(new Error('Submission failed'));
+      submitTransaction = () => Promise.reject(invalid);
       close = () => Promise.resolve();
     })();
 
@@ -211,8 +371,9 @@ describe('Facade submission', () => {
       PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
     );
     const dust = await DustWallet(config).startWithSeed(seed, ledgerV9.LedgerParameters.initialParameters().dust);
+    const invalid = await serviceRejection(new NodeClientError.TransactionInvalidError({ message: 'invalid', txData }));
     const fakeSubmission = new (class implements SubmissionService<ledgerV9.FinalizedTransaction> {
-      submitTransaction = () => Promise.reject(new Error('Submission failed'));
+      submitTransaction = () => Promise.reject(invalid);
       close = () => Promise.resolve();
     })();
 
@@ -238,7 +399,7 @@ describe('Facade submission', () => {
     // proof-erased transaction, which is exactly the case whose history key falls back to its bytes.
     const transaction = WalletTransaction.adopt('Finalized', proofErased, ProtocolVersion.MinSupportedVersion);
 
-    // Submission fails, so submitTransaction writes the pending entry and then reverts — both keyed off the same
+    // The node refuses it, so submitTransaction writes the pending entry and then reverts — both keyed off the same
     // serialized-bytes hash, so the result is a single entry transitioned in place rather than an orphan pending +
     // orphan rejected pair.
     const submissionResult = await facade.submitTransaction(transaction).then(

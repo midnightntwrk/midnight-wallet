@@ -16,3 +16,4 @@ export * from './forkingFacade.js';
 export * from './unbound.js';
 export * from './drivenLifecycle.js';
 export * from './lifecycleRecords.js';
+export * from './submissionRejections.js';

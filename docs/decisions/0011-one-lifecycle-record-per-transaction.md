@@ -65,7 +65,7 @@ site.
 | `Rejected`  | `Finalized`, `Submitted`                                                                       | the chain refused it, whoever submitted it, or its TTL passed while submitted                                                                                                                      | unchanged, with the verdict    |
 | `Orphaned`  | `Balanced`, `Finalized`, `Submitted`                                                           | the wallets crossed past the epoch it was built for                                                                                                                                                | unchanged, with the verdict    |
 | `Expired`   | `Balanced`, `Finalized`                                                                        | its TTL passed before it was submitted                                                                                                                                                             | unchanged                      |
-| `Reverted`  | `Balanced`, `Finalized`, `Submitted`                                                           | `revert`, `revertTransaction`, a builder that failed part-way, a submission that threw                                                                                                             | unchanged                      |
+| `Reverted`  | `Balanced`, `Finalized`, `Submitted`                                                           | `revert`, `revertTransaction`, a builder that failed part-way, a submission that failed in a way proving no block holds it                                                                         | unchanged                      |
 
 ```mermaid
 stateDiagram-v2
@@ -87,7 +87,7 @@ stateDiagram-v2
   Finalized --> Expired: TTL passed
   Balanced --> Reverted: revert or build failed
   Finalized --> Reverted: revert or build failed
-  Submitted --> Reverted: revert or submit threw
+  Submitted --> Reverted: revert or submit refused
   Rejected --> Balanced: balanced again
   Orphaned --> Balanced: balanced again
   Expired --> Balanced: balanced again

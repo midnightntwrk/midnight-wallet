@@ -34,6 +34,8 @@ import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
   makeSimulatorFacade,
+  nodeRefusal,
+  nodeUnreachable,
   tokenValue,
   waitForShieldedCoins,
   waitForUnshieldedBalance,
@@ -563,12 +565,13 @@ describe('A reverted transaction’s lifecycle record', () => {
     }).pipe(Effect.scoped, Effect.runPromise),
   );
 
-  it('should end as reverted when submitting it throws, because the facade gives its coins back', () =>
+  it('should end as reverted when the node refuses it, because the facade gives its coins back', () =>
     Effect.gen(function* () {
+      const refusal = yield* Effect.promise(() => nodeRefusal('the node refused the transaction'));
       const { facade } = yield* fundedFacade({
         submissionService: () => ({
           // Refuses every submission, whichever status it was asked to wait for.
-          submitTransaction: (): Promise<never> => Promise.reject(new Error('the node refused the transaction')),
+          submitTransaction: (): Promise<never> => Promise.reject(refusal),
           close: () => Promise.resolve(),
         }),
       });
@@ -577,7 +580,7 @@ describe('A reverted transaction’s lifecycle record', () => {
 
       const failure = yield* Effect.flip(Effect.tryPromise(() => facade.submitTransaction(finalizedTx)));
 
-      expect(String(failure.error)).toContain('the node refused the transaction');
+      expect(failure.error).toBe(refusal);
       expect(recordsCovering(yield* lifecycleOf(facade), finalizedTx).map((record) => record.state)).toStrictEqual([
         { _tag: 'Reverted' },
       ]);
@@ -586,13 +589,12 @@ describe('A reverted transaction’s lifecycle record', () => {
   it('should await an answer again when a submission that threw is retried and goes through, because the transaction is in flight', () =>
     Effect.gen(function* () {
       const attempts = { count: 0 };
+      const unreachable = yield* Effect.promise(() => nodeUnreachable('the node was unreachable'));
       const { facade } = yield* fundedFacade({
         submissionService: () => ({
           // Refuses the first submission only, as a node that was briefly unreachable does.
           submitTransaction: (): Promise<never> =>
-            ++attempts.count === 1
-              ? Promise.reject(new Error('the node was unreachable'))
-              : new Promise<never>(() => undefined),
+            ++attempts.count === 1 ? Promise.reject(unreachable) : new Promise<never>(() => undefined),
           close: () => Promise.resolve(),
         }),
       });
