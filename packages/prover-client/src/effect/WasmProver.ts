@@ -105,9 +105,24 @@ const zkirVersionOf = (keyMaterial: ProvingKeyMaterial | undefined): ZkirVersion
 type CallProverWorker = {
   kmProvider: KeyMaterialProvider;
   zkir: ZkirVersion;
+  /** When the operation times out, in milliseconds since the epoch; it started before the key material was looked up. */
+  deadline: number;
 } & (ProveOperationSchema | CheckOperationSchema);
 
-const callProverWorker = <RResponse>({ kmProvider, zkir, op, args }: CallProverWorker): Promise<RResponse> => {
+/** Settles as `promise` does, unless `deadline` passes first; then it is refused as an operation that timed out. */
+const beforeDeadline = <A>(promise: Promise<A>, deadline: number, op: CallProverWorker['op']): Promise<A> =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${op} action timed out`)), Math.max(0, deadline - Date.now()));
+    void promise.finally(() => clearTimeout(timer)).then(resolve, reject);
+  });
+
+const callProverWorker = <RResponse>({
+  kmProvider,
+  zkir,
+  deadline,
+  op,
+  args,
+}: CallProverWorker): Promise<RResponse> => {
   return new Promise((resolve, reject) => {
     const currentFile = import.meta.url;
     const worker =
@@ -158,23 +173,31 @@ const callProverWorker = <RResponse>({ kmProvider, zkir, op, args }: CallProverW
       worker.terminate();
       reject(Error(e.message));
     });
-    setTimeout(() => {
-      worker.terminate();
-      reject(new Error(`${op} action timed out`));
-    }, MAX_TIME_TO_PROCESS);
+    setTimeout(
+      () => {
+        worker.terminate();
+        reject(new Error(`${op} action timed out`));
+      },
+      Math.max(0, deadline - Date.now()),
+    );
   });
 };
 
 /**
  * Looks the circuit at `keyLocation` up to learn which ZKIR version it was compiled to, then runs `run` with that
  * version and a provider that answers the same lookup from what was read, so the key material is fetched once.
+ *
+ * The operation's deadline starts before the lookup, so a lookup that never settles is refused at it, and `run` is
+ * handed what is left of it.
  */
 const withCircuitRuntime = <A>(
   kmProvider: KeyMaterialProvider,
   keyLocation: string,
-  run: (kmProvider: KeyMaterialProvider, zkir: ZkirVersion) => Promise<A>,
-): Promise<A> =>
-  kmProvider.lookupKey(keyLocation).then((keyMaterial) =>
+  op: CallProverWorker['op'],
+  run: (kmProvider: KeyMaterialProvider, zkir: ZkirVersion, deadline: number) => Promise<A>,
+): Promise<A> => {
+  const deadline = Date.now() + MAX_TIME_TO_PROCESS;
+  return beforeDeadline(kmProvider.lookupKey(keyLocation), deadline, op).then((keyMaterial) =>
     run(
       {
         lookupKey: (location) =>
@@ -182,8 +205,10 @@ const withCircuitRuntime = <A>(
         getParams: (k) => kmProvider.getParams(k),
       },
       zkirVersionOf(keyMaterial),
+      deadline,
     ),
   );
+};
 
 class WasmProverImpl implements Context.Tag.Service<ProverClient> {
   constructor(keyMaterialProvider: KeyMaterialProvider) {
@@ -194,21 +219,36 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
 
   private wasmProverProvider = (keyMaterialProvider?: KeyMaterialProvider): ledger.ProvingProvider => ({
     check: async (serializedPreimage: Uint8Array, keyLocation: string): Promise<(bigint | undefined)[]> =>
-      withCircuitRuntime(keyMaterialProvider ?? this.keyMaterialProvider, keyLocation, (kmProvider, zkir) =>
-        callProverWorker<Array<bigint | undefined>>({ kmProvider, zkir, op: 'check', args: [serializedPreimage] }),
+      withCircuitRuntime(
+        keyMaterialProvider ?? this.keyMaterialProvider,
+        keyLocation,
+        'check',
+        (kmProvider, zkir, deadline) =>
+          callProverWorker<Array<bigint | undefined>>({
+            kmProvider,
+            zkir,
+            deadline,
+            op: 'check',
+            args: [serializedPreimage],
+          }),
       ),
     prove: async (
       serializedPreimage: Uint8Array,
       keyLocation: string,
       overwriteBindingInput?: bigint,
     ): Promise<Uint8Array> =>
-      withCircuitRuntime(keyMaterialProvider ?? this.keyMaterialProvider, keyLocation, (kmProvider, zkir) =>
-        callProverWorker<Uint8Array>({
-          kmProvider,
-          zkir,
-          op: 'prove',
-          args: [serializedPreimage, overwriteBindingInput],
-        }),
+      withCircuitRuntime(
+        keyMaterialProvider ?? this.keyMaterialProvider,
+        keyLocation,
+        'prove',
+        (kmProvider, zkir, deadline) =>
+          callProverWorker<Uint8Array>({
+            kmProvider,
+            zkir,
+            deadline,
+            op: 'prove',
+            args: [serializedPreimage, overwriteBindingInput],
+          }),
       ),
     lookupKey: (keyLocation: string): Promise<ProvingKeyMaterial | undefined> =>
       (keyMaterialProvider ?? this.keyMaterialProvider).lookupKey(keyLocation),
