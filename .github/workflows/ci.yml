@@ -346,7 +346,9 @@ jobs:
   test-unit-hosted:
     name: Unit Tests (hosted)
     needs: [test-scope, general-checks]
-    if: needs.test-scope.outputs.run-tests == 'true' && needs.test-scope.outputs.use-arc != 'true'
+    if:
+      ${{ !cancelled() && needs.test-scope.result == 'success' && needs.general-checks.result == 'success' &&
+      (needs.test-scope.outputs.run-tests == 'true' && needs.test-scope.outputs.use-arc != 'true') }}
     runs-on: ubuntu-24.04
     # A unit test that loops synchronously cannot be stopped by vitest's own timeout; without this bound it would hold
     # the runner for GitHub's 6-hour default. Recent runs take 3–8 min.
@@ -414,7 +416,9 @@ jobs:
   test-unit-arc:
     name: Unit Tests (ARC)
     needs: [test-scope, general-checks]
-    if: needs.test-scope.outputs.use-arc == 'true' && needs.test-scope.outputs.run-tests == 'true'
+    if:
+      ${{ !cancelled() && needs.test-scope.result == 'success' && needs.general-checks.result == 'success' &&
+      (needs.test-scope.outputs.use-arc == 'true' && needs.test-scope.outputs.run-tests == 'true') }}
     permissions:
       contents: read
       checks: write
@@ -461,7 +465,9 @@ jobs:
     # general-checks rather than extending the chain; the fork state-translation file needs its artifact, and without
     # the dependency that file would quietly skip instead of failing.
     needs: [test-scope, general-checks, build-wasm]
-    if: needs.test-scope.outputs.run-tests == 'true'
+    if:
+      ${{ !cancelled() && needs.test-scope.result == 'success' && needs.general-checks.result == 'success' &&
+      needs.build-wasm.result == 'success' && (needs.test-scope.outputs.run-tests == 'true') }}
     # Grant here too: a reusable workflow's token is capped by the caller job's
     # permissions, so checks: write must be granted at the call site as well.
     permissions:
@@ -477,7 +483,9 @@ jobs:
     # Runs in parallel with test-unit and integration: all three start once general-checks passes and test-scope chose to
     # run the tests (integration also waits for build-wasm, which runs alongside general-checks).
     needs: [test-scope, general-checks]
-    if: needs.test-scope.outputs.run-tests == 'true'
+    if:
+      ${{ !cancelled() && needs.test-scope.result == 'success' && needs.general-checks.result == 'success' &&
+      (needs.test-scope.outputs.run-tests == 'true') }}
     runs-on: ubuntu-latest-8-core-x64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -546,7 +554,9 @@ jobs:
   serialization-formats:
     name: Serialization Formats
     needs: [test-scope, general-checks]
-    if: needs.test-scope.outputs.run-tests == 'true'
+    if:
+      ${{ !cancelled() && needs.test-scope.result == 'success' && needs.general-checks.result == 'success' &&
+      (needs.test-scope.outputs.run-tests == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -610,7 +620,9 @@ jobs:
   build-publish:
     name: Build for Publishing
     needs: [test-scope, tests]
-    if: needs.test-scope.outputs.run-tests == 'true'
+    if:
+      ${{ !cancelled() && needs.test-scope.result == 'success' && needs.tests.result == 'success' &&
+      (needs.test-scope.outputs.run-tests == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -666,6 +678,7 @@ jobs:
   publish-checks:
     name: Publish Checks
     needs: [build-publish]
+    if: ${{ !cancelled() && needs.build-publish.result == 'success' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
