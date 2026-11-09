@@ -79,6 +79,16 @@ const syncedWallet = (appliedIndex: bigint): CoreWallet =>
     networkId,
   );
 
+/**
+ * A wallet that has read nothing, already on `version` — what a start that asked the chain its version builds, so the
+ * version watcher has no version news to give it.
+ */
+const freshWalletAt = (version: number): CoreWallet =>
+  CoreWallet.withProtocolVersion(
+    CoreWallet.initEmpty(keys(), networkId),
+    ProtocolVersion.ProtocolVersion(BigInt(version)),
+  );
+
 // =============================================================================
 // The fold
 // =============================================================================
@@ -152,6 +162,46 @@ describe('folding a version signal into the wallet state', () => {
 
     expect(state).toBe(caughtUp);
     expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
+  });
+
+  it('should report a wallet that has read nothing synced when the source holds no zswap event, even on the version it already holds, because an empty commitment tree leaves nothing to read', () => {
+    // The event timeline of such a chain never delivers anything, so this signal is the only thing that can tell the
+    // wallet it is at the tip.
+    const fresh = freshWalletAt(v8Version);
+
+    const [state, result] = capability.applyUpdate(fresh, VersionSignalSyncUpdate.create(v8Version, null), activeRange);
+
+    expect(state.progress.isConnected).toBe(true);
+    expect(state.progress.isStrictlyComplete()).toBe(true);
+    // Connected where it already stood: nothing was read, so neither the cursor nor the tip moves.
+    expect(state.progress.appliedIndex).toBe(0n);
+    expect(state.progress.highestRelevantWalletIndex).toBe(0n);
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
+    expect(result.changes).toEqual([]);
+  });
+
+  it('should leave a wallet that has been shown events exactly as it was on an empty-tree signal, because for that wallet the answer can only be stale', () => {
+    // The state a hand-over leaves: cursor and tip carried across, not yet connected. Only the timeline may connect it,
+    // by re-delivering the event the cursor stands on.
+    const handedOver = CoreWallet.updateProgress(syncedWallet(41n), { isConnected: false });
+
+    const [state] = capability.applyUpdate(handedOver, VersionSignalSyncUpdate.create(v8Version, null), activeRange);
+
+    expect(state).toBe(handedOver);
+  });
+
+  it('should leave a wallet already synced on an empty tree alone when the empty-tree signal repeats, because the repeat has nothing new to say', () => {
+    const synced = CoreWallet.restore(
+      new ledger.ZswapLocalState(),
+      keys(),
+      progressAt(0n),
+      ProtocolVersion.ProtocolVersion(BigInt(v8Version)),
+      networkId,
+    );
+
+    const [state] = capability.applyUpdate(synced, VersionSignalSyncUpdate.create(v8Version, null), activeRange);
+
+    expect(state).toBe(synced);
   });
 });
 
@@ -275,6 +325,40 @@ describe('watching the chain for a version the events never mention', () => {
       );
 
     expect(Chunk.toArray(collected)).toEqual([VersionSignalSyncUpdate.create(v9Version, null)]);
+    expect(Effect.runSync(Ref.get(eventTipAsked))).toEqual([]);
+  });
+
+  it('should signal an empty commitment tree as sync starts and on every interval after, even while the chain stays on the version the wallet holds, because nothing else tells such a wallet it is at the tip', async () => {
+    const intervalMs = 20;
+    const intervals = 2;
+    const elapsed = Duration.millis(intervals * intervalMs + intervalMs / 2);
+    const eventTipAsked = recorder<ZswapEventTipSubscriptionVariables>();
+
+    const collected = await Effect.gen(function* () {
+      const listening = yield* service(intervalMs)
+        .updates(freshWalletAt(v8Version), keys())
+        .pipe(
+          Stream.filter((update): update is VersionSignalSyncUpdate => update._tag === 'VersionSignal'),
+          Stream.interruptAfter(elapsed),
+          Stream.runCollect,
+          Effect.fork,
+        );
+      yield* TestClock.adjust(elapsed);
+      return yield* Fiber.join(listening);
+    }).pipe(
+      Effect.provideService(BlockHash.tag, servingTip(tipBlock(v8Version, 0), recorder())),
+      Effect.provideService(ZswapEventTip.tag, servingEventTip(0, eventTipAsked)),
+      Effect.provideService(ZswapEvents.tag, quietChain),
+      Effect.scoped,
+      Effect.provide(TestContext.TestContext),
+      Effect.runPromise,
+    );
+
+    // One check as sync starts, then one per interval.
+    expect(Chunk.toArray(collected)).toEqual(
+      Array.from({ length: intervals + 1 }, () => VersionSignalSyncUpdate.create(v8Version, null)),
+    );
+    // The tip alone proves the tree empty, so the event-id probe is never opened.
     expect(Effect.runSync(Ref.get(eventTipAsked))).toEqual([]);
   });
 
@@ -421,5 +505,37 @@ describe('the source on a chain with no shielded traffic and no new version', ()
     expect(heartbeats.map((heartbeat) => heartbeat.now.getTime())).toEqual(
       Array.from({ length: intervals }, (_, index) => (index + 1) * intervalMs),
     );
+  });
+});
+
+describe('a wallet on a chain whose zswap commitment tree is empty', () => {
+  it('should report synced before its first interval has passed, because the source checks the chain as soon as sync starts', async () => {
+    // A chain that has never produced a shielded output: the timeline is open and silent, and the tip proves the tree
+    // empty. The wallet is already on the chain's version, as a start that asked the chain builds it.
+    const intervalMs = 30_000;
+    const elapsed = Duration.millis(intervalMs / 2);
+    const fresh = freshWalletAt(v8Version);
+    const capability = makeEventsSyncCapability();
+
+    const synced = await Effect.gen(function* () {
+      const syncing = yield* service(intervalMs)
+        .updates(fresh, keys())
+        .pipe(
+          Stream.interruptAfter(elapsed),
+          Stream.runFold(fresh, (wallet, update) => capability.applyUpdate(wallet, update, activeRange)[0]),
+          Effect.fork,
+        );
+      yield* TestClock.adjust(elapsed);
+      return yield* Fiber.join(syncing);
+    }).pipe(
+      Effect.provideService(BlockHash.tag, servingTip(tipBlock(v8Version, 0), recorder())),
+      Effect.provideService(ZswapEventTip.tag, servingEventTip(0, recorder())),
+      Effect.provideService(ZswapEvents.tag, quietChain),
+      Effect.scoped,
+      Effect.provide(TestContext.TestContext),
+      Effect.runPromise,
+    );
+
+    expect(synced.progress.isStrictlyComplete()).toBe(true);
   });
 });
