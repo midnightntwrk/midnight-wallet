@@ -22,6 +22,7 @@ import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wall
 import * as rx from 'rxjs';
 import {
   type DefaultConfiguration,
+  type FacadeState,
   WalletEntrySchema,
   WalletFacade,
   isFinalizedWalletEntry,
@@ -148,6 +149,13 @@ describe('Dust Deregistration', () => {
 
     expect(dustDeregistrationTxHash).toBeTypeOf('string');
 
+    const decayingDustCoins = (state: FacadeState) =>
+      state.dust.availableCoins.filter((coin) => coin.dtime !== undefined);
+    const deregisteredNightUtxos = (state: FacadeState) =>
+      state.unshielded.availableCoins.filter((coin) => coin.meta.registeredForDustGeneration === false);
+
+    // Each wallet applies the transaction on its own schedule, and a synced facade only says every wallet has caught
+    // up with its own view, so the wait resolves on the effects asserted below rather than on isSynced.
     const walletStateAfterDeregistration = await rx.firstValueFrom(
       walletFacade.state().pipe(
         rx.mergeMap(async (state) => {
@@ -160,18 +168,18 @@ describe('Dust Deregistration', () => {
             txFound: txInHistory !== undefined && isFinalizedWalletEntry(txInHistory),
           };
         }),
-        rx.filter(({ state, txFound }) => txFound && state.isSynced),
+        rx.filter(
+          ({ state, txFound }) =>
+            txFound &&
+            decayingDustCoins(state).length >= deregisterTokens &&
+            deregisteredNightUtxos(state).length >= deregisterTokens,
+        ),
         rx.map(({ state }) => state),
       ),
     );
 
-    const availableCoinsWithInfo = walletStateAfterDeregistration.dust.availableCoins;
-    const nightUtxosNotRegisteredForDustGeneration = walletStateAfterDeregistration.unshielded.availableCoins.filter(
-      (coin) => coin.meta.registeredForDustGeneration === false,
-    );
-
-    expect(availableCoinsWithInfo.filter((coin) => coin.dtime !== undefined).length).toBe(deregisterTokens);
-    expect(nightUtxosNotRegisteredForDustGeneration).toHaveLength(2);
+    expect(decayingDustCoins(walletStateAfterDeregistration)).toHaveLength(deregisterTokens);
+    expect(deregisteredNightUtxos(walletStateAfterDeregistration)).toHaveLength(deregisterTokens);
   });
 
   it('books Night UTxOs at build time so a concurrent overlapping deregistration fails fast', async () => {
