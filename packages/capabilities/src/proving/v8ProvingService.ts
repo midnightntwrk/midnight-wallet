@@ -95,7 +95,12 @@ export const fromV8ProvingProvider = (provider: ledger.ProvingProvider): V8Provi
  */
 export const makeV8ServerProvingServiceEffect = (configuration: ServerProvingConfiguration): V8ProvingServiceEffect =>
   pipe(
-    HttpProverClient.create({ url: configuration.provingServerUrl }),
+    HttpProverClient.create({
+      url: configuration.provingServerUrl,
+      ...(configuration.maxConcurrentRequests === undefined
+        ? {}
+        : { maxConcurrentRequests: configuration.maxConcurrentRequests }),
+    }),
     Effect.map((client) => client.asV8ProvingProvider()),
     fromV8ProvingProviderEffect,
   );

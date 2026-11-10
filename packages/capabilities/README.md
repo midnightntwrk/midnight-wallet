@@ -120,6 +120,9 @@ const service = makeDefaultVersionedProvingService(
   operational fact about that server, not something the SDK enforces.
 - Each registered backend refuses the other ledger version's transaction with `ProvingEpochMismatchError` rather than
   handing it to a ledger that cannot read it.
+- A `server` backend takes `maxConcurrentRequests`, the most requests it has waiting at its proof server at once. It
+  defaults to 10, the places a proof server has in its queue as released; a server run with a larger `--job-capacity`
+  can be given more (`{ kind: 'server', url, maxConcurrentRequests: 32 }`). `provingServerUrl` always uses the default.
 - `makeV9ServerProvingServiceEffect` / `makeV9WasmProvingServiceEffect` build a single ledger-v9 backend, a
   `V9ProvingServiceEffect` over `V9UnprovenTransaction`; `makeV8ServerProvingServiceEffect` /
   `makeV8WasmProvingServiceEffect` are their ledger-v8 twins (`V8ProvingServiceEffect`, `V8UnprovenTransaction`). The

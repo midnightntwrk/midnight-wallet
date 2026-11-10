@@ -117,6 +117,9 @@ export const makeV9ServerProvingServiceEffect = (configuration: ServerProvingCon
   return pipe(
     HttpProverClient.create({
       url: configuration.provingServerUrl,
+      ...(configuration.maxConcurrentRequests === undefined
+        ? {}
+        : { maxConcurrentRequests: configuration.maxConcurrentRequests }),
     }),
     Effect.map((client) => client.asProvingProvider()),
     fromV9ProvingProviderEffect,

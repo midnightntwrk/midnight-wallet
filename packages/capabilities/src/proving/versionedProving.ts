@@ -41,6 +41,7 @@ import {
   type ProvingConfigurationError,
   type ProvingServiceEffect,
   type ProvingServices,
+  type ServerProvingConfiguration,
   type VersionedProvingService,
   type VersionedProvingServiceEffect,
   type WasmProvingConfiguration,
@@ -109,6 +110,12 @@ const isV9Transaction = (transaction: AnyVersionUnprovenTransaction): transactio
 const wasmConfigurationOf = (backend: Extract<ProvingBackend, { kind: 'wasm' }>): WasmProvingConfiguration =>
   backend.keyMaterialProvider === undefined ? {} : { keyMaterialProvider: backend.keyMaterialProvider };
 
+/** The proof server backend's configuration, with a cap on its requests only when one was named. */
+const serverConfigurationOf = (backend: Extract<ProvingBackend, { kind: 'server' }>): ServerProvingConfiguration =>
+  backend.maxConcurrentRequests === undefined
+    ? { provingServerUrl: backend.url }
+    : { provingServerUrl: backend.url, maxConcurrentRequests: backend.maxConcurrentRequests };
+
 /** Builds the backend a description names, driven by ledger-v8, for the epoch below `forks.v9`. */
 const makeV8Backend = (
   backend: ProvingBackend,
@@ -116,7 +123,7 @@ const makeV8Backend = (
 ): VersionProvingServiceEffect =>
   onlyFrom(
     backend.kind === 'server'
-      ? makeV8ServerProvingServiceEffect({ provingServerUrl: backend.url })
+      ? makeV8ServerProvingServiceEffect(serverConfigurationOf(backend))
       : makeV8WasmProvingServiceEffect(wasmConfigurationOf(backend)),
     isV8Transaction,
     epoch,
@@ -129,7 +136,7 @@ const makeV9Backend = (
 ): VersionProvingServiceEffect =>
   onlyFrom(
     backend.kind === 'server'
-      ? makeV9ServerProvingServiceEffect({ provingServerUrl: backend.url })
+      ? makeV9ServerProvingServiceEffect(serverConfigurationOf(backend))
       : makeV9WasmProvingServiceEffect(wasmConfigurationOf(backend)),
     isV9Transaction,
     epoch,
