@@ -183,8 +183,9 @@ export type { BatchUpdatesConfig, IndexerClientConnection } from '../types/Shiel
  */
 export type VersionWatchConfig = {
   /**
-   * Milliseconds between checks. Zero or less turns the watcher off entirely, which is what a source driving a wallet
-   * from something other than a live chain wants.
+   * Milliseconds between checks; the first runs as sync starts. Zero or less turns the watcher off entirely, which is
+   * what a source driving a wallet from something other than a live chain wants — and leaves a wallet on a chain that
+   * has never produced a zswap event with nothing to tell it that it is at the tip.
    *
    * @default 30000
    */
@@ -234,7 +235,7 @@ export type EventsWalletSyncUpdate = {
  * What the chain says about itself when its timeline says nothing.
  *
  * @remarks
- *   An observation, not a piece of the chain: it moves no cursor, inserts nothing and produces no changes. All it can do
+ *   An observation, not a piece of the chain: it moves no cursor, inserts nothing and produces no changes. What it can do
  *   is record a protocol version, which is enough, because recording one outside the running variant's activation range
  *   is exactly what makes the runtime hand over.
  *
@@ -243,7 +244,8 @@ export type EventsWalletSyncUpdate = {
  *   bytes of the version that preceded it, which its ledger cannot deserialize, and which may in any case be carrying a
  *   coin that would then never reach the far side. The signal therefore travels with the far end of the source's event
  *   timeline, so the capability can refuse it while anything remains unread. `null` means the source provably holds no
- *   zswap event at all, which is the one case where nothing can be unread.
+ *   zswap event at all, which is the one case where nothing can be unread — and so also the one case where a wallet
+ *   that has read nothing is at the tip, which a timeline with no event can never tell it.
  */
 export type VersionSignalSyncUpdate = Readonly<{
   _tag: 'VersionSignal';
@@ -437,11 +439,12 @@ const highestEventId = (config: DefaultSyncConfiguration, url: URL | string, res
  *   read afterwards. Asked the other way round, an event indexed between the two answers could be one of the version
  *   that preceded the tip — unread, uncounted, and exactly what the gate exists to catch.
  *
- *   Two short-circuits, both of them answers rather than shortcuts. A tip at or below the version the wallet already held
- *   is a signal that could only be a no-op, so no probe is opened and nothing is emitted — which is what keeps a
- *   settled wallet from polling a subscription for the rest of its life. And a tip whose commitment tree has never
- *   grown cannot have had a nullifier spent against it either, so such a chain provably holds no zswap event: nothing
- *   can be unread, and the signal goes out with `null`.
+ *   Two short-circuits, both of them answers rather than shortcuts. A tip whose commitment tree has never grown cannot
+ *   have had a nullifier spent against it either, so such a chain provably holds no zswap event: nothing can be unread,
+ *   and the signal goes out with `null` on every tick, version news or not, because it is the only thing that tells a
+ *   wallet on such a chain that it is at the tip. Otherwise, a tip at or below the version the wallet already held is a
+ *   signal that could only be a no-op, so no probe is opened and nothing is emitted — which is what keeps a settled
+ *   wallet from polling a subscription for the rest of its life.
  *
  *   Everything else is swallowed. A tick that fails says nothing about the chain, so it must neither reach the state nor
  *   take the sync stream down with it; the next tick is the retry, and costs nothing to wait for.
@@ -465,10 +468,10 @@ const readVersionSignal = (
       Option.match(Option.fromNullable(answer.block), {
         onNone: () => Effect.succeedNone,
         onSome: (tip) =>
-          BigInt(tip.protocolVersion) <= knownVersion
-            ? Effect.succeedNone
-            : tip.zswapEndIndex === 0
-              ? Effect.succeedSome(VersionSignalSyncUpdate.create(tip.protocolVersion, null))
+          tip.zswapEndIndex === 0
+            ? Effect.succeedSome(VersionSignalSyncUpdate.create(tip.protocolVersion, null))
+            : BigInt(tip.protocolVersion) <= knownVersion
+              ? Effect.succeedNone
               : pipe(
                   highestEventId(config, url, resumeFrom),
                   Effect.map(Option.map((maxId) => VersionSignalSyncUpdate.create(tip.protocolVersion, maxId))),
@@ -479,9 +482,12 @@ const readVersionSignal = (
   );
 
 /**
- * The chain's version, re-asked on a timer for as long as sync runs.
+ * The chain's version, asked as sync starts and re-asked on a timer for as long as it runs.
  *
  * @remarks
+ *   The first check does not wait an interval: on a chain whose zswap timeline is empty it is what reports a fresh wallet
+ *   synced, and the timeline itself never will.
+ *
  *   Deliberately silent about ticks that say nothing: a tick that finds the chain where the wallet left it, or that
  *   cannot reach the chain at all, emits no element rather than an empty one, so nothing downstream has to know that
  *   polling is how the answer was arrived at.
@@ -502,8 +508,10 @@ const versionWatch = (
   return intervalMs <= 0
     ? Stream.empty
     : pipe(
-        Stream.fromSchedule(Schedule.spaced(Duration.millis(intervalMs))),
-        Stream.mapEffect(() => readVersionSignal(config, url, resumeFrom, knownVersion)),
+        Stream.repeatEffectWithSchedule(
+          readVersionSignal(config, url, resumeFrom, knownVersion),
+          Schedule.spaced(Duration.millis(intervalMs)),
+        ),
         Stream.filterMap(identity),
       );
 };
@@ -513,9 +521,9 @@ const versionWatch = (
  *
  * @remarks
  *   The one update a caught-up wallet is guaranteed to receive. On a chain with no shielded traffic that is already on
- *   the wallet's version there is no event to batch and no version to signal, yet a booking nothing settles still has
- *   to be released once its lifetime has passed — and a release needs both the keys and a time to measure the lifetime
- *   against, which is exactly what this carries.
+ *   the wallet's version there is no event to batch and no version news to signal, yet a booking nothing settles still
+ *   has to be released once its lifetime has passed — and a release needs both the keys and a time to measure the
+ *   lifetime against, which is exactly what this carries.
  * @param config The sync configuration, carrying the interval.
  * @param secretKeys The wallet's keys.
  * @returns The heartbeats, or an empty stream when watching is turned off.
@@ -568,7 +576,8 @@ export const makeEventsSyncService = (
       const appliedIndex = state.progress?.appliedIndex ?? 0n;
 
       // The boundary is load-bearing, not waste: this subscription emits only events (no tip/progress
-      // sentinel), and `isConnected`/the tip (`maxId`) are set only when an event is received. So the
+      // sentinel), and `isConnected`/the tip (`maxId`) are set only when an event is received — bar a
+      // timeline with no event at all, which only the version watch can report (`readVersionSignal`). So the
       // cursor must stay `<= appliedIndex` — never `appliedIndex + 1`. Requesting one event later would
       // deliver nothing to a wallet already at the tip, so `applyUpdate` would never run and sync would
       // hang.
@@ -641,11 +650,30 @@ const noChanges = (state: CoreWallet): ChangesResult => ({
 });
 
 /**
+ * Connects a wallet the timeline has shown nothing, on the source's proof that its zswap timeline is empty.
+ *
+ * @remarks
+ *   With nothing to read, a cursor and a tip of zero already stand at the tip; all that is missing is the connection,
+ *   which the timeline only ever sets on an event it delivers. The proof is read off the tip, apart from the timeline,
+ *   so it can land after the timeline has shown this wallet events — for that wallet it can only be stale, and it
+ *   changes nothing. A wallet already connected is likewise left exactly as it was.
+ * @param wallet The wallet the empty-timeline signal reached.
+ * @returns The wallet, connected or untouched.
+ */
+const connectOnEmptyTimeline = (wallet: CoreWallet): CoreWallet => {
+  const { appliedIndex, highestRelevantWalletIndex, isConnected } = wallet.progress;
+  return !isConnected && appliedIndex === 0n && highestRelevantWalletIndex === 0n
+    ? CoreWallet.updateProgress(wallet, { isConnected: true })
+    : wallet;
+};
+
+/**
  * Folds what the chain said about its own version into the wallet state.
  *
  * @remarks
- *   The same recording the event path makes through {@link annotateVersion}, and nothing else: no cursor moves, no coin
- *   changes hands, no tree grows. A signal is an observation about the chain, not a piece of it.
+ *   The same recording the event path makes through {@link annotateVersion}, and — from a source that holds no zswap event
+ *   at all — the connection a timeline with no event never makes ({@link connectOnEmptyTimeline}). Nothing else: no
+ *   cursor moves, no coin changes hands, no tree grows. A signal is an observation about the chain, not a piece of it.
  *
  *   Unread events below the source's tip make the observation unsafe to record, and leave the state exactly as it was:
  *   the hand-over would park the cursor in front of history the next variant cannot read — and those events carry the
@@ -655,16 +683,16 @@ const noChanges = (state: CoreWallet): ChangesResult => ({
  *   backwards — so a source briefly answering from a lagging replica cannot drag a wallet back over a boundary.
  * @param state The wallet to record on.
  * @param update What the chain said, and how far its event timeline goes.
- * @returns The wallet, annotated or untouched, and an empty result.
+ * @returns The wallet, annotated, connected or untouched, and an empty result.
  */
 const applyVersionSignal = (state: CoreWallet, update: VersionSignalSyncUpdate): [CoreWallet, ChangesResult] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
   const unreadEvents = update.highestEventId !== null && BigInt(update.highestEventId) > appliedIndex;
+  const recorded = unreadEvents
+    ? state
+    : annotateVersion(state, Option.some(ProtocolVersion.ProtocolVersion(BigInt(update.version))));
 
-  return [
-    unreadEvents ? state : annotateVersion(state, Option.some(ProtocolVersion.ProtocolVersion(BigInt(update.version)))),
-    noChanges(state),
-  ];
+  return [update.highestEventId === null ? connectOnEmptyTimeline(recorded) : recorded, noChanges(state)];
 };
 
 /**

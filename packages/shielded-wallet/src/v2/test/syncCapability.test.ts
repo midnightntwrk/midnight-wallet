@@ -20,6 +20,7 @@ import { CoreWallet } from '../CoreWallet.js';
 import {
   type EventsSyncUpdate,
   SimulatorSyncUpdate,
+  VersionSignalSyncUpdate,
   WalletSyncUpdate,
   makeEventsSyncCapability,
   makeSimulatorSyncCapability,
@@ -554,5 +555,86 @@ describe('makeSimulatorSyncCapability.applyUpdate progress', () => {
     expect(state.progress.highestRelevantWalletIndex).toBe(1n);
     expect(state.progress.isConnected).toBe(true);
     expect(state.progress.isStrictlyComplete()).toBe(false);
+  });
+});
+
+// The answer that the source's zswap timeline is empty is read off the tip, apart from the timeline, so it can land on
+// either side of the first events the timeline delivers. Wherever it lands, it must not make the wallet look synced
+// ahead of what the timeline has shown it.
+describe('an empty-tree signal racing the event timeline', () => {
+  const capability = makeEventsSyncCapability();
+  const emptyTree = VersionSignalSyncUpdate.create(3, null);
+
+  /** The six genesis outputs in three batches, each carrying the source's tip of 6: behind until the last one lands. */
+  const timeline = (): readonly WalletSyncUpdate[] => [
+    batch([
+      [1, 3],
+      [2, 3],
+    ]),
+    batch([
+      [3, 3],
+      [4, 3],
+    ]),
+    batch([
+      [5, 3],
+      [6, 3],
+    ]),
+  ];
+
+  /** Every place the signal can land: before the first batch, between any two, after the last. */
+  const positions: readonly number[] = [0, 1, 2, 3];
+
+  const withSignalAt = (position: number): readonly WalletSyncUpdate[] => {
+    const updates = timeline();
+    return [...updates.slice(0, position), emptyTree, ...updates.slice(position)];
+  };
+
+  type Step = {
+    readonly before: CoreWallet;
+    readonly after: CoreWallet;
+    /** The highest tip any batch folded so far has reported. */
+    readonly tipShown: bigint;
+  };
+
+  const tipOf = (update: WalletSyncUpdate): bigint =>
+    update._tag === 'Events'
+      ? update.updates.reduce((tip, event) => (BigInt(event.maxId) > tip ? BigInt(event.maxId) : tip), 0n)
+      : 0n;
+
+  /** Folds the updates into a fresh wallet, one step per update. */
+  const trace = (updates: readonly WalletSyncUpdate[]): readonly Step[] =>
+    updates.reduce<readonly Step[]>((steps, update) => {
+      const previous = steps.at(-1);
+      const before = previous?.after ?? freshWallet();
+      const [after] = capability.applyUpdate(before, update, activeRange);
+      const tipShown = previous === undefined || tipOf(update) > previous.tipShown ? tipOf(update) : previous.tipShown;
+      return [...steps, { before, after, tipShown }];
+    }, []);
+
+  it('should never report the wallet synced while the timeline has shown it a tip it has not reached, wherever the signal lands', () => {
+    const traces = positions.map((position) => ({ position, steps: trace(withSignalAt(position)) }));
+
+    const syncedAhead = traces.flatMap(({ position, steps }) =>
+      steps
+        .filter(({ after, tipShown }) => after.progress.isStrictlyComplete() && after.progress.appliedIndex < tipShown)
+        .map(({ after, tipShown }) => ({ position, appliedIndex: after.progress.appliedIndex, tipShown })),
+    );
+
+    expect(syncedAhead).toEqual([]);
+    // And the timeline does get there, whichever the order: the property above is not met by never syncing at all.
+    expect(traces.map(({ steps }) => steps.at(-1)?.after.progress.isStrictlyComplete())).toEqual(
+      positions.map(() => true),
+    );
+  });
+
+  it('should hand back the very same wallet when the signal lands after the timeline has shown it anything, because from then on the timeline alone moves its progress', () => {
+    const late = positions.filter((position) => position > 0);
+
+    const untouched = late.map((position) => {
+      const { before, after } = trace(withSignalAt(position))[position];
+      return after === before;
+    });
+
+    expect(untouched).toEqual(late.map(() => true));
   });
 });
