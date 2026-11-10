@@ -180,6 +180,17 @@ describe('folding a version signal into the wallet state', () => {
     expect(result.changes).toEqual([]);
   });
 
+  it('should leave a fresh wallet disconnected on a signal from a source with unread events, because only an empty timeline proves it is at the tip', () => {
+    // A wallet that has read nothing hears a version above its own from a source holding events up to 97. It is behind
+    // by every one of them, and the signal itself says so.
+    const fresh = freshWalletAt(v8Version);
+
+    const [state] = capability.applyUpdate(fresh, VersionSignalSyncUpdate.create(v9Version, 97), activeRange);
+
+    expect(state.progress.isConnected).toBe(false);
+    expect(state.progress.isStrictlyComplete()).toBe(false);
+  });
+
   it('should leave a wallet that has been shown events exactly as it was on an empty-tree signal, because for that wallet the answer can only be stale', () => {
     // The state a hand-over leaves: cursor and tip carried across, not yet connected. Only the timeline may connect it,
     // by re-delivering the event the cursor stands on.
@@ -188,6 +199,39 @@ describe('folding a version signal into the wallet state', () => {
     const [state] = capability.applyUpdate(handedOver, VersionSignalSyncUpdate.create(v8Version, null), activeRange);
 
     expect(state).toBe(handedOver);
+  });
+
+  it('should leave a restored wallet disconnected on an empty-tree signal, because a cursor past zero means it has read events this chain does not hold', () => {
+    // The shape a snapshot restores to: the cursor at the stored offset, no tip yet, not connected. A source whose
+    // timeline is empty cannot be the one that cursor was read from, so its answer says nothing about this wallet.
+    const restored = CoreWallet.updateProgress(freshWalletAt(v8Version), {
+      appliedIndex: 30n,
+      highestRelevantWalletIndex: 0n,
+      isConnected: false,
+    });
+
+    const [state] = capability.applyUpdate(restored, VersionSignalSyncUpdate.create(v8Version, null), activeRange);
+
+    expect(state.progress.isConnected).toBe(false);
+    // Nor within the default gap, which a wallet connected at 30 against a tip of 0 would fall inside.
+    expect(state.progress.isCompleteWithin()).toBe(false);
+  });
+
+  it('should leave a wallet that has applied nothing disconnected on an empty-tree signal once it has been shown a tip, because the timeline has already told it there are events to read', () => {
+    // What a hand-over leaves when the variant before it applied nothing: every event it was served lay past its
+    // range, so the cursor stayed at zero while the tip moved. The cursor alone reads like a fresh wallet's; the tip
+    // says there are events to read.
+    const shownTip = CoreWallet.updateProgress(freshWalletAt(v8Version), {
+      appliedIndex: 0n,
+      highestRelevantWalletIndex: 6n,
+      isConnected: false,
+    });
+
+    const [state] = capability.applyUpdate(shownTip, VersionSignalSyncUpdate.create(v8Version, null), activeRange);
+
+    expect(state.progress.isConnected).toBe(false);
+    // Nor within the default gap, which a wallet connected at 0 against a tip of 6 would fall inside.
+    expect(state.progress.isCompleteWithin()).toBe(false);
   });
 
   it('should leave a wallet already synced on an empty tree alone when the empty-tree signal repeats, because the repeat has nothing new to say', () => {
