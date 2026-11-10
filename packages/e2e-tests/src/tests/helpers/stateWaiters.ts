@@ -146,31 +146,52 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
     ),
   );
 
-/** Waits for a dust deregistration transaction to settle and the consolidated Night output to re-sync. */
-export const waitForStateAfterDustDeregistration = (
+/**
+ * Waits for a dust deregistration transaction to finalize successfully and for the wallet's Night balance to reach
+ * `expectedNightBalance`.
+ *
+ * A synced facade does not mean every wallet inside it has applied the transaction, so the wait is on the effects
+ * themselves. History is written by a fan-out beside sync rather than by sync itself, so the entry is polled with
+ * {@link waitForTxInHistory}; the Night balance is then awaited on the state stream, bounded by a timeout whose error
+ * names the expected balance (the last observed one is logged on every state emission).
+ *
+ * @param wallet - The wallet that submitted the deregistration.
+ * @param finalizedTx - The submitted deregistration transaction.
+ * @param unshieldedTokenRaw - The raw token type of Night.
+ * @param expectedNightBalance - The Night balance the wallet must report once the transaction is applied.
+ * @returns The first wallet state whose Night balance equals `expectedNightBalance`.
+ * @throws If the history entry finalizes with a status other than `SUCCESS`, or the balance is not reached in time.
+ */
+export const waitForStateAfterDustDeregistration = async (
   wallet: WalletFacade,
   finalizedTx: FinalizedTx,
   unshieldedTokenRaw: ledger.RawTokenType,
-) =>
-  rx.firstValueFrom(
-    wallet.state().pipe(
-      rx.mergeMap(async (state) => {
-        const txInHistory = await wallet.queryTxHistoryByHash(
-          carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash(),
-        );
+  expectedNightBalance: bigint,
+) => {
+  const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
+  await waitForTxInHistory(txHash, wallet);
 
-        return {
-          state,
-          txFound: txInHistory !== undefined,
-        };
+  return rx.firstValueFrom(
+    wallet.state().pipe(
+      rx.tap((state) => {
+        logger.info(
+          `Night balance: ${state.unshielded.balances[unshieldedTokenRaw]}, waiting for ${expectedNightBalance}`,
+        );
       }),
-      rx.filter(
-        ({ state, txFound }) =>
-          txFound && state.isSynced && state.unshielded.balances[unshieldedTokenRaw] !== undefined,
-      ),
-      rx.map(({ state }) => state),
+      rx.filter((state) => state.unshielded.balances[unshieldedTokenRaw] === expectedNightBalance),
+      rx.timeout({
+        first: 60_000,
+        with: () =>
+          rx.throwError(
+            () =>
+              new Error(
+                `Night balance did not reach ${expectedNightBalance} within 60 s after dust deregistration; the last balance is in the log`,
+              ),
+          ),
+      }),
     ),
   );
+};
 
 export const waitForRegisteredTokens = (wallet: WalletFacade) =>
   rx.firstValueFrom(

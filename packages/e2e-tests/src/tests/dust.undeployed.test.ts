@@ -239,6 +239,7 @@ describe('Dust tests', () => {
         receiver.wallet,
         finalizedDustTx,
         unshieldedTokenRaw,
+        initialNightBalance,
       );
 
       const finalWalletNightBalance = walletStateAfterNightRestored.unshielded.balances[unshieldedTokenRaw];
