@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Chunk, type Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
+import { Chunk, type Context, Data, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
 import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from '@effect/platform';
 import { ProverClient } from './ProverClient.js';
 import {
@@ -53,43 +53,113 @@ const v8Framing: PayloadFraming = {
 };
 
 /**
+ * How many requests a client has waiting at a proof server at once, unless its configuration says otherwise.
+ *
+ * @remarks
+ *   The places a proof server has in its queue as released (`--job-capacity`). A job holds one from the moment it arrives
+ *   until a worker takes it, and a request that finds them all taken is refused. The server's workers run beside the
+ *   queue, but a job they have not got to yet still holds its place, so the queue is all the room a client that sends
+ *   its requests at once can count on.
+ */
+const DEFAULT_MAX_CONCURRENT_REQUESTS = 10;
+
+/** Raised when a client is configured with a cap that is not a number of requests: a whole number, at least one. */
+export class InvalidMaxConcurrentRequestsError extends Data.TaggedError(
+  '@midnightntwrk/wallet-sdk-prover-client/effect/HttpProverClient/InvalidMaxConcurrentRequestsError',
+)<{
+  readonly message: string;
+  /** The cap that was configured. */
+  readonly maxConcurrentRequests: number;
+}> {}
+
+/**
+ * Reads a configured cap as the number of permits a client is given.
+ *
+ * @remarks
+ *   Permits are taken one per request, so a cap that is not a whole number of at least one has no reading that sends a
+ *   request: a client given none waits forever before its first. It is refused here rather than turned into a client
+ *   that never proves anything.
+ */
+const parseMaxConcurrentRequests = (
+  configured: number | undefined,
+): Either.Either<number, InvalidMaxConcurrentRequestsError> =>
+  configured === undefined
+    ? Either.right(DEFAULT_MAX_CONCURRENT_REQUESTS)
+    : Number.isInteger(configured) && configured >= 1
+      ? Either.right(configured)
+      : Either.left(
+          new InvalidMaxConcurrentRequestsError({
+            message: `maxConcurrentRequests must be a whole number of at least 1, but was ${configured}`,
+            maxConcurrentRequests: configured,
+          }),
+        );
+
+/**
+ * Builds a client for one proof server, with the permits that bound what it has waiting there.
+ *
+ * @remarks
+ *   The permits belong to the client rather than to a request or a provider, because what they stand for is room in one
+ *   proof server's queue: every request this client makes, through whichever provider, waits in that same queue.
+ */
+const make = (
+  config: ProverClient.ServerConfig,
+): Effect.Effect<HttpProverClientImpl, InvalidProtocolSchemeError | InvalidMaxConcurrentRequestsError> =>
+  pipe(
+    Either.all({
+      baseUrl: HttpURL.make(new URL(config.url)),
+      permits: parseMaxConcurrentRequests(config.maxConcurrentRequests),
+    }),
+    EitherOps.toEffect,
+    Effect.flatMap(({ baseUrl, permits }) =>
+      Effect.map(Effect.makeSemaphore(permits), (requestPermits) => new HttpProverClientImpl(baseUrl, requestPermits)),
+    ),
+  );
+
+/**
  * Creates a layer for a {@link ProverClient} that sends requests to a Proof Server over HTTP.
  *
  * @param config The server configuration to use when configuring the HTTP elements of the layer.
  * @returns A `Layer` for {@link ProverClient} that sends requests to a configured Proof Server over HTTP. The layer can
- *   fail with an `InvalidProtocolSchemeError` if `config` is invalid for a HTTP context.
+ *   fail with an `InvalidProtocolSchemeError` if `config` is invalid for a HTTP context, or with an
+ *   {@link InvalidMaxConcurrentRequestsError} if its `maxConcurrentRequests` is not a whole number of at least one.
  */
-export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverClient, InvalidProtocolSchemeError> = (
-  config,
-) =>
-  Layer.effect(
-    ProverClient,
-    HttpURL.make(new URL(config.url)).pipe(
-      Either.map((baseUrl) => new HttpProverClientImpl(baseUrl)),
-      Either.match({
-        onLeft: (l) => Effect.fail(l),
-        onRight: (r) => Effect.succeed(r),
-      }),
-    ),
-  );
+export const layer: (
+  config: ProverClient.ServerConfig,
+) => Layer.Layer<ProverClient, InvalidProtocolSchemeError | InvalidMaxConcurrentRequestsError> = (config) =>
+  Layer.effect(ProverClient, make(config));
 
+/**
+ * Creates a {@link ProverClient} that sends requests to a Proof Server over HTTP.
+ *
+ * @example
+ *   ```typescript
+ *   const client = yield* HttpProverClient.create({ url: 'http://localhost:6300', maxConcurrentRequests: 4 });
+ *   const proven = yield* client.proveTransaction(unprovenTransaction, ledger.CostModel.initialCostModel());
+ *   ```;
+ *
+ * @param config The Proof Server to send requests to, and how many of them to have waiting there at once.
+ * @returns An `Effect` that yields the client; or fails with an `InvalidProtocolSchemeError` if `config` is invalid for
+ *   a HTTP context, or with an {@link InvalidMaxConcurrentRequestsError} if its `maxConcurrentRequests` is not a whole
+ *   number of at least one.
+ */
 export const create = (
   config: ProverClient.ServerConfig,
-): Effect.Effect<ProverClient.Service, InvalidProtocolSchemeError> => {
-  return pipe(
-    HttpURL.make(new URL(config.url)),
-    Either.map((baseUrl) => new HttpProverClientImpl(baseUrl)),
-    EitherOps.toEffect,
+): Effect.Effect<ProverClient.Service, InvalidProtocolSchemeError | InvalidMaxConcurrentRequestsError> =>
+  pipe(
+    make(config),
     Effect.map((client) => ProverClient.of(client)),
   );
-};
 
 class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
-  constructor(baseUrl: HttpURL.HttpUrl) {
+  constructor(baseUrl: HttpURL.HttpUrl, requestPermits: Effect.Semaphore) {
     this.baseUrl = baseUrl;
+    this.requestPermits = requestPermits;
   }
 
   protected readonly baseUrl: HttpURL.HttpUrl;
+
+  /** One per request this client may have waiting at the proof server at once. */
+  private readonly requestPermits: Effect.Semaphore;
 
   private request(
     path: string,
@@ -132,6 +202,10 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
           return yield* receiveBody(response);
         }),
       ),
+      // Held from the moment a request is sent until its reply has been read, so that no more requests than there
+      // are permits wait at the proof server at once. Taken per attempt: a request waiting to be tried again has
+      // nothing at the server, and holds no place another could use.
+      this.requestPermits.withPermits(1),
       Effect.retry({
         times: 3,
         while: (error) =>

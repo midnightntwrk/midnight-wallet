@@ -27,6 +27,16 @@ export declare namespace ProverClient {
   interface ServerConfig {
     /** The base URL to the Proof Server. */
     readonly url: URL | string;
+    /**
+     * The most requests the client has waiting at the Proof Server at once. Defaults to 10, the places a Proof Server
+     * has in its queue as released.
+     *
+     * @remarks
+     *   A ledger asks for every proof of a transaction at once, and a Proof Server refuses the requests its queue has no
+     *   room for, which fails the whole transaction. Requests past this number are held back, and sent as earlier ones
+     *   are answered. `/check` and `/prove` requests wait in the same queue at the server, so both count.
+     */
+    readonly maxConcurrentRequests?: number;
   }
 
   /** Provides wasm-related configuration for {@link KeyMaterialProvider} implementations. */

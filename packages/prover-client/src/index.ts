@@ -24,6 +24,8 @@ export class HttpProverClient {
    * @param config The server configuration to use when configuring the HTTP elements of the Proof Server.
    * @throws {@link ProverClient.InvalidProtocolSchemeError} The `config` is invalid for a HTTP context. E.g., expecting
    *   'http:' or 'https:' URLs but something other was provided.
+   * @throws `InvalidMaxConcurrentRequestsError` The `maxConcurrentRequests` of `config` is not a whole number of at
+   *   least one.
    */
   constructor(config: ProverClient.ProverClient.ServerConfig) {
     this.#innerClient = Effect.gen(function* () {

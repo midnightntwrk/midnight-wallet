@@ -41,7 +41,7 @@ const provenTransaction = await proverClient.proveTransaction(unprovenTransactio
 
 ```typescript
 class HttpProverClient {
-  constructor(config: { url: string });
+  constructor(config: { url: string; maxConcurrentRequests?: number });
 
   proveTransaction<S extends Signaturish, B extends Bindingish>(
     transaction: Transaction<S, PreProof, B>,
@@ -49,6 +49,12 @@ class HttpProverClient {
   ): Promise<Transaction<S, Proof, B>>;
 }
 ```
+
+`maxConcurrentRequests` is the most requests the client has waiting at the Proof Server at once. Unless set it is 10,
+the places a Proof Server has in its queue as released. A ledger asks for every proof of a transaction at once, and a
+Proof Server refuses the requests its queue has no room for; requests past this number are held back and sent as earlier
+ones are answered. It has to be a whole number of at least one: anything else is refused when the client is created,
+with an `InvalidMaxConcurrentRequestsError`.
 
 ### Proving providers, per ledger version
 

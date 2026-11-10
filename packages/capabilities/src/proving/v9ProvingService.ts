@@ -60,7 +60,10 @@ const wrapEffectService = <TProven, TUnproven>(
  * @returns A backend that proves ledger-v9 transactions.
  */
 export const fromV9ProvingProviderEffect = (
-  provider: Effect.Effect<ledger.ProvingProvider, InvalidProtocolSchemeError>,
+  provider: Effect.Effect<
+    ledger.ProvingProvider,
+    InvalidProtocolSchemeError | HttpProverClient.InvalidMaxConcurrentRequestsError
+  >,
 ): V9ProvingServiceEffect => {
   return {
     prove(transaction: V9UnprovenTransaction): Effect.Effect<V9UnboundTransaction, ProvingFailure> {

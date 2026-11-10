@@ -24,8 +24,8 @@
  */
 import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
-import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Cause, Effect, Exit, Option } from 'effect';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as HttpProverClient from '../HttpProverClient.js';
 
 const PROVER_URL = new URL('http://prover.test:6300');
@@ -171,4 +171,156 @@ describe('What the HTTP prover client sends to a proof server', () => {
     expect(observed[0].body).toStrictEqual(ledgerV9.createCheckPayload(preimage));
     expect(result).toStrictEqual(ledgerV9.parseCheckResult(aCheckResponseBody));
   });
+});
+
+/**
+ * The places a proof server has in its queue as released: its `--job-capacity`, 10.
+ *
+ * @remarks
+ *   A job holds a place from the moment it arrives until a worker takes it. The server's workers run beside the queue,
+ *   but a job they have not got to yet still holds its place, so the queue is all the room a client that sends its
+ *   requests at once can count on, however many workers there are.
+ */
+const RELEASED_QUEUE_PLACES = 10;
+
+/**
+ * A proof server that answers nothing until told to, so what a client has waiting at it can be read off.
+ *
+ * @remarks
+ *   A request is in flight from the moment it arrives until it is answered. Nothing is answered before
+ *   `answerEverything`, which is what lets a test see how many requests a client sends without an answer to any of
+ *   them; from then on every request, held or yet to arrive, is answered as it stands.
+ *
+ *   Given a number of places, it refuses a request that finds them all taken the way a proof server refuses one that
+ *   finds its queue full: with `429 Job Queue full`, the request never having been in flight.
+ */
+const aHeldProofServer = (places: number = Number.POSITIVE_INFINITY) => {
+  const held: Array<() => void> = [];
+  const traffic = { arrived: 0, refused: 0, inFlight: 0, peakInFlight: 0, answering: false };
+
+  const fetch = (): Promise<Response> =>
+    new Promise((resolve) => {
+      traffic.arrived += 1;
+      if (traffic.inFlight >= places) {
+        traffic.refused += 1;
+        resolve(new Response('Job Queue full', { status: 429 }));
+        return;
+      }
+      traffic.inFlight += 1;
+      traffic.peakInFlight = Math.max(traffic.peakInFlight, traffic.inFlight);
+      const answer = (): void => {
+        traffic.inFlight -= 1;
+        resolve(new Response(aCheckResponseBody, { status: 200 }));
+      };
+      if (traffic.answering) answer();
+      else held.push(answer);
+    });
+
+  return {
+    fetch,
+    arrived: (): number => traffic.arrived,
+    refused: (): number => traffic.refused,
+    inFlight: (): number => traffic.inFlight,
+    peakInFlight: (): number => traffic.peakInFlight,
+    answerEverything: (): void => {
+      traffic.answering = true;
+      held.splice(0).forEach((answer) => answer());
+    },
+  };
+};
+
+/**
+ * How many requests the HTTP prover client has waiting at a proof server at once.
+ *
+ * @remarks
+ *   A ledger asks for every proof of a transaction at once, and a proof server only has room for so many: it refuses the
+ *   ones past its queue, and one refused proof fails the whole transaction. So the client holds requests back itself,
+ *   and sends the next one only as an earlier one is answered. A proof server queues `/check` and `/prove` requests in
+ *   the same place, so the client counts them together.
+ */
+describe('How many requests the HTTP prover client has in flight at a proof server', () => {
+  const realFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  const aProofServer = (places?: number) => {
+    const server = aHeldProofServer(places);
+    globalThis.fetch = server.fetch;
+    return server;
+  };
+
+  it('is never more than the configured cap, so a transaction with more proofs than the server queues is not refused', async () => {
+    const server = aProofServer();
+    const provider = Effect.runSync(
+      HttpProverClient.create({ url: PROVER_URL, maxConcurrentRequests: 3 }),
+    ).asProvingProvider();
+    const preimage = await aV9Preimage();
+
+    const proving = Promise.all(Array.from({ length: 8 }, () => provider.prove(preimage, 'midnight/zswap/output')));
+    await vi.waitFor(() => expect(server.inFlight()).toBe(3));
+    server.answerEverything();
+    await proving;
+
+    expect(server.peakInFlight()).toBe(3);
+    expect(server.arrived()).toBe(8);
+  });
+
+  it('is never more than a proof server queues as released when no cap is configured, so none of them is refused', async () => {
+    const server = aProofServer(RELEASED_QUEUE_PLACES);
+    const provider = Effect.runSync(HttpProverClient.create({ url: PROVER_URL })).asProvingProvider();
+    const preimage = await aV9Preimage();
+
+    const proving = Promise.allSettled(
+      Array.from({ length: 14 }, () => provider.prove(preimage, 'midnight/zswap/output')),
+    );
+    await vi.waitFor(() => expect(server.inFlight()).toBe(RELEASED_QUEUE_PLACES));
+    server.answerEverything();
+    await proving;
+
+    expect(server.refused()).toBe(0);
+    expect(server.arrived()).toBe(14);
+  });
+
+  it('counts check and prove requests together, because they wait in the same queue at the server', async () => {
+    const server = aProofServer();
+    const provider = Effect.runSync(
+      HttpProverClient.create({ url: PROVER_URL, maxConcurrentRequests: 3 }),
+    ).asProvingProvider();
+    const preimage = await aV9Preimage();
+
+    const working = Promise.all([
+      ...Array.from({ length: 4 }, () => provider.prove(preimage, 'midnight/zswap/output')),
+      ...Array.from({ length: 4 }, () => provider.check(preimage, 'midnight/zswap/output')),
+    ]);
+    await vi.waitFor(() => expect(server.inFlight()).toBe(3));
+    server.answerEverything();
+    await working;
+
+    expect(server.peakInFlight()).toBe(3);
+    expect(server.arrived()).toBe(8);
+  });
+});
+
+/**
+ * What the HTTP prover client makes of a cap that is not a number of requests.
+ *
+ * @remarks
+ *   A cap counts the requests a client may have waiting: a whole number of them, and at least one. Nothing else has a
+ *   reading that sends a request — a client capped at none waits forever before its first — so such a client is not
+ *   created at all, and whoever configured it is told so rather than left with proofs that never come.
+ */
+describe('A cap on the requests the HTTP prover client has in flight', () => {
+  it.each([0, -1, 2.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'cannot be %s, because it counts requests: a whole number of them, and at least one',
+    (cap) => {
+      const exit = Effect.runSyncExit(HttpProverClient.create({ url: PROVER_URL, maxConcurrentRequests: cap }));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(Exit.isFailure(exit) ? Option.getOrUndefined(Cause.failureOption(exit.cause)) : undefined).toMatchObject({
+        _tag: '@midnightntwrk/wallet-sdk-prover-client/effect/HttpProverClient/InvalidMaxConcurrentRequestsError',
+      });
+    },
+  );
 });

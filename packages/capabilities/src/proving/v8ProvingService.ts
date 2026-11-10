@@ -56,7 +56,10 @@ export type V8ProvingService = ProvingService<V8UnboundTransaction, V8UnprovenTr
  * @returns A backend that proves ledger-v8 transactions.
  */
 export const fromV8ProvingProviderEffect = (
-  provider: Effect.Effect<ledger.ProvingProvider, InvalidProtocolSchemeError>,
+  provider: Effect.Effect<
+    ledger.ProvingProvider,
+    InvalidProtocolSchemeError | HttpProverClient.InvalidMaxConcurrentRequestsError
+  >,
 ): V8ProvingServiceEffect => ({
   prove(transaction: V8UnprovenTransaction): Effect.Effect<V8UnboundTransaction, ProvingFailure> {
     return pipe(
