@@ -31,7 +31,7 @@ import { NetworkId, InMemoryTransactionHistoryStorage, ProtocolVersion } from '@
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { makeDefaultSubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { carried } from './helpers/transactions.js';
-import { waitForTxInHistory } from './helpers/stateWaiters.js';
+import { outputIntentHashesOf, waitForTxInHistory } from './helpers/stateWaiters.js';
 import { logger } from './logger.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
@@ -161,12 +161,11 @@ describe('Dust Deregistration', () => {
 
     expect(dustDeregistrationTxHash).toBeTypeOf('string');
 
-    const finalizedLedgerTx = carried<ledger.FinalizedTransaction>(finalizedDustDeregistrationTx);
-    const deregistrationTxHash = finalizedLedgerTx.transactionHash();
+    const deregistrationTxHash = carried<ledger.FinalizedTransaction>(finalizedDustDeregistrationTx).transactionHash();
 
     // The transaction must first finalize successfully in history; then the state must show both effects, decaying
     // Dust and deregistered Night, since each wallet applies the transaction on its own schedule.
-    await waitForTxInHistory(deregistrationTxHash, walletFacade);
+    await waitForTxInHistory(deregistrationTxHash, walletFacade, { timeoutMs: 60_000 });
 
     // The wait accepts at least the expected counts while the assertions below are exact, so a surplus ends the wait
     // and fails an exact assertion instead of running into the timeout.
@@ -198,11 +197,8 @@ describe('Dust Deregistration', () => {
     expect(decayingDustCoins(walletStateAfterDeregistration)).toHaveLength(deregisteredUtxoCount);
     expect(deregisteredNightUtxos(walletStateAfterDeregistration)).toHaveLength(deregisteredUtxoCount);
 
-    // The deregistered Night UTxOs are the outputs of this transaction and carry exactly the value of its inputs. An
-    // output's intent hash is taken with the segment that applies its offer, and guaranteed offers apply in segment 0.
-    const deregistrationIntentHashes = [...(finalizedLedgerTx.intents?.entries() ?? [])].flatMap(
-      ([segment, intent]) => [intent.intentHash(0), intent.intentHash(segment)],
-    );
+    // The deregistered Night UTxOs are the outputs of this transaction and carry exactly the value of its inputs.
+    const deregistrationIntentHashes = outputIntentHashesOf(finalizedDustDeregistrationTx);
     const deregisteredUtxos = deregisteredNightUtxos(walletStateAfterDeregistration);
     expect(deregisteredUtxos.every((coin) => deregistrationIntentHashes.includes(coin.utxo.intentHash))).toBe(true);
     expect(deregisteredUtxos.reduce((sum, coin) => sum + coin.utxo.value, 0n)).toBe(

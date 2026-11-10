@@ -147,46 +147,61 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
   );
 
 /**
- * Waits for a dust deregistration transaction to finalize successfully and for the wallet's Night balance to reach
- * `expectedNightBalance`.
+ * Every intent hash the ledger can stamp on a coin `finalizedTx` creates.
  *
- * A synced facade does not mean every wallet inside it has applied the transaction, so the wait is on the effects
- * themselves. History is written by a fan-out beside sync rather than by sync itself, so the entry is polled with
- * {@link waitForTxInHistory}; the Night balance is then awaited on the state stream, bounded by a timeout whose error
- * names the expected balance (the last observed one is logged on every state emission).
+ * An output's intent hash is taken with the segment that applies its offer: a guaranteed offer applies in segment 0 and
+ * a fallible offer in its intent's own segment, so each intent contributes both `intentHash(0)` and
+ * `intentHash(segment)`.
+ *
+ * @param finalizedTx - The transaction whose outputs are looked for.
+ * @returns The intent hashes its outputs can carry.
+ */
+export const outputIntentHashesOf = (finalizedTx: FinalizedTx): readonly string[] =>
+  [...(carried<ledger.FinalizedTransaction>(finalizedTx).intents?.entries() ?? [])].flatMap(([segment, intent]) => [
+    intent.intentHash(0),
+    intent.intentHash(segment),
+  ]);
+
+/**
+ * Waits for a dust deregistration transaction to finalize successfully and for the wallet to hold the Night outputs it
+ * created.
+ *
+ * A synced facade does not mean every wallet inside it has applied the transaction, so the wait is on the effect
+ * itself. History is written by a fan-out beside sync rather than by sync itself, so the entry is polled with
+ * {@link waitForTxInHistory}; the outputs are then awaited on the state stream. Both waits are bounded and fail with an
+ * error naming what was missing.
  *
  * @param wallet - The wallet that submitted the deregistration.
  * @param finalizedTx - The submitted deregistration transaction.
  * @param unshieldedTokenRaw - The raw token type of Night.
- * @param expectedNightBalance - The Night balance the wallet must report once the transaction is applied.
- * @returns The first wallet state whose Night balance equals `expectedNightBalance`.
- * @throws If the history entry finalizes with a status other than `SUCCESS`, or the balance is not reached in time.
+ * @returns The first wallet state holding an available Night coin created by `finalizedTx`.
+ * @throws If the history entry does not finalize with `SUCCESS`, or either wait runs out of time.
  */
 export const waitForStateAfterDustDeregistration = async (
   wallet: WalletFacade,
   finalizedTx: FinalizedTx,
   unshieldedTokenRaw: ledger.RawTokenType,
-  expectedNightBalance: bigint,
 ) => {
   const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
-  await waitForTxInHistory(txHash, wallet);
+  await waitForTxInHistory(txHash, wallet, { timeoutMs: 60_000 });
+
+  const outputIntentHashes = outputIntentHashesOf(finalizedTx);
+  const ownOutputs = (state: FacadeState) =>
+    state.unshielded.availableCoins.filter(
+      (coin) => coin.utxo.type === unshieldedTokenRaw && outputIntentHashes.includes(coin.utxo.intentHash),
+    );
 
   return rx.firstValueFrom(
     wallet.state().pipe(
       rx.tap((state) => {
-        logger.info(
-          `Night balance: ${state.unshielded.balances[unshieldedTokenRaw]}, waiting for ${expectedNightBalance}`,
-        );
+        logger.info(`Night outputs of dust deregistration ${txHash} held: ${ownOutputs(state).length}`);
       }),
-      rx.filter((state) => state.unshielded.balances[unshieldedTokenRaw] === expectedNightBalance),
+      rx.filter((state) => ownOutputs(state).length > 0),
       rx.timeout({
         first: 60_000,
         with: () =>
           rx.throwError(
-            () =>
-              new Error(
-                `Night balance did not reach ${expectedNightBalance} within 60 s after dust deregistration; the last balance is in the log`,
-              ),
+            () => new Error(`No Night output of dust deregistration ${txHash} became available within 60 s`),
           ),
       }),
     ),
@@ -236,6 +251,11 @@ export interface WaitForTxInHistoryOptions {
    * …).
    */
   ready?: (entry: WalletEntry) => boolean;
+  /**
+   * Optional bound on the wait, in milliseconds. When set, a target not reached in time fails with an error naming the
+   * hash and the target, instead of running into the test timeout. Defaults to no bound.
+   */
+  timeoutMs?: number;
 }
 
 /**
@@ -283,43 +303,54 @@ export async function waitForTxInHistory(
     (['shielded', 'unshielded', 'dust'] as const).filter((k) => e[k] !== undefined).join(',');
 
   let pollsSinceDump = 0;
+  const polled = rx.merge(wallet.state().pipe(rx.filter((state) => state.isSynced)), rx.interval(500)).pipe(
+    rx.mergeMap(async () => {
+      const entry = await wallet.queryTxHistoryByHash(txHash);
+      // Resolve when we hit the requested lifecycle (+ ready). Fast-fail when the tx settles into a different
+      // terminal lifecycle — it will never reach the target, so surface it instead of waiting for the timeout.
+      const reached = entry !== undefined && matchesTarget(entry) && isReady(entry);
+      const terminalMismatch = entry !== undefined && !matchesTarget(entry) && isTerminal(entry);
+      const done = reached || terminalMismatch;
+
+      if (entry === undefined) {
+        logger.info(`Waiting for tx ${txHash} (until=${until}): not found yet`);
+      } else {
+        logger.info(
+          `Waiting for tx ${txHash} (until=${until}): lifecycle=${entry.lifecycle.status}, status=${entry.status}, sections=[${describeSections(entry)}], done=${done}`,
+        );
+      }
+
+      if (!done && pollsSinceDump >= 20) {
+        const all = await wallet.getAllFromTxHistory();
+        const summary = all.map((e) => ({
+          hash: e.hash,
+          lifecycle: e.lifecycle.status,
+          status: e.status ?? '(none)',
+          sections: describeSections(e) || '(none)',
+          identifiers: e.identifiers,
+        }));
+        logger.info(`Storage snapshot (${all.length} entries): ${JSON.stringify(summary, null, 2)}`);
+        pollsSinceDump = 0;
+      } else {
+        pollsSinceDump = done ? 0 : pollsSinceDump + 1;
+      }
+
+      return done ? entry : undefined;
+    }),
+    rx.filter((entry): entry is WalletEntry => entry !== undefined),
+  );
   const txEntry = await rx.firstValueFrom(
-    rx.merge(wallet.state().pipe(rx.filter((state) => state.isSynced)), rx.interval(500)).pipe(
-      rx.mergeMap(async () => {
-        const entry = await wallet.queryTxHistoryByHash(txHash);
-        // Resolve when we hit the requested lifecycle (+ ready). Fast-fail when the tx settles into a different
-        // terminal lifecycle — it will never reach the target, so surface it instead of waiting for the timeout.
-        const reached = entry !== undefined && matchesTarget(entry) && isReady(entry);
-        const terminalMismatch = entry !== undefined && !matchesTarget(entry) && isTerminal(entry);
-        const done = reached || terminalMismatch;
-
-        if (entry === undefined) {
-          logger.info(`Waiting for tx ${txHash} (until=${until}): not found yet`);
-        } else {
-          logger.info(
-            `Waiting for tx ${txHash} (until=${until}): lifecycle=${entry.lifecycle.status}, status=${entry.status}, sections=[${describeSections(entry)}], done=${done}`,
-          );
-        }
-
-        if (!done && pollsSinceDump >= 20) {
-          const all = await wallet.getAllFromTxHistory();
-          const summary = all.map((e) => ({
-            hash: e.hash,
-            lifecycle: e.lifecycle.status,
-            status: e.status ?? '(none)',
-            sections: describeSections(e) || '(none)',
-            identifiers: e.identifiers,
-          }));
-          logger.info(`Storage snapshot (${all.length} entries): ${JSON.stringify(summary, null, 2)}`);
-          pollsSinceDump = 0;
-        } else {
-          pollsSinceDump = done ? 0 : pollsSinceDump + 1;
-        }
-
-        return done ? entry : undefined;
-      }),
-      rx.filter((entry): entry is WalletEntry => entry !== undefined),
-    ),
+    options.timeoutMs === undefined
+      ? polled
+      : polled.pipe(
+          rx.timeout({
+            first: options.timeoutMs,
+            with: () =>
+              rx.throwError(
+                () => new Error(`Tx ${txHash} did not reach ${until} in history within ${options.timeoutMs} ms`),
+              ),
+          }),
+        ),
   );
 
   expect(txEntry).toBeDefined();
