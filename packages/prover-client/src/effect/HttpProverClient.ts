@@ -254,7 +254,11 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
       this.requestPermits.withPermits(1),
       Effect.retry({
         schedule: this.retrySchedule,
-        while: (error) => error._tag === 'Refusal' && mayPass(error.status),
+        // A reply can break off before its body is read, and then there is no refusal to speak of, only a response
+        // that could not be read. Its status still says whether sending again may get a different one.
+        while: (error) =>
+          (error._tag === 'Refusal' && mayPass(error.status)) ||
+          (error._tag === 'ResponseError' && mayPass(error.response.status)),
       }),
     );
 

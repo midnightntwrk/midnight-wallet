@@ -326,7 +326,14 @@ describe('A cap on the requests the HTTP prover client has in flight', () => {
 });
 
 /** What a proof server answers one request with. */
-type Answer = Readonly<{ status: number; body: string | Uint8Array<ArrayBuffer> }>;
+type Answer = Readonly<{
+  status: number;
+  body: string | Uint8Array<ArrayBuffer> | (() => ReadableStream<Uint8Array>);
+}>;
+
+/** A body that breaks off before it can be read, as a reply cut short on its way does. */
+const aBrokenBody = (): ReadableStream<Uint8Array> =>
+  new ReadableStream({ start: (controller) => controller.error(new Error('the reply broke off')) });
 
 const aProof: Answer = { status: 200, body: aCheckResponseBody };
 
@@ -343,7 +350,9 @@ const aScriptedProofServer = (script: readonly [Answer, ...Answer[]]) => {
   const fetch = (): Promise<Response> => {
     const answer = script[Math.min(traffic.arrived, script.length - 1)];
     traffic.arrived += 1;
-    return Promise.resolve(new Response(answer.body, { status: answer.status }));
+    return Promise.resolve(
+      new Response(typeof answer.body === 'function' ? answer.body() : answer.body, { status: answer.status }),
+    );
   };
 
   return { fetch, arrived: (): number => traffic.arrived };
@@ -390,6 +399,18 @@ describe('What the HTTP prover client does with a request the proof server does 
     'sends it again when the answer was %s, because what gave way between it and the server may hold the next time',
     async (status) => {
       const server = aProofServerAnswering({ status, body: 'no answer from the proof server' }, aProof);
+      const provider = aProviderRetrying(Schedule.recurs(4));
+      const preimage = await aV9Preimage();
+
+      await expect(provider.prove(preimage, 'midnight/zswap/output')).resolves.toStrictEqual(aCheckResponseBody);
+      expect(server.arrived()).toBe(2);
+    },
+  );
+
+  it.each([429, 502, 503, 504])(
+    'sends it again when the answer was %s and broke off before it could be read, because the status alone says it may pass',
+    async (status) => {
+      const server = aProofServerAnswering({ status, body: aBrokenBody }, aProof);
       const provider = aProviderRetrying(Schedule.recurs(4));
       const preimage = await aV9Preimage();
 

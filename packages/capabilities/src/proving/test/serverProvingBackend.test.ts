@@ -165,5 +165,22 @@ describe.each(backends)(
       expect(server.peakInFlight()).toBe(3);
       expect(server.arrived()).toBe(8);
     });
+
+    it('is never more at once than that across the transactions its backend is proving, because they queue at the same server', async () => {
+      const server = aHeldProofServer();
+      globalThis.fetch = server.fetch;
+      const service = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(cappedAt(3), FORKS));
+
+      const proved = Promise.all([
+        Effect.runPromiseExit(service.prove(transactionOf(4), stamp)),
+        Effect.runPromiseExit(service.prove(transactionOf(4), stamp)),
+      ]);
+      await vi.waitFor(() => expect(server.inFlight()).toBe(3));
+      server.answerEverything();
+      await proved;
+
+      expect(server.peakInFlight()).toBe(3);
+      expect(server.arrived()).toBe(8);
+    });
   },
 );

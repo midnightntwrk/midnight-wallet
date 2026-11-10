@@ -90,6 +90,10 @@ export const fromV8ProvingProvider = (provider: ledger.ProvingProvider): V8Provi
 /**
  * Proves ledger-v8 transactions at a proof server.
  *
+ * @remarks
+ *   One client serves everything the backend proves, made at its first proof and kept. The client's cap on requests in
+ *   flight is a cap on what this backend has waiting at its proof server, and that only holds while every transaction
+ *   it proves goes through the same client.
  * @param configuration The proof server to send ledger-v8 proving requests to.
  * @returns A backend that proves ledger-v8 transactions over HTTP.
  */
@@ -102,6 +106,8 @@ export const makeV8ServerProvingServiceEffect = (configuration: ServerProvingCon
         : { maxConcurrentRequests: configuration.maxConcurrentRequests }),
     }),
     Effect.map((client) => client.asV8ProvingProvider()),
+    Effect.cached,
+    Effect.runSync,
     fromV8ProvingProviderEffect,
   );
 

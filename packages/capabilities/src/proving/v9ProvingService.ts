@@ -104,6 +104,10 @@ export const fromV9ProvingProvider = (provider: ledger.ProvingProvider): V9Provi
 /**
  * Proves ledger-v9 transactions at a proof server.
  *
+ * @remarks
+ *   One client serves everything the backend proves, made at its first proof and kept. The client's cap on requests in
+ *   flight is a cap on what this backend has waiting at its proof server, and that only holds while every transaction
+ *   it proves goes through the same client.
  * @example
  *   ```typescript
  *   const proving = makeV9ServerProvingServiceEffect({ provingServerUrl: new URL('http://localhost:6300') });
@@ -122,6 +126,8 @@ export const makeV9ServerProvingServiceEffect = (configuration: ServerProvingCon
         : { maxConcurrentRequests: configuration.maxConcurrentRequests }),
     }),
     Effect.map((client) => client.asProvingProvider()),
+    Effect.cached,
+    Effect.runSync,
     fromV9ProvingProviderEffect,
   );
 };
