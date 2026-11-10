@@ -1,6 +1,6 @@
 ---
-'@midnightntwrk/wallet-sdk-facade': minor
-'@midnightntwrk/wallet-sdk-capabilities': minor
+'@midnightntwrk/wallet-sdk-facade': patch
+'@midnightntwrk/wallet-sdk-capabilities': patch
 ---
 
 fix(facade): keep a submitted transaction's coins and Dust booked unless the failure proves no block holds it
@@ -14,8 +14,8 @@ sent, or a simulator discard) and it was the only send of the transaction: no ot
 end or revert in its lifecycle record, and its TTL not passed. Everything else, `Dropped` included, keeps the bookings
 until sync or the TTL settles them. The error still reaches the caller.
 
-Minor rather than patch: when the release itself fails, `submitTransaction` rejects with an `AggregateError` (the
-submission error first, then each failed release or record update), and an application `SubmissionService` that
-rejects with its own error no longer gets its bookings released at once.
+When the release itself fails, `submitTransaction` rejects with an `AggregateError` (the submission error first, then
+each failed release or record update). An application `SubmissionService` that rejects with its own error keeps its
+bookings until sync or the TTL settles them.
 
 Capabilities exports `classifySubmissionFailure`, `SubmissionFailure` and `Lifecycle.isCoveredBy`.
