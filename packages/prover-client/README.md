@@ -41,7 +41,11 @@ const provenTransaction = await proverClient.proveTransaction(unprovenTransactio
 
 ```typescript
 class HttpProverClient {
-  constructor(config: { url: string; maxConcurrentRequests?: number });
+  constructor(config: {
+    url: string;
+    maxConcurrentRequests?: number;
+    retrySchedule?: Schedule.Schedule<unknown, unknown>;
+  });
 
   proveTransaction<S extends Signaturish, B extends Bindingish>(
     transaction: Transaction<S, PreProof, B>,
@@ -55,6 +59,12 @@ the places a Proof Server has in its queue as released. A ledger asks for every 
 Proof Server refuses the requests its queue has no room for; requests past this number are held back and sent as earlier
 ones are answered. It has to be a whole number of at least one: anything else is refused when the client is created,
 with an `InvalidMaxConcurrentRequestsError`.
+
+`retrySchedule` is how often, and how far apart, a request is sent again after the Proof Server could not take it: its
+queue was full (HTTP 429), or something between the client and it gave way (HTTP 502, 503, 504). Unless set, the client
+waits 1 second, doubling up to 10 seconds, for 5 minutes in all, and then fails the request with what the server said
+last. This is what carries a transaction through a Proof Server that other clients, or other transactions of the same
+wallet, are also using.
 
 ### Proving providers, per ledger version
 

@@ -24,7 +24,7 @@
  */
 import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
-import { Cause, Effect, Exit, Option } from 'effect';
+import { Cause, Effect, Exit, Option, Schedule } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as HttpProverClient from '../HttpProverClient.js';
 
@@ -323,4 +323,98 @@ describe('A cap on the requests the HTTP prover client has in flight', () => {
       });
     },
   );
+});
+
+/** What a proof server answers one request with. */
+type Answer = Readonly<{ status: number; body: string | Uint8Array<ArrayBuffer> }>;
+
+const aProof: Answer = { status: 200, body: aCheckResponseBody };
+
+/** What a proof server says to a request that finds its queue full. */
+const queueFull: Answer = { status: 429, body: 'Job Queue full' };
+
+/**
+ * A proof server that answers from a script: each request takes the next answer, and the last one stands for every
+ * request after it.
+ */
+const aScriptedProofServer = (script: readonly [Answer, ...Answer[]]) => {
+  const traffic = { arrived: 0 };
+
+  const fetch = (): Promise<Response> => {
+    const answer = script[Math.min(traffic.arrived, script.length - 1)];
+    traffic.arrived += 1;
+    return Promise.resolve(new Response(answer.body, { status: answer.status }));
+  };
+
+  return { fetch, arrived: (): number => traffic.arrived };
+};
+
+/**
+ * What the HTTP prover client does with a request the proof server does not take.
+ *
+ * @remarks
+ *   A proof server refuses a request that finds its queue full, and a queue empties as proofs are made: the same request
+ *   a little later is taken. The same goes for an answer that never came from the server at all, but from something
+ *   between the client and it giving way. So those are sent again, as the client's retry schedule allows, and only an
+ *   answer that sending again cannot change, or a schedule that has run out, fails the proof.
+ *
+ *   The schedules here recur without waiting, so that what is under test is which answers are sent again and how often,
+ *   not how long a client waits in between.
+ */
+describe('What the HTTP prover client does with a request the proof server does not take', () => {
+  const realFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  const aProofServerAnswering = (...script: readonly [Answer, ...Answer[]]) => {
+    const server = aScriptedProofServer(script);
+    globalThis.fetch = server.fetch;
+    return server;
+  };
+
+  const aProviderRetrying = (retrySchedule: Schedule.Schedule<unknown, unknown>) =>
+    Effect.runSync(HttpProverClient.create({ url: PROVER_URL, retrySchedule })).asProvingProvider();
+
+  it('sends it again when the queue was full, and takes the proof once the server has room', async () => {
+    const server = aProofServerAnswering(queueFull, queueFull, aProof);
+    const provider = aProviderRetrying(Schedule.recurs(4));
+    const preimage = await aV9Preimage();
+
+    await expect(provider.prove(preimage, 'midnight/zswap/output')).resolves.toStrictEqual(aCheckResponseBody);
+    expect(server.arrived()).toBe(3);
+  });
+
+  it.each([502, 503, 504])(
+    'sends it again when the answer was %s, because what gave way between it and the server may hold the next time',
+    async (status) => {
+      const server = aProofServerAnswering({ status, body: 'no answer from the proof server' }, aProof);
+      const provider = aProviderRetrying(Schedule.recurs(4));
+      const preimage = await aV9Preimage();
+
+      await expect(provider.prove(preimage, 'midnight/zswap/output')).resolves.toStrictEqual(aCheckResponseBody);
+      expect(server.arrived()).toBe(2);
+    },
+  );
+
+  it('gives up once its retries are spent, and says what the server said last', async () => {
+    const server = aProofServerAnswering(queueFull);
+    const provider = aProviderRetrying(Schedule.recurs(2));
+    const preimage = await aV9Preimage();
+
+    await expect(provider.prove(preimage, 'midnight/zswap/output')).rejects.toThrow('Failed to prove: Job Queue full');
+    expect(server.arrived()).toBe(3);
+  });
+
+  it('does not send it again when the server turned down what it holds, because the answer would be the same', async () => {
+    const server = aProofServerAnswering({ status: 400, body: 'not a proof preimage' });
+    const provider = aProviderRetrying(Schedule.recurs(4));
+    const preimage = await aV9Preimage();
+
+    await expect(provider.prove(preimage, 'midnight/zswap/output')).rejects.toThrow(
+      'Failed to prove: not a proof preimage',
+    );
+    expect(server.arrived()).toBe(1);
+  });
 });

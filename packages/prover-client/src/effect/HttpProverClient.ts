@@ -63,6 +63,40 @@ const v8Framing: PayloadFraming = {
  */
 const DEFAULT_MAX_CONCURRENT_REQUESTS = 10;
 
+/**
+ * How often, and how far apart, a request the proof server could not take is sent again, unless the client's
+ * configuration says otherwise: after 1 second, then twice as long each time up to 10 seconds, for 5 minutes in all.
+ *
+ * @remarks
+ *   A place in a proof server's queue frees each time a worker starts another proof. With the two workers it has as
+ *   released, that ranges from a few times a second, on a fast machine making Dust spend proofs of about half a second
+ *   each, to once in ten seconds, on a slow one making zswap proofs of about twenty. The first wait sits between the
+ *   two, and the waits grow to the slow end, because a server still full after the short waits is one of the slow ones.
+ *   Five minutes is time for a full server of the slowest of those proofs to empty twice over. The waits are jittered,
+ *   so that requests refused together do not all come back together.
+ */
+const defaultRetrySchedule: Schedule.Schedule<unknown, unknown> = pipe(
+  Schedule.exponential(Duration.seconds(1), 2),
+  Schedule.union(Schedule.spaced(Duration.seconds(10))),
+  Schedule.jittered,
+  Schedule.upTo(Duration.minutes(5)),
+);
+
+/**
+ * A reply that was not a result: what the proof server, or something answering in its place, said and with which
+ * status.
+ */
+class Refusal extends Data.TaggedError('Refusal')<{
+  readonly status: number;
+  readonly message: string;
+}> {}
+
+/**
+ * Whether sending the same request again may get a different reply: the server's queue was full (429), or the reply
+ * never came from the server at all but from something between the client and it giving way (502, 503, 504).
+ */
+const mayPass = (status: number): boolean => status === 429 || (status >= 502 && status <= 504);
+
 /** Raised when a client is configured with a cap that is not a number of requests: a whole number, at least one. */
 export class InvalidMaxConcurrentRequestsError extends Data.TaggedError(
   '@midnightntwrk/wallet-sdk-prover-client/effect/HttpProverClient/InvalidMaxConcurrentRequestsError',
@@ -111,7 +145,11 @@ const make = (
     }),
     EitherOps.toEffect,
     Effect.flatMap(({ baseUrl, permits }) =>
-      Effect.map(Effect.makeSemaphore(permits), (requestPermits) => new HttpProverClientImpl(baseUrl, requestPermits)),
+      Effect.map(
+        Effect.makeSemaphore(permits),
+        (requestPermits) =>
+          new HttpProverClientImpl(baseUrl, requestPermits, config.retrySchedule ?? defaultRetrySchedule),
+      ),
     ),
   );
 
@@ -151,15 +189,23 @@ export const create = (
   );
 
 class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
-  constructor(baseUrl: HttpURL.HttpUrl, requestPermits: Effect.Semaphore) {
+  constructor(
+    baseUrl: HttpURL.HttpUrl,
+    requestPermits: Effect.Semaphore,
+    retrySchedule: Schedule.Schedule<unknown, unknown>,
+  ) {
     this.baseUrl = baseUrl;
     this.requestPermits = requestPermits;
+    this.retrySchedule = retrySchedule;
   }
 
   protected readonly baseUrl: HttpURL.HttpUrl;
 
   /** One per request this client may have waiting at the proof server at once. */
   private readonly requestPermits: Effect.Semaphore;
+
+  /** How often, and how far apart, a request the proof server could not take is sent again. */
+  private readonly retrySchedule: Schedule.Schedule<unknown, unknown>;
 
   private request(
     path: string,
@@ -197,7 +243,7 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
         Effect.gen(function* () {
           if (response.status !== 200) {
             const text = yield* response.text;
-            return yield* new ClientError({ message: `${failurePrefix}: ${text}` });
+            return yield* new Refusal({ status: response.status, message: `${failurePrefix}: ${text}` });
           }
           return yield* receiveBody(response);
         }),
@@ -207,16 +253,14 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
       // nothing at the server, and holds no place another could use.
       this.requestPermits.withPermits(1),
       Effect.retry({
-        times: 3,
-        while: (error) =>
-          // Retry if we get a Bad Gateway, Service Unavailable, or Gateway Timeout error.
-          error._tag === 'ResponseError' && error.response.status >= 502 && error.response.status <= 504,
-        schedule: Schedule.exponential(Duration.seconds(2), 2),
+        schedule: this.retrySchedule,
+        while: (error) => error._tag === 'Refusal' && mayPass(error.status),
       }),
     );
 
     return proveTxRequest.pipe(
       Effect.catchTags({
+        Refusal: (refusal) => new ClientError({ message: refusal.message }),
         RequestError: (err) => new ClientError({ message: `Failed to connect to Proof Server: ${err.message}` }),
         ResponseError: (err) =>
           Effect.orElseSucceed(err.response.text, () => 'Unknown server error').pipe(
