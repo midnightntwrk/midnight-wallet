@@ -10,8 +10,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect } from 'effect';
-import { makeIndexerChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import {
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
@@ -19,6 +17,7 @@ import {
   type DustGenerationRates,
   type DustKeysByEpoch,
   dustVariantConfigurations,
+  dustWalletProbes,
   type DustWalletAPI,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
@@ -46,9 +45,10 @@ export type DustWalletFactory = (config: DefaultDustConfiguration) => {
 /**
  * A dust sub-wallet that syncs from indexer projections instead of the event stream.
  *
- * The shipped `DustWallet` with exactly one substitution — the V2 variant's sync service. The V1 variant keeps the
- * event stream, because the projections sync is a ledger-v9 capability: it rests on `DustLocalState` members no
- * ledger-v8 has. On a chain that runs ledger-v9 from its first block the V1 variant never applies, so a wallet built
+ * The shipped `DustWallet` with one substitution, the V2 variant's sync service, and the same start: it takes its
+ * probes from `dustWalletProbes`, as `DustWallet` does, so `skipLedgerV8DustHistory` works for it too. The V1 variant
+ * keeps the event stream, because the projections sync is a ledger-v9 capability: it rests on `DustLocalState` members
+ * no ledger-v8 has. On a chain that runs ledger-v9 from its first block the V1 variant never applies, so a wallet built
  * this way reaches the projections sync immediately.
  *
  * The projections sync synchronizes in finite passes rather than over a live subscription, but background
@@ -68,14 +68,9 @@ export const eventLessDustWallet: DustWalletFactory = (config) => {
   return CustomForkingDustWallet(
     {
       ...config,
-      chainVersionProbe: config.chainVersionProbe ?? makeIndexerChainVersionProbe(config),
-      // Honoured here as `DustWallet` honours it: a fresh start on a chain past the boundary parks the V2 variant where
-      // the dust timeline reaches it, never reading the ledger-v8 dust history.
-      ...(config.skipLedgerV8DustHistory === true
-        ? {
-            dustTimelineStartProbe: () => Effect.runPromise(SyncService.findDustTimelineStart(config, config.forks.v9)),
-          }
-        : {}),
+      // The probes `DustWallet` asks, so a fresh start begins where it would for the event-based wallet: on a chain past
+      // the boundary with `skipLedgerV8DustHistory`, where the dust timeline reaches it.
+      ...dustWalletProbes(config),
     },
     { builder: new V1Builder().withDefaults(), configuration: v1 },
     {
