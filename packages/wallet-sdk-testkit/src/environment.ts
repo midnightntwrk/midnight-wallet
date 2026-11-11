@@ -134,9 +134,11 @@ export const makeEnvironment = (
       // The same boundary the shielded configuration names, for the same reason: this testkit's environments all run
       // the ledger-v9-native node line, so the dust wallet reaches its V2 variant too.
       forks: ProtocolVersion.V9NativeForkSchedule,
-      // A fresh wallet on a network that crossed the v9 fork starts its Dust at the boundary instead of replaying the
-      // ledger-v8 history; on a network that runs ledger-v9 from its first block there is nothing to skip.
-      skipLedgerV8DustHistory: true,
+      // A fresh wallet on a remote network that crossed the v9 fork starts its Dust at the boundary, when the search
+      // finds it, instead of replaying the ledger-v8 history. The local undeployed chain runs ledger-v9 from its first
+      // block, so it has nothing to skip, and on a chain with no dust events yet the search would only wait out its
+      // event-tip probe before every fresh wallet starts.
+      skipLedgerV8DustHistory: network in NETWORK_PRESETS,
     };
   },
   down: options.down ?? (async () => {}),

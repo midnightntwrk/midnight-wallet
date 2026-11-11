@@ -51,7 +51,14 @@ export const isRegistered = (coin: NightCoin): boolean => coin.meta.registeredFo
  * unregistered, and registration is decided from the flags read once the funds are there.
  */
 const registeredCount = (coins: readonly NightCoin[]): number => coins.filter(isRegistered).length;
-const isUnregisteredOther = (coin: NightCoin): boolean => !isGenerator(coin) && !isRegistered(coin);
+/**
+ * A UTxO of at least the base amount. Smaller ones, left from earlier funding amounts or as change, do not stand in for
+ * the UTxOs the suites spend, so they count towards neither the five nor the two unregistered, and are never
+ * registered.
+ */
+const isFullSized = (coin: NightCoin): boolean => coin.utxo.value >= BASE_AMOUNT;
+const isOther = (coin: NightCoin): boolean => !isGenerator(coin) && isFullSized(coin);
+const isUnregisteredOther = (coin: NightCoin): boolean => isOther(coin) && !isRegistered(coin);
 const hasRegisteredGenerator = (coins: readonly NightCoin[]): boolean =>
   coins.some((coin) => isGenerator(coin) && isRegistered(coin));
 
@@ -64,7 +71,7 @@ const othersToRegister = (coins: readonly NightCoin[]): number =>
 
 /** The Night UTxO amounts to send so the wallet reaches what the dust healthchecks need. */
 export const planNightTopUp = (coins: readonly NightCoin[]): readonly bigint[] => {
-  const others = coins.filter((coin) => !isGenerator(coin));
+  const others = coins.filter(isOther);
   // Registration takes unregistered others, and the registration healthcheck needs MIN_UNREGISTERED_OTHERS left after.
   const baseCount = Math.max(
     0,
@@ -98,16 +105,19 @@ export const planRegistration = <C extends NightCoin>(coins: readonly C[], dust:
     .slice(0, Math.max(0, MIN_REGISTERED - registeredCount(coins) - generator.length));
   const utxos = [...generator, ...others];
   if (utxos.length > 0) return { _tag: 'Register', utxos };
-  return dust > 0n ? { _tag: 'Ready' } : { _tag: 'WaitForDust' };
+  return dust >= MIN_DUST_FOR_FEES ? { _tag: 'Ready' } : { _tag: 'WaitForDust' };
 };
 
 /** Why the funded wallet still cannot serve the dust healthchecks; empty when it can. */
 export const readinessProblems = (coins: readonly NightCoin[], dust: bigint): readonly string[] => {
   const registered = registeredCount(coins);
+  const fullSized = coins.filter(isFullSized).length;
   const unregisteredOthers = coins.filter(isUnregisteredOther).length;
   return [
-    ...(coins.length < MIN_NIGHT_UTXOS ? [`${coins.length} Night UTxOs, needs ${MIN_NIGHT_UTXOS}`] : []),
-    ...(dust > 0n ? [] : ['no Dust to pay fees']),
+    ...(fullSized < MIN_NIGHT_UTXOS
+      ? [`${fullSized} Night UTxOs of at least ${BASE_AMOUNT} Specks, needs ${MIN_NIGHT_UTXOS}`]
+      : []),
+    ...(dust >= MIN_DUST_FOR_FEES ? [] : [`${dust} Specks of Dust, needs ${MIN_DUST_FOR_FEES} to pay fees`]),
     ...(registered < MIN_REGISTERED ? [`${registered} registered Night UTxOs, needs ${MIN_REGISTERED}`] : []),
     ...(hasRegisteredGenerator(coins) ? [] : ['the generator is not registered for Dust generation']),
     ...(unregisteredOthers < MIN_UNREGISTERED_OTHERS
@@ -143,15 +153,34 @@ export const parseFundingEnvironment = (
   };
   const funder = valueOf('SEED');
   if (funder === undefined) return Either.left('SEED must be set to a wallet that holds funds');
-  const random = valueOf('FUND_RANDOM_TARGET') === 'true';
+  // Read strictly: this spends funds, and a value read as false would silently fund SEED2 instead of a new wallet.
+  const randomValue = valueOf('FUND_RANDOM_TARGET');
+  if (randomValue !== undefined && randomValue !== 'true' && randomValue !== 'false') {
+    return Either.left(`FUND_RANDOM_TARGET must be true or false, not ${randomValue}`);
+  }
+  const random = randomValue === 'true';
   const given = valueOf('SEED2');
   if (!random && given === undefined) {
     return Either.left('SEED2 must be set to the wallet to fund, or set FUND_RANDOM_TARGET=true to fund a new one');
   }
+  const stable = valueOf('SEED_STABLE');
+  // A wallet that funds itself waits for a balance that never rises, and a stable wallet funded as a test wallet first
+  // ends up over its exact target.
+  const named = [
+    ['SEED', funder],
+    ...(random || given === undefined ? [] : [['SEED2', given]]),
+    ...(stable === undefined ? [] : [['SEED_STABLE', stable]]),
+  ] as const;
+  const clashes = named.filter(([, seed], index) => named.findIndex(([, other]) => other === seed) !== index);
+  if (clashes.length > 0) {
+    return Either.left(
+      `SEED, SEED2 and SEED_STABLE must differ; ${clashes.map(([name]) => name).join(', ')} repeats another of them`,
+    );
+  }
   return Either.right({
     funder,
     target: random || given === undefined ? { _tag: 'Random' } : { _tag: 'Given', seed: given },
-    stable: valueOf('SEED_STABLE'),
+    stable,
   });
 };
 
@@ -164,22 +193,16 @@ export type StableTopUp = {
   readonly over: readonly HeldStableBalance[];
 };
 
-export const planStableTopUp = (current: readonly HeldStableBalance[]): StableTopUp => {
-  const over = current.filter(({ held, amount }) => held > amount);
-  const short =
-    over.length > 0
-      ? []
-      : current
-          .filter(({ held, amount }) => held < amount)
-          .map(({ label, kind, tokenType, amount, held }) => ({
-            label,
-            kind,
-            tokenType,
-            amount,
-            short: amount - held,
-          }));
-  return { short, over };
-};
+/**
+ * Every balance below its target is sent whatever the others hold, so one above its target cannot hide the ones that
+ * are short; the ones above are returned for the caller to fail on, since funding cannot take a balance back down.
+ */
+export const planStableTopUp = (current: readonly HeldStableBalance[]): StableTopUp => ({
+  short: current
+    .filter(({ held, amount }) => held < amount)
+    .map(({ label, kind, tokenType, amount, held }) => ({ label, kind, tokenType, amount, short: amount - held })),
+  over: current.filter(({ held, amount }) => held > amount),
+});
 
 /**
  * Builds a Dust registration, and when it falls short of its fee, waits that shortfall out and builds it again, up to
@@ -192,7 +215,9 @@ export const registerWithRetries = async <R>(
 ): Promise<R> => {
   const attempt = (n: number): Promise<R> =>
     register().catch(async (error: unknown) => {
-      if (n >= maxAttempts) throw error;
+      if (n >= maxAttempts) {
+        throw new Error(`The Dust registration failed after ${n} attempts`, { cause: error });
+      }
       await waitOutShortfall(error, n);
       return attempt(n + 1);
     });
