@@ -29,6 +29,17 @@ export default defineConfig({
       ['html', { outputFile: './reports/html/index.html' }],
     ],
     projects: [
+      // Pure helpers, such as the funding script's plan: no Docker and no network. Run it with
+      // `yarn workspace @midnight/wallet-e2e-tests test-e2e --project unit`.
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['**/**/tests/helpers/*.test.ts'],
+          exclude: ['**/*.integration.test.ts'],
+          retry: 0,
+        },
+      },
       {
         extends: true,
         test: {
