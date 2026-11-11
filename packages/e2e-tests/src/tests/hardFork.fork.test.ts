@@ -1025,6 +1025,27 @@ describe.sequential('Hard fork crossing @fork', () => {
   );
 
   test(
+    "should start a new wallet built from this file's configuration on the ledger-v8 dust history, so a wallet started after the v9 fork still exercises the V1 to V2 hand-over",
+    async () => {
+      // Every wallet this file starts after the boundary, the receiver among them, is built from the fixture's
+      // configuration. If that configuration skipped the ledger-v8 dust history, those wallets would start at the
+      // ledger-v9 timeline and a broken hand-over for a wallet started after the fork could no longer fail this lane.
+      // Only the test below opts in to the skip, and it does so explicitly.
+      const fromDefaults = await DustWallet(makeConfiguration()).startWithSeed(seeds.dust);
+      try {
+        // Read before sync starts, so it is the start the wallet chose. A number, not a bigint: the HTML reporter
+        // cannot serialize a failed bigint assertion.
+        const first = await rx.firstValueFrom(fromDefaults.state);
+        logger.info(`Start from the fixture's configuration: protocol version ${first.protocolVersion}`);
+        expect(Number(first.protocolVersion)).toBeLessThan(Number(ProtocolVersion.V9NativeForkVersion));
+      } finally {
+        await fromDefaults.stop();
+      }
+    },
+    DUST_TIMEOUT_MS,
+  );
+
+  test(
     'starts a new wallet without the ledger-v8 dust history, holding the dust the wallet that crossed holds',
     async () => {
       // The hand-over empties a crossing wallet's state, so one started at the ledger-v9 dust timeline must reach the
