@@ -1,16 +1,15 @@
 ---
+'@midnightntwrk/wallet-sdk-dust-wallet': minor
 '@midnightntwrk/wallet-sdk-testkit': patch
 ---
 
-Tests only: the remote funding script tops wallets up instead of sending fixed amounts. A test wallet is brought to five
-Night UTxOs of 1000 tNight, one of them ten times that, and to minimum shielded balances of tNight and native tokens 1
-and 2. A wallet with no Dust has that larger UTxO registered for Dust generation, so it can pay fees. The stable wallet
-is brought to the balances the balance-constant suite asserts, now 1000 shielded and 1000 unshielded tNight, read from
-one shared table, and is left untouched when it already holds more. The script runs on its own with `yarn test-fund`.
-The native token transfer suite's coin-count checks now hold on a long-lived wallet.
+`dustWalletProbes(configuration)` is now exported: the probes `DustWallet` asks before a fresh start, including the
+search for where the dust timeline reaches `forks.v9` when `skipLedgerV8DustHistory` is set. A composition with its own
+variants spreads it into its configuration to start where `DustWallet` would.
 
-`eventLessDustWallet` now honours `skipLedgerV8DustHistory` as `DustWallet` does, and the testkit environment and the
-e2e fixture set it, so a new wallet on a network that crossed the v9 fork starts its Dust at the boundary instead of
-replaying the ledger-v8 history. On qanet this cuts a cold sync from about 36 minutes to under 30 seconds. The qanet
-preset's indexer subscription now uses the indexer host: the host it named does not serve it, so a wallet restored from
-a snapshot never connected and waited out its ten-minute catch-up before being rebuilt.
+The testkit's `eventLessDustWallet` now takes its probes from `dustWalletProbes`, so it honours
+`skipLedgerV8DustHistory` as `DustWallet` does. The remote network presets set that flag, so a new wallet on a network
+that crossed the v9 fork starts its Dust at the boundary instead of replaying the ledger-v8 history: on qanet a cold sync
+drops from tens of minutes to seconds. The undeployed environment leaves it off, because a local chain has no ledger-v8
+history to skip. The qanet preset's indexer subscription now uses the indexer host; the host it named does not serve it,
+so a wallet restored from a snapshot never connected.

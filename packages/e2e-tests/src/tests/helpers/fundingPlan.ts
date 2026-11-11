@@ -10,7 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { Either } from 'effect';
 import { tNightAmount } from './primitives.js';
+import { type StableBalance } from './stableWallet.js';
 
 // What the remote funding script sends to a test wallet and when it registers Night for Dust generation, as pure
 // functions of the wallet's Night UTxOs, so every wallet shape can be checked without a live network.
@@ -26,6 +28,11 @@ export const DUST_GENERATOR_AMOUNT = BASE_AMOUNT * 10n;
 export const MIN_NIGHT_UTXOS = 5;
 export const MIN_UNREGISTERED_OTHERS = 2;
 export const MIN_REGISTERED = 2;
+/**
+ * Dust a funded wallet holds before the suites run: enough for a transaction fee with room to spare, the same amount
+ * the suites' own `waitForDustBalance` waits for.
+ */
+export const MIN_DUST_FOR_FEES = 7n * 10n ** 14n;
 
 /** The part of a wallet's Night UTxO the plan reads. */
 export type NightCoin = {
@@ -111,4 +118,83 @@ export const readinessProblems = (coins: readonly NightCoin[], dust: bigint): re
         ]
       : []),
   ];
+};
+
+/** The wallet the funding script funds: one generated for this run, or the one `SEED2` names. */
+export type FundingTarget = { readonly _tag: 'Random' } | { readonly _tag: 'Given'; readonly seed: string };
+
+/** What the funding script reads from its environment. */
+export type FundingEnvironment = {
+  readonly funder: string;
+  readonly target: FundingTarget;
+  readonly stable: string | undefined;
+};
+
+/**
+ * Reads the funding script's environment: `SEED` (the funding wallet), `SEED2` or `FUND_RANDOM_TARGET` (the wallet to
+ * fund) and `SEED_STABLE` (the balance-constant wallet). An empty value, as `NAME=` in `.env` leaves, counts as unset.
+ */
+export const parseFundingEnvironment = (
+  env: Readonly<Record<string, string | undefined>>,
+): Either.Either<FundingEnvironment, string> => {
+  const valueOf = (name: string): string | undefined => {
+    const value = env[name];
+    return value === undefined || value === '' ? undefined : value;
+  };
+  const funder = valueOf('SEED');
+  if (funder === undefined) return Either.left('SEED must be set to a wallet that holds funds');
+  const random = valueOf('FUND_RANDOM_TARGET') === 'true';
+  const given = valueOf('SEED2');
+  if (!random && given === undefined) {
+    return Either.left('SEED2 must be set to the wallet to fund, or set FUND_RANDOM_TARGET=true to fund a new one');
+  }
+  return Either.right({
+    funder,
+    target: random || given === undefined ? { _tag: 'Random' } : { _tag: 'Given', seed: given },
+    stable: valueOf('SEED_STABLE'),
+  });
+};
+
+/** One of the stable wallet's balances, with what it holds now. */
+export type HeldStableBalance = StableBalance & { readonly held: bigint };
+
+/** What to send the stable wallet, and which balances are already above their target. */
+export type StableTopUp = {
+  readonly short: readonly (StableBalance & { readonly short: bigint })[];
+  readonly over: readonly HeldStableBalance[];
+};
+
+export const planStableTopUp = (current: readonly HeldStableBalance[]): StableTopUp => {
+  const over = current.filter(({ held, amount }) => held > amount);
+  const short =
+    over.length > 0
+      ? []
+      : current
+          .filter(({ held, amount }) => held < amount)
+          .map(({ label, kind, tokenType, amount, held }) => ({
+            label,
+            kind,
+            tokenType,
+            amount,
+            short: amount - held,
+          }));
+  return { short, over };
+};
+
+/**
+ * Builds a Dust registration, and when it falls short of its fee, waits that shortfall out and builds it again, up to
+ * `maxAttempts` builds in all. `waitOutShortfall` rethrows any error that is not a fee shortfall it can wait out.
+ */
+export const registerWithRetries = async <R>(
+  register: () => Promise<R>,
+  waitOutShortfall: (error: unknown, attempt: number) => Promise<void>,
+  maxAttempts: number,
+): Promise<R> => {
+  const attempt = (n: number): Promise<R> =>
+    register().catch(async (error: unknown) => {
+      if (n >= maxAttempts) throw error;
+      await waitOutShortfall(error, n);
+      return attempt(n + 1);
+    });
+  return attempt(1);
 };

@@ -67,6 +67,7 @@ import {
   dustLocalStateOf,
 } from './helpers/dustComparison.js';
 import { logger } from './logger.js';
+import { failingAfter, firstStateWhere, within } from './helpers/stateWaiters.js';
 
 /** The dev preset's funded account. */
 const FUNDED_SEED = '0000000000000000000000000000000000000000000000000000000000000001';
@@ -185,17 +186,6 @@ const unshieldedInputsOf = (transaction: ledgerV9.FinalizedTransaction): readonl
  */
 const describeFailure = (error: unknown): string => inspect(error, { depth: 6, breakLength: 160 });
 
-/** A deadline that says what was being waited for, rather than raising a bare `TimeoutError`. */
-const failingAfter = <T>(label: string, milliseconds: number): rx.MonoTypeOperatorFunction<T> =>
-  rx.timeout({
-    first: milliseconds,
-    with: () => rx.throwError(() => new Error(`Timed out after ${milliseconds}ms waiting for ${label}`)),
-  });
-
-/** Caps a wait that would otherwise only be bounded by the file's hour-long test timeout. */
-const within = <T>(label: string, milliseconds: number, work: Promise<T>): Promise<T> =>
-  rx.firstValueFrom(rx.from(work).pipe(failingAfter(label, milliseconds)));
-
 /**
  * Whether a failure is the wallet saying it has not been given enough dust to pay for something.
  *
@@ -239,8 +229,7 @@ const stateWhere = (
   wallet: WalletFacade,
   settled: (state: FacadeState) => boolean,
   milliseconds: number = SPEND_TIMEOUT_MS,
-): Promise<FacadeState> =>
-  rx.firstValueFrom(wallet.state().pipe(rx.filter(settled), failingAfter(label, milliseconds)));
+): Promise<FacadeState> => firstStateWhere(label, wallet, settled, milliseconds);
 
 /**
  * A wallet's states, each paired with the sequence of protocol phases observed up to it.

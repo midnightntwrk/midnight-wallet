@@ -217,28 +217,8 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 available coins: ${initialState.shielded.availableCoins.length}`);
 
       // Every input of a self-transaction is one of this wallet's coins and every output — the payment and any change —
-      // comes back to it, so its coin count moves by outputs minus inputs. The default coin selection spends the
-      // smallest coins first until the amount is covered, so both are known before the transaction is built: a larger
-      // smallest coin gives the payment plus change (+1), a coin of exactly the amount gives no change (+0), and several
-      // smaller coins lower the count. A long-lived wallet reaches each of these, so the expectation is derived from
-      // the coins it holds rather than fixed.
-      const tNightCoins = initialState.shielded.availableCoins
-        .filter((coin) => coin.coin.type === shieldedTokenRaw)
-        .map((coin) => coin.coin.value)
-        .toSorted((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-      const runningTotals = tNightCoins.map((_, index) =>
-        tNightCoins.slice(0, index + 1).reduce((total, value) => total + value, 0n),
-      );
-      const expectedInputs = runningTotals.findIndex((total) => total >= outputValue) + 1;
-      expect(expectedInputs, 'The wallet cannot cover the self-transaction').toBeGreaterThan(0);
-      const expectedChange = runningTotals[expectedInputs - 1] - outputValue;
-      const expectedOutputs = expectedChange > 0n ? 2 : 1;
-      const expectedCoinDelta = expectedOutputs - expectedInputs;
-      logger.info(
-        `Expecting the self-transaction to spend ${expectedInputs} coins and create ${expectedOutputs} ` +
-          `(change ${expectedChange})`,
-      );
-
+      // comes back to it, so its coin count moves by outputs minus inputs, read from the transaction itself. How many
+      // coins it spends is coin selection's choice, pinned in the capabilities package's own tests, not this one's.
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
           type: 'shielded',
@@ -263,8 +243,11 @@ describe('Token transfer', () => {
       const inputCount = offers.reduce((total, offer) => total + offer.inputs.length, 0);
       const outputCount = offers.reduce((total, offer) => total + offer.outputs.length, 0);
       logger.info(`Self-transaction spends ${inputCount} coins and creates ${outputCount}`);
-      expect(inputCount, 'Coins the self-transaction spends').toBe(expectedInputs);
-      expect(outputCount, 'Coins the self-transaction creates').toBe(expectedOutputs);
+      expect(inputCount, 'Coins the self-transaction spends').toBeGreaterThan(0);
+      // The payment, plus change when the coins spent exceed it.
+      expect(outputCount, 'Coins the self-transaction creates').toBeGreaterThanOrEqual(1);
+      expect(outputCount, 'Coins the self-transaction creates').toBeLessThanOrEqual(2);
+      const expectedCoinDelta = outputCount - inputCount;
 
       await utils.waitForFacadePending(sender.wallet);
       await utils.waitForFacadePendingClear(sender.wallet);
