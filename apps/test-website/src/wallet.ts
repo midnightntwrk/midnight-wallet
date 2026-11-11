@@ -35,26 +35,29 @@ const LOCAL_NODE_PORT_RPC = 9944;
 export const KNOWN_NETWORKS = ['preview', 'preprod', 'devnet', 'qanet', 'undeployed'] as const;
 export type KnownNetwork = (typeof KNOWN_NETWORKS)[number];
 
-type RemoteNetwork = Exclude<KnownNetwork, 'undeployed'>;
+type RemoteKnownNetwork = Exclude<KnownNetwork, 'undeployed'>;
 
-// Every remote network's indexer is on shielded.tools; preprod's node is the one host still on midnight.network.
-const indexerDomain = (network: RemoteNetwork): string => `${network}.shielded.tools`;
-
-const nodeDomain = (network: RemoteNetwork): string =>
-  network === 'preprod' ? `${network}.midnight.network` : `${network}.shielded.tools`;
+// A record rather than a template, so a network added to `KNOWN_NETWORKS` fails to compile here until its hosts are
+// listed. The hosts match the testkit's `NETWORK_PRESETS`.
+const REMOTE_HOSTS: Record<RemoteKnownNetwork, { readonly indexer: string; readonly node: string }> = {
+  preview: { indexer: 'indexer.preview.midnight.network', node: 'rpc.preview.midnight.network' },
+  preprod: { indexer: 'indexer.preprod.shielded.tools', node: 'rpc.preprod.midnight.network' },
+  devnet: { indexer: 'indexer.devnet.shielded.tools', node: 'rpc.devnet.shielded.tools' },
+  qanet: { indexer: 'indexer.qanet.shielded.tools', node: 'rpc.qanet.shielded.tools' },
+};
 
 const indexerHttpUrl = (network: KnownNetwork): string =>
   network === 'undeployed'
     ? `http://localhost:${LOCAL_INDEXER_PORT}/api/v4/graphql`
-    : `https://indexer.${indexerDomain(network)}/api/v4/graphql`;
+    : `https://${REMOTE_HOSTS[network].indexer}/api/v4/graphql`;
 
 const indexerWsUrl = (network: KnownNetwork): string =>
   network === 'undeployed'
     ? `ws://localhost:${LOCAL_INDEXER_PORT}/api/v4/graphql/ws`
-    : `wss://indexer.${indexerDomain(network)}/api/v4/graphql/ws`;
+    : `wss://${REMOTE_HOSTS[network].indexer}/api/v4/graphql/ws`;
 
 const relayUrl = (network: KnownNetwork): string =>
-  network === 'undeployed' ? `ws://localhost:${LOCAL_NODE_PORT_RPC}` : `wss://rpc.${nodeDomain(network)}`;
+  network === 'undeployed' ? `ws://localhost:${LOCAL_NODE_PORT_RPC}` : `wss://${REMOTE_HOSTS[network].node}`;
 
 export type Configuration = DefaultConfiguration;
 

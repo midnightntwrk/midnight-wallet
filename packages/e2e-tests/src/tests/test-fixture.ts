@@ -143,7 +143,7 @@ export class TestContainersFixture {
         return 'https://indexer.qanet.shielded.tools/api/v4/graphql';
       }
       case 'preview': {
-        return 'https://indexer.preview.shielded.tools/api/v4/graphql';
+        return 'https://indexer.preview.midnight.network/api/v4/graphql';
       }
       case 'preprod': {
         return 'https://indexer.preprod.shielded.tools/api/v4/graphql';
@@ -170,7 +170,7 @@ export class TestContainersFixture {
         return 'wss://indexer.qanet.shielded.tools/api/v4/graphql/ws';
       }
       case 'preview': {
-        return 'wss://indexer.preview.shielded.tools/api/v4/graphql/ws';
+        return 'wss://indexer.preview.midnight.network/api/v4/graphql/ws';
       }
       case 'preprod': {
         return 'wss://indexer.preprod.shielded.tools/api/v4/graphql/ws';
@@ -197,7 +197,7 @@ export class TestContainersFixture {
         return 'wss://rpc.qanet.shielded.tools';
       }
       case 'preview': {
-        return 'wss://rpc.preview.shielded.tools';
+        return 'wss://rpc.preview.midnight.network';
       }
       case 'preprod': {
         return 'wss://rpc.preprod.midnight.network';

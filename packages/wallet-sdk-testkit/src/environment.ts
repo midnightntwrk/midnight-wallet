@@ -75,9 +75,9 @@ export const NETWORK_PRESETS: Record<RemoteNetwork, RemoteNetworkPreset> = {
   },
   preview: {
     networkId: NetworkId.NetworkId.Preview,
-    indexerHttpUrl: 'https://indexer.preview.shielded.tools/api/v4/graphql',
-    indexerWsUrl: 'wss://indexer.preview.shielded.tools/api/v4/graphql/ws',
-    nodeUrl: 'wss://rpc.preview.shielded.tools',
+    indexerHttpUrl: 'https://indexer.preview.midnight.network/api/v4/graphql',
+    indexerWsUrl: 'wss://indexer.preview.midnight.network/api/v4/graphql/ws',
+    nodeUrl: 'wss://rpc.preview.midnight.network',
   },
   preprod: {
     networkId: NetworkId.NetworkId.PreProd,
