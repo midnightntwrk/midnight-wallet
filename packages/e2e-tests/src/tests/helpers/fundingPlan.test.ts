@@ -77,6 +77,12 @@ describe('planRegistration', () => {
     expect(planRegistration(wallet, 0n)).toEqual({ _tag: 'Register', utxos: [wallet[1]] });
   });
 
+  test('should register the generator when it is unregistered, even though two other UTxOs are registered and the wallet holds Dust, because it is what keeps the wallet generating enough Dust to pay fees', () => {
+    const wallet = [generator(false), base(true), base(true), base(false), base(false)];
+
+    expect(planRegistration(wallet, 5n)).toEqual({ _tag: 'Register', utxos: [wallet[0]] });
+  });
+
   test('should wait for Dust when two UTxOs are registered and the wallet has none yet', () => {
     const wallet = [generator(true), base(true), base(false), base(false), base(false)];
 
@@ -95,6 +101,12 @@ describe('readinessProblems', () => {
     const wallet = [generator(true), base(true), base(false), base(false), base(false)];
 
     expect(readinessProblems(wallet, 5n)).toEqual([]);
+  });
+
+  test('should report a wallet whose generator is not registered, even with two other UTxOs registered', () => {
+    const wallet = [generator(false), base(true), base(true), base(false), base(false)];
+
+    expect(readinessProblems(wallet, 5n)).toEqual([expect.stringMatching(/generator.*not registered/)]);
   });
 
   test('should report a registered wallet left short of unregistered UTxOs, and say a deregistration lets funding add them', () => {
