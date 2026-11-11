@@ -572,8 +572,8 @@ describe('a dust wallet starting on a chain that has not forked', () => {
     Effect.gen(function* () {
       // Reverting releases dust a transaction booked, and a transaction of the other ledger version cannot have
       // booked any of this variant's. So this resolves, changes nothing, and is deliberately not a version mismatch:
-      // the facade reverts all three wallets together when a submission fails, and a refusal here would strand that
-      // whole path.
+      // the facade reverts all three wallets together when a submission fails in a way that proves no block holds the
+      // transaction, and a refusal here would strand that whole path.
       const wallet = yield* syncedV1Wallet;
 
       yield* Effect.promise(() => wallet.dust.revertTransaction(v9Transaction()));

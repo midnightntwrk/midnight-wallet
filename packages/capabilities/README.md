@@ -134,6 +134,41 @@ const service = makeDefaultVersionedProvingService(
 - `makeV9SimulatorProvingServiceEffect` / `makeV8SimulatorProvingServiceEffect` erase proofs instead of proving them,
   for the in-memory simulator.
 
+### Reading a failed submission
+
+A rejected submission does not always mean no block holds the transaction: the node can report a failure after the
+transaction is already in a block, or the wait for finality can time out. `classifySubmissionFailure` reads what a
+rejection says about inclusion, so a caller releases what the transaction booked (its coins and Dust) only when that is
+safe:
+
+```typescript
+import { classifySubmissionFailure, SubmissionFailure } from '@midnightntwrk/wallet-sdk-capabilities/submission';
+
+await submission.submitTransaction(tx, 'Finalized').catch(async (rejection: unknown) => {
+  await SubmissionFailure.$match(classifySubmissionFailure(rejection), {
+    NotIncluded: () => release(tx),
+    Undetermined: () => Promise.resolve(),
+  });
+  throw rejection;
+});
+```
+
+`NotIncluded` is about the send that was rejected. A node refuses a transaction a block already holds the same way it
+refuses one it never saw, so before releasing after a retry, make sure no earlier send of the transaction may be in a
+block. The facade releases only after the only send of a transaction: none other in flight, and none its lifecycle
+record shows.
+
+- `NotIncluded` - the rejection is a `SubmissionError` (bare, or inside the `FiberFailure` that `Effect.runPromise`
+  rejects with) whose cause proves no block holds the transaction: the node usurped or invalidated it
+  (`TransactionUsurpedError`, `TransactionInvalidError`), no connection was made (`ConnectionError`), the node's
+  transaction pool refused it with a JSON-RPC error (polkadot-sdk author RPC codes 1001, 1002, 1010, 1011, 1014–1016,
+  1018–1021), or the simulator discarded it (`LedgerError`).
+- `Undetermined` - everything else: a dropped transaction (`TransactionDroppedError`), a finality timeout, pool codes
+  1012 (temporarily banned) and 1013 (already imported), and any rejection that is not a submission service's own. A
+  block may hold the transaction, so keep its bookings.
+- `SubmissionFailure` is a `Data.taggedEnum`, so `SubmissionFailure.$is('NotIncluded')` works as a type guard too. The
+  facade uses this to release a failed transaction's coins and Dust only on `NotIncluded`.
+
 ## Exports
 
 ### Balancer
@@ -157,6 +192,11 @@ const service = makeDefaultVersionedProvingService(
 
 - `CounterOffer` - Class for building balanced transactions with fee awareness
 - `TransactionCostModel` - Interface defining `inputFeeOverhead` and `outputFeeOverhead`
+
+### Submission
+
+- `classifySubmissionFailure` - Reads whether a rejected submission proves no block holds the transaction
+- `SubmissionFailure` - Tagged enum `NotIncluded` | `Undetermined` returned by `classifySubmissionFailure`
 
 ## License
 

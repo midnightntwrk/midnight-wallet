@@ -55,7 +55,7 @@ import { DustSectionSchema, mergeDustSections } from '@midnightntwrk/wallet-sdk-
 import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Array as Arr, Cause, DateTime, Effect, Either, Option, pipe, Schema } from 'effect';
+import { Array as Arr, Cause, DateTime, Effect, Either, HashMap, Option, pipe, Ref, Schema } from 'effect';
 import {
   type AnyTx,
   type FinalizedTx,
@@ -85,9 +85,11 @@ import {
   tap,
 } from 'rxjs';
 import {
+  classifySubmissionFailure,
   type DefaultTransactionLifecycleServiceConfiguration,
   type InclusionVerdict,
   Lifecycle,
+  SubmissionFailure,
   TransactionTraits,
   type TransactionLifecycleService,
   TransactionLifecycleServiceImpl,
@@ -147,7 +149,10 @@ const endResultOf = (state: Lifecycle.LifecycleState): Option.Option<Transaction
   }
 };
 
-const recordKey = (record: Lifecycle.LifecycleRecord<LifecycleTx>): string => record.identifiers.join(',');
+/** The key a transaction with `identifiers` is held under, by its record and by the attempts to submit it alike. */
+const transactionKeyOf = (identifiers: readonly string[]): string => identifiers.join(',');
+
+const recordKey = (record: Lifecycle.LifecycleRecord<LifecycleTx>): string => transactionKeyOf(record.identifiers);
 
 /**
  * The states only a finalized transaction reaches: it is finalized, then submitted, and only a submitted one is
@@ -973,27 +978,102 @@ type IdentifiedTransaction = Readonly<{
 /** Undoes one booking a builder took, in the wallet that took it. */
 type Release = () => Promise<void>;
 
+/** Runs every step in `steps` to its end, whichever fail, and gives each failure's reason, in the steps' order. */
+const failuresOf = async (steps: readonly Release[]): Promise<readonly unknown[]> =>
+  Arr.filterMap(await Promise.allSettled(steps.map((step) => step())), (result) =>
+    result.status === 'rejected' ? Option.some<unknown>(result.reason) : Option.none(),
+  );
+
 /**
  * Releases every booking in `booked` after `error` ended a build, then rejects.
  *
  * A failed release is never silent. When every release settles, the rejection is `error` itself, unchanged, so a caller
  * matching on it is unaffected. When any release rejects, a booking may remain until it expires, and `error` alone
  * would tell the caller the opposite: the rejection is then an `AggregateError` whose `errors` hold `error` first and
- * each release's rejection after it, in the order the releases were given.
+ * each release's rejection after it, in the order the releases were given, under `message`.
  */
-const releaseAndRethrow = async (error: unknown, booked: readonly Release[]): Promise<never> => {
-  const settled = await Promise.allSettled(booked.map((release) => release()));
-  const releaseFailures = Arr.filterMap(settled, (result) =>
-    result.status === 'rejected' ? Option.some<unknown>(result.reason) : Option.none(),
-  );
+const releaseAndRethrow = async (
+  error: unknown,
+  booked: readonly Release[],
+  message = 'The build failed, and releasing the coins it had booked failed too: a booking may remain until it expires.',
+): Promise<never> => {
+  const releaseFailures = await failuresOf(booked);
   if (releaseFailures.length === 0) {
     throw error;
   }
-  throw new AggregateError(
-    [error, ...releaseFailures],
-    'The build failed, and releasing the coins it had booked failed too: a booking may remain until it expires.',
-  );
+  throw new AggregateError([error, ...releaseFailures], message);
 };
+
+/** The records covering the transaction with `identifiers`: those that stand for the same spend. */
+const coveringRecords = (
+  records: ReadonlyArray<Lifecycle.LifecycleRecord<LifecycleTx>>,
+  identifiers: readonly string[],
+): ReadonlyArray<Lifecycle.LifecycleRecord<LifecycleTx>> => records.filter(Lifecycle.isCoveredBy(identifiers));
+
+/**
+ * Whether the records show no earlier send of the transaction: each covering record is still balanced or finalized,
+ * never submitted, ended or reverted, in this session or one before a restart.
+ */
+const showsNoEarlierSend = (
+  records: ReadonlyArray<Lifecycle.LifecycleRecord<LifecycleTx>>,
+  identifiers: readonly string[],
+): boolean =>
+  coveringRecords(records, identifiers).every(
+    (record) => record.state._tag === 'Balanced' || record.state._tag === 'Finalized',
+  );
+
+/**
+ * Whether the records show the transaction ended, confirmed, rejected, orphaned or reverted: its bookings were settled
+ * by that end, or by the revert.
+ */
+const showsEnded = (
+  records: ReadonlyArray<Lifecycle.LifecycleRecord<LifecycleTx>>,
+  identifiers: readonly string[],
+): boolean => coveringRecords(records, identifiers).some((record) => !Lifecycle.isLive(record));
+
+/**
+ * The sends of one transaction this session has under way: how many await the node, and whether the one awaiting it is
+ * the only send there has been. Only the only send may release the bookings when it proves excluded.
+ */
+type SubmissionAttempts = Readonly<{ inFlight: number; onlySend: boolean }>;
+
+/** Every transaction with a send awaiting the node, keyed as its record is. */
+type AttemptsByTransaction = HashMap.HashMap<string, SubmissionAttempts>;
+
+/** Counts one more send of the transaction keyed `key`; a send that joins another is not the only one. */
+const attemptStarted =
+  (key: string) =>
+  (attempts: AttemptsByTransaction): AttemptsByTransaction =>
+    HashMap.modifyAt(attempts, key, (current) =>
+      Option.some(
+        Option.match(current, {
+          onNone: () => ({ inFlight: 1, onlySend: true }),
+          onSome: (held) => ({ inFlight: held.inFlight + 1, onlySend: false }),
+        }),
+      ),
+    );
+
+/** Marks the sends of the transaction keyed `key` as following an earlier one the records show. */
+const earlierSendSeen =
+  (key: string) =>
+  (attempts: AttemptsByTransaction): AttemptsByTransaction =>
+    HashMap.modify(attempts, key, (held) => ({ ...held, onlySend: false }));
+
+/**
+ * Ends one send of the transaction keyed `key`, and says whether it was the only send there has been. A send this
+ * session never started is not. Once none awaits the node the transaction is forgotten: its record shows the send to
+ * any later one.
+ */
+const attemptEnded =
+  (key: string) =>
+  (attempts: AttemptsByTransaction): readonly [boolean, AttemptsByTransaction] =>
+    Option.match(HashMap.get(attempts, key), {
+      onNone: () => [false, attempts] as const,
+      onSome: (held) =>
+        held.inFlight === 1
+          ? ([held.onlySend, HashMap.remove(attempts, key)] as const)
+          : ([false, HashMap.set(attempts, key, { ...held, inFlight: held.inFlight - 1 })] as const),
+    });
 
 /**
  * Clock abstraction for obtaining the current time. By default, the facade uses the system clock
@@ -1097,6 +1177,21 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   configuration: TConfig;
   /** Optional factory for the clock abstraction. Defaults to system clock (`() => new Date()`). */
   clock?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<Clock.Clock>;
+  /**
+   * Optional factory for the service that submits transactions to a node. Defaults to one submitting through
+   * `configuration.relayURL`.
+   *
+   * @remarks
+   *   When a submission rejects, the facade releases the coins and Dust the transaction booked only if
+   *   {@link classifySubmissionFailure} finds the rejection proves no block holds it: a `SubmissionError` (matched by
+   *   `_tag`, bare or inside the `FiberFailure` `Effect.runPromise` rejects with) whose `cause` is a node-client
+   *   `TransactionUsurpedError`, `TransactionInvalidError`, `ConnectionError`, a pool refusal answered over JSON-RPC,
+   *   or the simulator's `LedgerError`. Any other rejection, an application's own error included, keeps them booked
+   *   until sync or the transaction's TTL settles them. Such a rejection proves only that this send is in no block, and
+   *   a node refuses a transaction a block already holds the same way, so the facade releases only after the only send
+   *   of the transaction (see {@link WalletFacade.submitTransaction}). {@link SubmissionService} lists the full
+   *   contract.
+   */
   submissionService?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<SubmissionService<FinalizedTx>>;
   /**
    * Optional factory for the service holding one lifecycle record per transaction. Defaults to one polling
@@ -1350,6 +1445,12 @@ export class WalletFacade {
    *   the stamp a pending transaction is booked with: that comes from the transaction's own bytes.
    */
   #observedProtocolVersion = new BehaviorSubject<Option.Option<ProtocolVersion.ProtocolVersion>>(Option.none());
+
+  /**
+   * The transactions with a submission attempt that may still reach a block, so a later attempt proven excluded
+   * releases nothing.
+   */
+  readonly #submissionAttempts = Ref.unsafeMake<AttemptsByTransaction>(HashMap.empty());
 
   /** Where the chain hands over from one ledger version to the next, which is what divides the two epochs. */
   readonly #forkVersion: ProtocolVersion.ProtocolVersion;
@@ -1976,13 +2077,30 @@ export class WalletFacade {
    * Call {@link validateTransaction} with `{ enforceBalancing: true, verifySignatures: true, enforceLimits: true }`
    * before this method to surface structural errors with a clear diagnostic instead of a cryptic network rejection.
    *
+   * A failed submission releases the coins and Dust the transaction booked, and records it as rejected, only when the
+   * failure proves this send is in no block and this was the only send of the transaction. The failure proves it when
+   * the node usurped, invalidated or refused it, or when it was never sent because no connection was made or a step
+   * before sending failed. It was the only send when no other send of it was awaiting the node, its lifecycle record
+   * showed no earlier send, end or revert when it started, in this session or one before a restart, and showed no end
+   * when it failed, and its TTL had not passed. A node refuses a transaction a block already holds the same way it
+   * refuses one it never saw, so only the first send can tell. Every other failure keeps the bookings until sync or the
+   * transaction's TTL settles them: holding a coin until then only delays it, where releasing one a block spent would
+   * offer it again.
+   *
    * @param tx - The finalized transaction to submit.
    * @returns The transaction identifier.
    * @throws {@link WellFormedError} — call {@link validateTransaction} first to get this error early.
+   * @throws The error that ended the submission, unchanged, whether or not the bookings were released.
+   * @throws {AggregateError} When the failure released the bookings and a step of that release failed too: `errors`
+   *   holds the submission's error first, then each wallet's failed release, then each failed update of the lifecycle
+   *   record or history entry. The message says which: a failed wallet release may leave a booking until it expires; a
+   *   failed update leaves the record or entry showing the transaction pending.
    */
   async submitTransaction(tx: FinalizedTx): Promise<TransactionIdentifier> {
     const carried = this.accept<Carried>(tx);
     const identifiers = carried.identifiers();
+    const attemptKey = transactionKeyOf(identifiers);
+    await this.#startAttempt(attemptKey, identifiers);
     try {
       // The bytes' own version, never the wallets' reading: a crossing can land between building and submitting.
       // Recorded before it is sent, like the history entry: an inclusion can be reported before submission returns.
@@ -1991,13 +2109,97 @@ export class WalletFacade {
       // handlers' gotFinalized call clears the pending entry on confirmation.
       const key = submitTxHistoryKey(carried);
       await this.#txHistoryStorage.gotPending({ ...key, submittedAt: this.clock.now() });
-      await this.submissionService.submitTransaction(tx, 'Finalized');
-
-      return identifiers.at(-1)!;
     } catch (error) {
-      await this.revert(tx);
+      // Nothing was sent, so no block can hold this attempt.
+      return await this.#endExcludedAttempt(tx, attemptKey, error);
+    }
+    try {
+      await this.submissionService.submitTransaction(tx, 'Finalized');
+    } catch (error) {
+      // Releasing coins a block may have spent would offer them again, so a failure that cannot rule out inclusion
+      // leaves the record live for sync or the TTL to settle, and keeps later attempts from releasing either.
+      return await SubmissionFailure.$match(classifySubmissionFailure(error), {
+        NotIncluded: () => this.#endExcludedAttempt(tx, attemptKey, error),
+        Undetermined: () => {
+          this.#endAttempt(attemptKey);
+          throw error;
+        },
+      });
+    }
+    // An accepted transaction is in a block: a send after it is refused as already applied.
+    this.#endAttempt(attemptKey);
+    return identifiers.at(-1)!;
+  }
+
+  /**
+   * Counts a send of the transaction keyed `attemptKey`, then reads its records: one showing an earlier send makes this
+   * one not the only send. Counted first, so a send that ends meanwhile still sees this one.
+   */
+  async #startAttempt(attemptKey: string, identifiers: readonly string[]): Promise<void> {
+    Effect.runSync(Ref.update(this.#submissionAttempts, attemptStarted(attemptKey)));
+    try {
+      const { records } = await firstValueFrom(this.transactionLifecycleService.state());
+      if (!showsNoEarlierSend(records, identifiers)) {
+        Effect.runSync(Ref.update(this.#submissionAttempts, earlierSendSeen(attemptKey)));
+      }
+    } catch (error) {
+      this.#endAttempt(attemptKey);
       throw error;
     }
+  }
+
+  /** Ends a send of the transaction keyed `attemptKey`, and says whether it was the only send there has been. */
+  #endAttempt(attemptKey: string): boolean {
+    return Effect.runSync(Ref.modify(this.#submissionAttempts, attemptEnded(attemptKey)));
+  }
+
+  /**
+   * Ends a send proven excluded by `error`, then rejects with it, releasing what `tx` booked and recording it as
+   * reverted and rejected only when it was the only send, its record shows no end, and its TTL has not passed: an end
+   * already settled the bookings, and at the TTL the wallets' own sweeps do.
+   */
+  async #endExcludedAttempt(tx: FinalizedTx, attemptKey: string, error: unknown): Promise<never> {
+    const onlySend = this.#endAttempt(attemptKey);
+    const ttlPassed = this.#factsOf(lifecycleTxOf(tx, this.#forkVersion)).ttl.getTime() <= this.clock.now().getTime();
+    if (!onlySend || ttlPassed) {
+      throw error;
+    }
+    const { records } = await firstValueFrom(this.transactionLifecycleService.state());
+    if (showsEnded(records, this.#identifiersOf(tx))) {
+      throw error;
+    }
+    return await this.#releaseExcluded(tx, error);
+  }
+
+  /**
+   * Releases what `tx` booked and records it as reverted and rejected, then rejects with `error`.
+   *
+   * @remarks
+   *   Each wallet's release, the lifecycle record and the history entry are settled independently, so one failing never
+   *   leaves the rest undone. Any failure among them is reported beside `error` in an `AggregateError` whose message
+   *   says whether a booking may remain or only a record or entry failed to move.
+   */
+  async #releaseExcluded(tx: FinalizedTx, error: unknown): Promise<never> {
+    const [bookingFailures, recordFailures] = await Promise.all([
+      failuresOf([
+        () => this.shielded.revertTransaction(tx),
+        () => this.unshielded.revertTransaction(tx),
+        () => this.dust.revertTransaction(tx),
+      ]),
+      failuresOf([
+        () => this.transactionLifecycleService.reverted(this.#identifiersOf(tx)),
+        () => this.#recordRejection(tx),
+      ]),
+    ]);
+    if (bookingFailures.length === 0 && recordFailures.length === 0) {
+      throw error;
+    }
+    throw new AggregateError(
+      [error, ...bookingFailures, ...recordFailures],
+      bookingFailures.length > 0
+        ? 'The submission failed, and releasing the coins and Dust it had booked failed too: a booking may remain until it expires.'
+        : 'The submission failed and its coins and Dust were released, but updating its lifecycle record or history entry failed: it may still show as pending.',
+    );
   }
 
   /**

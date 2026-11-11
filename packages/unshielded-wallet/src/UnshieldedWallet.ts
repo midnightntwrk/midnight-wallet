@@ -776,8 +776,8 @@ export function CustomForkingUnshieldedWallet<
      *   the correct behaviour, not a release quietly skipped.
      *
      *   It is also the one place a version mismatch is not an error: the facade reverts all three wallets together when a
-     *   submission fails, and a refusal here would strand that whole path over a transaction this wallet was never
-     *   holding anything for.
+     *   submission fails in a way that proves no block holds the transaction, and a refusal here would strand that
+     *   whole path over a transaction this wallet was never holding anything for.
      * @param transaction The transaction to un-book.
      */
     revertTransaction(transaction: AnyTx): Promise<void> {

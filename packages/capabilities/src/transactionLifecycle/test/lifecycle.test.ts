@@ -337,8 +337,8 @@ describe('A transaction in a final state', () => {
     expect(apply(before)).toStrictEqual(before);
   });
 
-  // A submission that threw is reverted, and the caller may send the same transaction again. Once it is sent it is in
-  // flight, whatever the wallet concluded before, so the record must await its answer again.
+  // A submission that proved no block holds it is reverted, and the caller may send the same transaction again. Once it
+  // is sent it is in flight, whatever the wallet concluded before, so the record must await its answer again.
   it('should submit a reverted record again when the transaction is sent again, because sending it is a fact', () => {
     const final = facts('finalized', ['id-a']);
 
