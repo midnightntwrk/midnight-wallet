@@ -363,6 +363,31 @@ describe('Facade submission failures', () => {
     expect(entries.map(isPendingWalletEntry)).toStrictEqual([true]);
   });
 
+  it('should keep everything the transaction booked when the last of two overlapping sends is refused after the other ended undetermined, because the other may be in a block', async () => {
+    const [timeout, refusal] = [await finalityTimeout(), await nodeRefusal('1010: Invalid Transaction')];
+    // Both sends start before either is recorded as submitted, so only the overlap itself marks the second as not the
+    // only send. The first ends undetermined; the second, now the last in flight, is refused as a node refuses one
+    // already in a block.
+    const firstAttempt = Promise.withResolvers<never>();
+    const secondAttempt = Promise.withResolvers<never>();
+    const submit = vi
+      .fn<() => Promise<never>>()
+      .mockReturnValueOnce(firstAttempt.promise)
+      .mockReturnValueOnce(secondAttempt.promise);
+    const { facade, reverts, transaction } = await facadeSubmittingWith(submit);
+
+    const firstSubmission = facade.submitTransaction(transaction);
+    const secondSubmission = facade.submitTransaction(transaction);
+    await vi.waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
+    firstAttempt.reject(timeout);
+    await expect(firstSubmission).rejects.toBe(timeout);
+    secondAttempt.reject(refusal);
+
+    await expect(secondSubmission).rejects.toBe(refusal);
+    reverts.forEach((revert) => expect(revert).not.toHaveBeenCalled());
+    expect(await recordStatesOf(facade)).toStrictEqual(['Submitted']);
+  });
+
   it('should keep everything the transaction booked when a retry after an accepted submission is refused, because the accepted one is in a block', async () => {
     const invalid = await nodeReportedInvalid();
     // The first attempt is accepted; the retry is refused, as a node refuses a transaction already applied.
