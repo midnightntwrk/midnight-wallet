@@ -1,5 +1,334 @@
 # @midnightntwrk/wallet-sdk-dust-wallet
 
+## 5.0.0
+
+### Major Changes
+
+- 9907a64: build: depend on the final ledger, zkir and proof server releases, all from `@midnightntwrk`
+
+  - `@midnightntwrk/ledger-v9` `^1.0.0` (was `1.0.0-rc.7`). Its key material pins are those `midnight-ledger`
+    `ledger-9.1.0.0` declares, the same circuits as `ledger-9.1.0.0-rc.7`.
+  - `@midnightntwrk/ledger-v8` `^8.1.3` (was `@midnight-ntwrk/ledger-v8` `^8.1.0`), with the same key material as 8.1.0.
+  - `@midnightntwrk/zkir-v2` `^2.2.0` (was `@midnight-ntwrk/zkir-v2` `2.2.0-rc.6`).
+  - The testing helpers' proof server image is `9.0.0` (was `9.0.0-rc.10`).
+
+  Every Midnight package the SDK depends on now installs from the public npmjs registry, without credentials.
+
+  BREAKING CHANGE: ledger-v8 comes from `@midnightntwrk/ledger-v8`. An application that builds ledger-v8 objects and
+  hands them to the wallet imports them from `@midnightntwrk/ledger-v8` as well; objects from
+  `@midnight-ntwrk/ledger-v8` belong to a second copy of the ledger, which the wallet's own does not accept.
+
+- 1e0ea94: Breaking changes since 4.x
+
+  - **Two ledger versions.** `DustWallet(configuration)` runs a ledger-v8 variant (V1) below `forks.v9` and a ledger-v9
+    variant (V2) from it. At the crossing the Dust state starts empty and is rebuilt from the chain. `forks` is
+    required, and `DefaultDustConfiguration` is declared by the package.
+  - **Starting.** `DustWallet(configuration).startWithSeed(seed, rates?)` returns a `Promise`, and `startWithSecretKey`
+    is replaced by `startWithKeys({ v8, v9 }, rates?)`. Generation rates are plain `DustGenerationRates` rather than
+    ledger `DustParameters`, though either ledger version's `DustParameters` is still accepted; left out, they are the
+    configured `dustParameters`, which default to ledger-v9's initial ones. A fresh start asks the chain the protocol
+    version of its first block (`chainVersionProbe`, by default the indexer) to pick the variant; if the probe fails, it
+    starts on V1. An instance's `start` takes `DustKeysByEpoch`, `{ v8, v9 }`, whichever variant it resumes on, and
+    keeps them until `stop()`.
+  - **Transacting.** `estimateFee` and `balanceTransactions` no longer take a secret key; after `stop()` they fail with
+    `MissingStartAuxError`. `balanceTransactions` resolves `{ transaction, blockData }`, where `blockData` holds the
+    ledger parameters the fee was priced with (typed `unknown` on `DustWalletAPI`; read them with the capabilities
+    `withLedgerParameters`). Transactions are `WalletTransaction` handles; a handle for the other ledger version is
+    refused with `ProtocolVersionMismatchError`, except by `revertTransaction`, which ignores it. Signatures, and the
+    `nightVerifyingKey` that `createDustGenerationTransaction` and `attachDustRegistration` take, use the SDK's
+    `Signing` types, and an ECDSA one is refused below `forks.v9`.
+  - **API types.** `DustWalletAPI<TKeys = never, TSerialized>`: `start(keys)` takes the wallet's own keys type, and the
+    API requires `stepSync` and `ensureFeeCoverage`. `DustWalletState.state` is sealed: read it with `coreStateOf` from
+    `./v1` or `./v2`. The state loses `capabilities`, `services` and `mapState` (use `fromVariant`), and its constructor
+    takes `(protocolVersion, state, projections)` in place of `(state, capabilities, services)`.
+    `DustWalletCapabilities` and `DustWalletServices` are removed, and the shared types live in `DustWalletTypes`.
+  - **Subpaths.** `./v1` exports the ledger-v8 variant and no longer the wallet API: import `DustWallet`,
+    `CustomDustWallet`, `DustWalletAPI`, `DustWalletState` and `DefaultDustConfiguration` from the package root. Its
+    `Simulator` is the capabilities `V8` simulator.
+  - **`CustomDustWallet`** composes one ledger-v9 variant, from a V2 builder with ledger-v9 `DustParameters`, instead of
+    a ledger-v8 one; its starts stay synchronous, its instance `start` takes `{ v9: key }`, and it cannot cross a fork.
+  - **Custom sync and core state.** A `SyncService` declares how background synchronization repeats its `updates`, as a
+    required `backgroundRepeat`: `BackgroundRepeat.Once()` for a long-lived subscription, or
+    `BackgroundRepeat.WithDelay({ delay })`. Sync updates are tagged `Events` or `VersionSignal`, `applyUpdate` receives
+    the protocol-version range its variant owns, and `BlockData` requires `protocolVersion`. A custom variant
+    (`V1Variant`, `V2Variant`) must supply `startAux`, the `StartMaterial.StartAuxCapability` its builder sets with
+    `withStartAux(Defaults)`, and takes an optional fifth type parameter for the previous variant's state.
+    `CoreWallet.pendingDust` holds `PendingDust` entries (`{ coin, nullifier, declaredTime }`), and `DustWithNullifier`
+    is removed. `CoreWallet` records which sync moved its position as a required `syncKind`
+    (`'events' | 'projections'`), which `CoreWallet.restore` takes as its last argument.
+  - **Errors.** The `WalletError` union of `./v1` and `./v2` gains `SnapshotRestoreError`, `OutOfOrderSyncUpdateError`
+    and `InsufficientDustForFeeError`, and that of `./v2` also `SnapshotSyncMismatchError`, so an exhaustive match over
+    it must handle them.
+  - **Snapshots.** Snapshots are format `v2`, recording the variant that wrote them, the Dust still pending, and which
+    sync saved their position (`syncKind`); 4.x snapshots are read and upgraded. Once this release has saved a wallet,
+    going back to 4.x means restoring it from its seed. An unreadable snapshot is refused with `SnapshotRestoreError`
+    instead of `Wallet.Other`, and `restore` throws that tagged error.
+  - **Transaction history.** `txHistoryStorage` is a `DustHistoryStorage`, and a `DustTransactionHistoryEntry` is the
+    common lifecycle entry with an optional `dust` section. A custom `TransactionHistoryService` returns
+    `TransactionDetails` with the `block` (`hash`, `height`, `timestamp`), the transaction's `identifiers` and its
+    `fees` in place of `timestamp`, and may fail with `BlocklessFinalizedEntryError`.
+  - **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `^1.0.0` beside `@midnightntwrk/ledger-v8`.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 4.x
+
+  - **Projections fast sync.** The `./v2` `SyncService.makeEventLessSyncService` synchronizes Dust from the indexer's
+    projections instead of replaying every Dust event. It runs in finite passes, repeated in the background every
+    `backgroundSyncInterval` (default 5 s); every pass, idle or not, re-resolves the wallet's nullifiers. It needs
+    ledger-v9 and does not hand over across a fork by itself: compose it as the V2 sync of a `CustomForkingDustWallet`
+    whose V1 variant replays events. A restored projections wallet resumes from the block its last pass reached. A
+    wallet that replays events refuses a projections snapshot at restore with `SnapshotSyncMismatchError`
+    (`Wallet.SnapshotSyncMismatch`) rather than misread its position; a `SyncService` declares what it `resumesFrom`,
+    which both shipped services do. `SyncService.DustProjectionsUpdate` names the update it applies, so the composed
+    wallet's type is `ForkingDustWallet<WalletSyncUpdate, DustProjectionsUpdate>`, with the first from `./v1`.
+  - **Stepped sync.** `DustWallet.stepSync(keys)` runs one pass and returns; it completes only when the V2 variant uses
+    a finite-pass sync such as the projections sync. Below `forks.v9`, where the V1 variant has no stepped sync, it
+    rejects with `ManualSyncUnsupportedError` (`isManualSyncUnsupportedError`).
+  - **Skipping the ledger-v8 history.** A fresh wallet on a chain that crossed `forks.v9` replays the ledger-v8 Dust
+    events before it crosses, only to start empty on ledger-v9. With `skipLedgerV8DustHistory` it starts at the last
+    Dust event below the boundary instead, so they are never replayed. **The wallet's ledger-v8 Dust transaction history
+    will be missing.** Off by default; a restored wallet resumes from its snapshot, and when the search cannot be made
+    the start proceeds without it. The `./v2` `SyncService.findDustTimelineStart` is the search, and
+    `ForkingDustConfiguration.dustTimelineStartProbe` opts a `CustomForkingDustWallet` in.
+  - **Fee coverage.** `InsufficientDustForFeeError` (`Wallet.InsufficientDustForFee`) reports that a first-time Dust
+    registration cannot yet pay its own fee from the Dust its Night has generated: the `fee`, the `shortfall` and the
+    `claimableFeePayment` in Specks, and an `estimate` of when generation will cover it (`Reachable`, with the seconds
+    and the moment, or `Unreachable`, with the reason). One class serves both variants, so `instanceof` recognises it;
+    `isInsufficientDustForFeeError` is the guard. `ensureFeeCoverage(currentTime, nightUtxos, feePayment, fee)` rejects
+    with it, the coins-and-balances capability's `feeCoverageEstimate` computes the estimate, and
+    `claimableFeePayment(dustState, nightUtxos, now)` gives the amount `waitForGeneratedDust` waits for.
+  - **Restoring.** A snapshot restores on the variant that wrote it. `DustWallet(configuration).tryRestore` returns an
+    `Either` instead of throwing, `peekProtocolVersion` reads a snapshot's protocol version, and a snapshot in a format
+    version this build does not know is refused with `SnapshotRestoreError` (`unknown-version`). Snapshot fields this
+    build does not declare are kept and written back.
+  - **Composition.** A `./v2` subpath (the ledger-v9 variant) beside `./v1`; both export `Migration` and `coreStateOf`,
+    and their builders gain `withStartAux(Defaults)` and `withMigration(Defaults)`. `CustomForkingDustWallet` composes
+    both variants from your own builders, and `dustVariantConfigurations` gives each its own ledger version's parameters
+    from plain rates (see also `asV8DustParameters` and `asV9DustParameters`). A wallet with no traffic of its own still
+    notices the fork, re-asking the chain's tip every 30 seconds (`versionWatch.intervalMs` of the variants'
+    `SyncService.DefaultSyncConfiguration`, not of `DefaultDustConfiguration`; zero or less disables it).
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 4.x
+
+  - `computeBalancingRecipe` no longer loops forever on a wallet holding several part-drained Dust coins. Each pass now
+    covers the fee still unpaid over the coins not yet selected, and a pass that selects no coin fails instead of
+    repeating. With the loop bounded, Dust the transactions already carry counts toward the fee; a transaction that
+    already covers its fee gets an empty balancing transaction, where 4.x looped forever; a coin selection that exhausts
+    the pool is retried once largest-first; and a selector that returns a coin it was not offered fails with
+    `TransactingError`. `dryRunFee` takes an optional trailing parameter carrying the proof-erased, merged transactions,
+    and with no inputs prices the transactions as they are rather than with an extra empty intent.
+  - Reverting a transaction releases only the Dust it booked. It used to drop decaying Dust coins the transaction never
+    spent, and release coins other pending transactions held. A coin a pending transaction spent stays pending through
+    syncs, and in the snapshot, until the chain spends it, its lock runs out or it decays to nothing
+    (`CoreWallet.settlePendingDust`).
+  - A reordered event batch is refused whole, and the sync retries from the same position, instead of applying it.
+  - A transaction's Dust history section is no longer dropped when its event arrives before the indexer can serve the
+    transaction's details: the lookup is retried for `transactionDetailsRetryWindow` (default 2 minutes), and a section
+    still missing after that is logged with its transaction hash. History lookups run at most eight at a time.
+  - The sync's retry back-off is really capped at two minutes, with jitter. A second `start()` no longer starts a second
+    sync. A Dust wallet syncing from a `Simulator` reports the chain tip and `isConnected`. A block the indexer cannot
+    return is a typed error rather than a defect.
+
+- d898335: fix(dust-wallet): date a Dust spend only at a block whose roots the wallet holds
+
+  Paying a fee with Dust no longer dates the spend at a block whose Dust events the wallet has not applied, which the
+  node rejected with `Custom error: 170`. Without a `currentTime`, `balanceTransactions` dates the spend at the newest
+  block when the wallet's Dust tree roots match that block's. A wallet on the event-less sync otherwise dates it at the
+  block its last pass verified, when that block is no more than ten minutes behind the newest and its Dust grace period
+  lasts until the transaction's TTL. When neither holds, balancing reads the newest block again every second, reserving
+  nothing, and after two minutes fails with `SyncWalletError`, whose cause names the wallet's roots, the block's, and
+  why the wallet's own block was refused. A `currentTime` the caller passes is used at once. When the newest block
+  reports no roots at all, as the simulator's do, the spend is dated at it at once and a warning is logged. The V1
+  variant's `BlockData` gains the optional `dustCommitmentMerkleTreeRoot` and `dustGenerationMerkleTreeRoot` the indexer
+  reports. The facade's balancing and transfer methods document the possible wait.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [2e933df]
+- Updated dependencies [9907a64]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0
+  - @midnightntwrk/wallet-sdk-runtime@2.0.0
+
+## 5.0.0-rc.3
+
+### Patch Changes
+
+- d898335: fix(dust-wallet): date a Dust spend only at a block whose roots the wallet holds
+
+  Paying a fee with Dust no longer dates the spend at a block whose Dust events the wallet has not applied, which the
+  node rejected with `Custom error: 170`. Without a `currentTime`, `balanceTransactions` dates the spend at the newest
+  block when the wallet's Dust tree roots match that block's. A wallet on the event-less sync otherwise dates it at the
+  block its last pass verified, when that block is no more than ten minutes behind the newest and its Dust grace period
+  lasts until the transaction's TTL. When neither holds, balancing reads the newest block again every second, reserving
+  nothing, and after two minutes fails with `SyncWalletError`, whose cause names the wallet's roots, the block's, and
+  why the wallet's own block was refused. A `currentTime` the caller passes is used at once. When the newest block
+  reports no roots at all, as the simulator's do, the spend is dated at it at once and a warning is logged. The V1
+  variant's `BlockData` gains the optional `dustCommitmentMerkleTreeRoot` and `dustGenerationMerkleTreeRoot` the indexer
+  reports. The facade's balancing and transfer methods document the possible wait.
+
+- Updated dependencies [2e933df]
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-rc.2
+
+## 5.0.0-rc.2
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 4.x
+
+  - **Two ledger versions.** `DustWallet(configuration)` runs a ledger-v8 variant (V1) below `forks.v9` and a ledger-v9
+    variant (V2) from it. At the crossing the Dust state starts empty and is rebuilt from the chain. `forks` is
+    required, and `DefaultDustConfiguration` is declared by the package.
+  - **Starting.** `DustWallet(configuration).startWithSeed(seed, rates?)` returns a `Promise`, and `startWithSecretKey`
+    is replaced by `startWithKeys({ v8, v9 }, rates?)`. Generation rates are plain `DustGenerationRates` rather than
+    ledger `DustParameters`, though either ledger version's `DustParameters` is still accepted; left out, they are the
+    configured `dustParameters`, which default to ledger-v9's initial ones. A fresh start asks the chain the protocol
+    version of its first block (`chainVersionProbe`, by default the indexer) to pick the variant; if the probe fails, it
+    starts on V1. An instance's `start` takes `DustKeysByEpoch`, `{ v8, v9 }`, whichever variant it resumes on, and
+    keeps them until `stop()`.
+  - **Transacting.** `estimateFee` and `balanceTransactions` no longer take a secret key; after `stop()` they fail with
+    `MissingStartAuxError`. `balanceTransactions` resolves `{ transaction, blockData }`, where `blockData` holds the
+    ledger parameters the fee was priced with (typed `unknown` on `DustWalletAPI`; read them with the capabilities
+    `withLedgerParameters`). Transactions are `WalletTransaction` handles; a handle for the other ledger version is
+    refused with `ProtocolVersionMismatchError`, except by `revertTransaction`, which ignores it. Signatures, and the
+    `nightVerifyingKey` that `createDustGenerationTransaction` and `attachDustRegistration` take, use the SDK's
+    `Signing` types, and an ECDSA one is refused below `forks.v9`.
+  - **API types.** `DustWalletAPI<TKeys = never, TSerialized>`: `start(keys)` takes the wallet's own keys type, and the
+    API requires `stepSync` and `ensureFeeCoverage`. `DustWalletState.state` is sealed: read it with `coreStateOf` from
+    `./v1` or `./v2`. The state loses `capabilities`, `services` and `mapState` (use `fromVariant`), and its constructor
+    takes `(protocolVersion, state, projections)` in place of `(state, capabilities, services)`.
+    `DustWalletCapabilities` and `DustWalletServices` are removed, and the shared types live in `DustWalletTypes`.
+  - **Subpaths.** `./v1` exports the ledger-v8 variant and no longer the wallet API: import `DustWallet`,
+    `CustomDustWallet`, `DustWalletAPI`, `DustWalletState` and `DefaultDustConfiguration` from the package root. Its
+    `Simulator` is the capabilities `V8` simulator.
+  - **`CustomDustWallet`** composes one ledger-v9 variant, from a V2 builder with ledger-v9 `DustParameters`, instead of
+    a ledger-v8 one; its starts stay synchronous, its instance `start` takes `{ v9: key }`, and it cannot cross a fork.
+  - **Custom sync and core state.** A `SyncService` declares how background synchronization repeats its `updates`, as a
+    required `backgroundRepeat`: `BackgroundRepeat.Once()` for a long-lived subscription, or
+    `BackgroundRepeat.WithDelay({ delay })`. Sync updates are tagged `Events` or `VersionSignal`, `applyUpdate` receives
+    the protocol-version range its variant owns, and `BlockData` requires `protocolVersion`. A custom variant
+    (`V1Variant`, `V2Variant`) must supply `startAux`, the `StartMaterial.StartAuxCapability` its builder sets with
+    `withStartAux(Defaults)`, and takes an optional fifth type parameter for the previous variant's state.
+    `CoreWallet.pendingDust` holds `PendingDust` entries (`{ coin, nullifier, declaredTime }`), and `DustWithNullifier`
+    is removed. `CoreWallet` records which sync moved its position as a required `syncKind`
+    (`'events' | 'projections'`), which `CoreWallet.restore` takes as its last argument.
+  - **Errors.** The `WalletError` union of `./v1` and `./v2` gains `SnapshotRestoreError`, `OutOfOrderSyncUpdateError`
+    and `InsufficientDustForFeeError`, and that of `./v2` also `SnapshotSyncMismatchError`, so an exhaustive match over
+    it must handle them.
+  - **Snapshots.** Snapshots are format `v2`, recording the variant that wrote them, the Dust still pending, and which
+    sync saved their position (`syncKind`); 4.x snapshots are read and upgraded. Once this release has saved a wallet,
+    going back to 4.x means restoring it from its seed. An unreadable snapshot is refused with `SnapshotRestoreError`
+    instead of `Wallet.Other`, and `restore` throws that tagged error.
+  - **Transaction history.** `txHistoryStorage` is a `DustHistoryStorage`, and a `DustTransactionHistoryEntry` is the
+    common lifecycle entry with an optional `dust` section. A custom `TransactionHistoryService` returns
+    `TransactionDetails` with the `block` (`hash`, `height`, `timestamp`), the transaction's `identifiers` and its
+    `fees` in place of `timestamp`, and may fail with `BlocklessFinalizedEntryError`.
+  - **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` beside `@midnight-ntwrk/ledger-v8`.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 4.x
+
+  - **Projections fast sync.** The `./v2` `SyncService.makeEventLessSyncService` synchronizes Dust from the indexer's
+    projections instead of replaying every Dust event. It runs in finite passes, repeated in the background every
+    `backgroundSyncInterval` (default 5 s); every pass, idle or not, re-resolves the wallet's nullifiers. It needs
+    ledger-v9 and does not hand over across a fork by itself: compose it as the V2 sync of a `CustomForkingDustWallet`
+    whose V1 variant replays events. A restored projections wallet resumes from the block its last pass reached. A
+    wallet that replays events refuses a projections snapshot at restore with `SnapshotSyncMismatchError`
+    (`Wallet.SnapshotSyncMismatch`) rather than misread its position; a `SyncService` declares what it `resumesFrom`,
+    which both shipped services do. `SyncService.DustProjectionsUpdate` names the update it applies, so the composed
+    wallet's type is `ForkingDustWallet<WalletSyncUpdate, DustProjectionsUpdate>`, with the first from `./v1`.
+  - **Stepped sync.** `DustWallet.stepSync(keys)` runs one pass and returns; it completes only when the V2 variant uses
+    a finite-pass sync such as the projections sync. Below `forks.v9`, where the V1 variant has no stepped sync, it
+    rejects with `ManualSyncUnsupportedError` (`isManualSyncUnsupportedError`).
+  - **Skipping the ledger-v8 history.** A fresh wallet on a chain that crossed `forks.v9` replays the ledger-v8 Dust
+    events before it crosses, only to start empty on ledger-v9. With `skipLedgerV8DustHistory` it starts at the last
+    Dust event below the boundary instead, so they are never replayed. **The wallet's ledger-v8 Dust transaction history
+    will be missing.** Off by default; a restored wallet resumes from its snapshot, and when the search cannot be made
+    the start proceeds without it. The `./v2` `SyncService.findDustTimelineStart` is the search, and
+    `ForkingDustConfiguration.dustTimelineStartProbe` opts a `CustomForkingDustWallet` in.
+  - **Fee coverage.** `InsufficientDustForFeeError` (`Wallet.InsufficientDustForFee`) reports that a first-time Dust
+    registration cannot yet pay its own fee from the Dust its Night has generated: the `fee`, the `shortfall` and the
+    `claimableFeePayment` in Specks, and an `estimate` of when generation will cover it (`Reachable`, with the seconds
+    and the moment, or `Unreachable`, with the reason). One class serves both variants, so `instanceof` recognises it;
+    `isInsufficientDustForFeeError` is the guard. `ensureFeeCoverage(currentTime, nightUtxos, feePayment, fee)` rejects
+    with it, the coins-and-balances capability's `feeCoverageEstimate` computes the estimate, and
+    `claimableFeePayment(dustState, nightUtxos, now)` gives the amount `waitForGeneratedDust` waits for.
+  - **Restoring.** A snapshot restores on the variant that wrote it. `DustWallet(configuration).tryRestore` returns an
+    `Either` instead of throwing, `peekProtocolVersion` reads a snapshot's protocol version, and a snapshot in a format
+    version this build does not know is refused with `SnapshotRestoreError` (`unknown-version`). Snapshot fields this
+    build does not declare are kept and written back.
+  - **Composition.** A `./v2` subpath (the ledger-v9 variant) beside `./v1`; both export `Migration` and `coreStateOf`,
+    and their builders gain `withStartAux(Defaults)` and `withMigration(Defaults)`. `CustomForkingDustWallet` composes
+    both variants from your own builders, and `dustVariantConfigurations` gives each its own ledger version's parameters
+    from plain rates (see also `asV8DustParameters` and `asV9DustParameters`). A wallet with no traffic of its own still
+    notices the fork, re-asking the chain's tip every 30 seconds (`versionWatch.intervalMs` of the variants'
+    `SyncService.DefaultSyncConfiguration`, not of `DefaultDustConfiguration`; zero or less disables it).
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 4.x
+
+  - `computeBalancingRecipe` no longer loops forever on a wallet holding several part-drained Dust coins. Each pass now
+    covers the fee still unpaid over the coins not yet selected, and a pass that selects no coin fails instead of
+    repeating. With the loop bounded, Dust the transactions already carry counts toward the fee; a transaction that
+    already covers its fee gets an empty balancing transaction, where 4.x looped forever; a coin selection that exhausts
+    the pool is retried once largest-first; and a selector that returns a coin it was not offered fails with
+    `TransactingError`. `dryRunFee` takes an optional trailing parameter carrying the proof-erased, merged transactions,
+    and with no inputs prices the transactions as they are rather than with an extra empty intent.
+  - Reverting a transaction releases only the Dust it booked. It used to drop decaying Dust coins the transaction never
+    spent, and release coins other pending transactions held. A coin a pending transaction spent stays pending through
+    syncs, and in the snapshot, until the chain spends it, its lock runs out or it decays to nothing
+    (`CoreWallet.settlePendingDust`).
+  - A reordered event batch is refused whole, and the sync retries from the same position, instead of applying it.
+  - A transaction's Dust history section is no longer dropped when its event arrives before the indexer can serve the
+    transaction's details: the lookup is retried for `transactionDetailsRetryWindow` (default 2 minutes), and a section
+    still missing after that is logged with its transaction hash. History lookups run at most eight at a time.
+  - The sync's retry back-off is really capped at two minutes, with jitter. A second `start()` no longer starts a second
+    sync. A Dust wallet syncing from a `Simulator` reports the chain tip and `isConnected`. A block the indexer cannot
+    return is a typed error rather than a defect.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-runtime@2.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0-rc.1
+
 ## 5.0.0-rc.1
 
 ### Major Changes

@@ -13,7 +13,7 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion, type SnapshotFormat, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
+import { Either, Iterable, Option, pipe, Record, Array as Arr } from 'effect';
 import { InvalidCoinHashesError, type WalletError } from './WalletError.js';
 
 export type PublicKeys = {
@@ -527,6 +527,40 @@ export const CoreWallet = {
     tx: TTx,
   ): CoreWallet {
     const state = wallet.state.revertTransaction(tx);
+    const stillBooked = bookedNonces(state);
+    const bookings: Record<ledger.Nonce, Booking> = Object.fromEntries(
+      Object.entries(wallet.bookings ?? {}).filter(([nonce]) => stillBooked.has(nonce)),
+    );
+
+    return withBookings({ ...wallet, state }, bookings);
+  },
+
+  /**
+   * Un-books only the coins a transaction spent in the fallible segments that failed, and forgets those bookings.
+   *
+   * @remarks
+   *   A transaction that lands as a partial success had its guaranteed section and its successful fallible segments
+   *   applied on chain, so the coins those spent are gone and sync settles them; they stay booked here. Only the coins
+   *   spent in a failed segment's fallible offer were never spent, so only those become available again. A segment id
+   *   with no fallible offer in `tx` has nothing to release and is ignored. The bookings of the released coins are
+   *   forgotten for the same reason as in {@link CoreWallet.revertTransaction}.
+   * @example
+   *   const released = CoreWallet.revertFailedSegments(wallet, tx, [1]);
+   *
+   * @param wallet The wallet holding the bookings.
+   * @param tx The transaction the coins were booked for.
+   * @param failedSegments The ids of the fallible segments the chain did not apply.
+   * @returns The wallet with the coins of the failed segments no longer booked, and every other booking kept.
+   */
+  revertFailedSegments<TTx extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>>(
+    wallet: CoreWallet,
+    tx: TTx,
+    failedSegments: ReadonlyArray<number>,
+  ): CoreWallet {
+    const failedOffers = Arr.filterMap(failedSegments, (segmentId) =>
+      Option.fromNullable(tx.fallibleOffer?.get(segmentId)),
+    );
+    const state = Arr.reduce(failedOffers, wallet.state, (released, offer) => released.applyFailed(offer));
     const stillBooked = bookedNonces(state);
     const bookings: Record<ledger.Nonce, Booking> = Object.fromEntries(
       Object.entries(wallet.bookings ?? {}).filter(([nonce]) => stillBooked.has(nonce)),

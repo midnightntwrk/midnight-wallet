@@ -1,5 +1,61 @@
 # @midnightntwrk/wallet-sdk-hd
 
+## 4.0.0
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 3.x
+
+  - `Roles.Metadata` is removed: role 4 is now `Roles.EcdsaUnshielded`, which derives ECDSA unshielded keys. Code that
+    names `Roles.Metadata` must name `Roles.EcdsaUnshielded`, or the value `4`.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 3.x
+
+  - `WalletSeeds.fromMasterSeed(masterSeed, { account?, addressIndex?, unshieldedRole? })` derives the shielded, Dust
+    and unshielded seeds a wallet starts from (by default account 0, address index 0 and `Roles.NightExternal`), and
+    wipes the BIP32 root afterwards. It throws `SeedDerivationError` for a seed it cannot read, or an account or index
+    out of range. `WalletSeedsOptions` is the type of its options.
+  - `Roles.EcdsaUnshielded` (role 4) derives ECDSA unshielded keys under a role of their own, so their secret is never
+    shared with the schnorr roles of the same account; pass it as `unshieldedRole`.
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 3.x
+
+  - `HDWallet.clear()` is documented as what it does: it zeroes the root key's private-key buffer. The intermediate keys
+    BIP32 allocates along a derivation path, and keys already returned to callers, are left to the garbage collector. No
+    behaviour change.
+
+## 4.0.0-rc.1
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 3.x
+
+  - `Roles.Metadata` is removed: role 4 is now `Roles.EcdsaUnshielded`, which derives ECDSA unshielded keys. Code that
+    names `Roles.Metadata` must name `Roles.EcdsaUnshielded`, or the value `4`.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 3.x
+
+  - `WalletSeeds.fromMasterSeed(masterSeed, { account?, addressIndex?, unshieldedRole? })` derives the shielded, Dust
+    and unshielded seeds a wallet starts from (by default account 0, address index 0 and `Roles.NightExternal`), and
+    wipes the BIP32 root afterwards. It throws `SeedDerivationError` for a seed it cannot read, or an account or index
+    out of range. `WalletSeedsOptions` is the type of its options.
+  - `Roles.EcdsaUnshielded` (role 4) derives ECDSA unshielded keys under a role of their own, so their secret is never
+    shared with the schnorr roles of the same account; pass it as `unshieldedRole`.
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 3.x
+
+  - `HDWallet.clear()` is documented as what it does: it zeroes the root key's private-key buffer. The intermediate keys
+    BIP32 allocates along a derivation path, and keys already returned to callers, are left to the garbage collector. No
+    behaviour change.
+
 ## 3.1.0-rc.0
 
 ### Patch Changes

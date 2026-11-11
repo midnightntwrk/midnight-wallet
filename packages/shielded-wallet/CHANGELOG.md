@@ -1,5 +1,254 @@
 # @midnightntwrk/wallet-sdk-shielded
 
+## 4.0.0
+
+### Major Changes
+
+- 9907a64: build: depend on the final ledger, zkir and proof server releases, all from `@midnightntwrk`
+
+  - `@midnightntwrk/ledger-v9` `^1.0.0` (was `1.0.0-rc.7`). Its key material pins are those `midnight-ledger`
+    `ledger-9.1.0.0` declares, the same circuits as `ledger-9.1.0.0-rc.7`.
+  - `@midnightntwrk/ledger-v8` `^8.1.3` (was `@midnight-ntwrk/ledger-v8` `^8.1.0`), with the same key material as 8.1.0.
+  - `@midnightntwrk/zkir-v2` `^2.2.0` (was `@midnight-ntwrk/zkir-v2` `2.2.0-rc.6`).
+  - The testing helpers' proof server image is `9.0.0` (was `9.0.0-rc.10`).
+
+  Every Midnight package the SDK depends on now installs from the public npmjs registry, without credentials.
+
+  BREAKING CHANGE: ledger-v8 comes from `@midnightntwrk/ledger-v8`. An application that builds ledger-v8 objects and
+  hands them to the wallet imports them from `@midnightntwrk/ledger-v8` as well; objects from
+  `@midnight-ntwrk/ledger-v8` belong to a second copy of the ledger, which the wallet's own does not accept.
+
+- 1e0ea94: Breaking changes since 3.x
+
+  - **Two ledger versions.** `ShieldedWallet(configuration)` runs a ledger-v8 variant (V1) below `forks.v9` and a
+    ledger-v9 variant (V2) from it, and carries the wallet's coins across when the chain crosses. `forks` is required,
+    and `DefaultShieldedConfiguration` is declared by the package rather than aliased to a variant's.
+  - **Starting.** `ShieldedWallet(configuration).startWithSeed(seed)` returns a `Promise`, and `startWithSecretKeys` is
+    replaced by `startWithKeys({ v8, v9 })`, also asynchronous. A fresh start asks the chain which protocol version its
+    first block was produced under (`chainVersionProbe`, by default the indexer) and starts on the matching variant; if
+    the probe fails, it starts on V1. An instance's `start` takes `ShieldedKeysByEpoch`, `{ v8, v9 }` (each ledger
+    version's `ZswapSecretKeys`), whichever variant it resumes on, and keeps them until `stop()`.
+  - **Transacting.** `balanceTransaction(tx, ttl?)`, `transferTransaction(outputs, ttl?)` and
+    `initSwap(inputs, outputs, ttl?)` no longer take secret keys, and transactions go in and out as `WalletTransaction`
+    handles stamped with the protocol version they were built for. A handle for the other ledger version is refused by
+    the methods that build and balance, and ignored by `revertTransaction` and `revertFailedSegments`. Transacting after
+    `stop()`, which drops the keys, fails with `MissingStartAuxError`. `balanceTransaction` returns a
+    `ShieldedBalancingResult`.
+  - **API types.** `ShieldedWalletAPI<TKeys = never, TSerialized>` and `ShieldedWalletState` drop the transaction type
+    parameter, and a wallet typed as a bare `ShieldedWalletAPI` cannot be started. `ShieldedWalletAPI` requires
+    `revertFailedSegments`. `ShieldedWalletState.state` is sealed: read it with `coreStateOf` from `./v1` or `./v2`. The
+    state loses `capabilities`, `services` and `mapState` (use `fromVariant`), and its constructor takes
+    `(protocolVersion, state, projections)` in place of `(state, capabilities, services)`. `ShieldedWalletCapabilities`,
+    `ShieldedWalletServices` and `UnboundTransaction` are removed: use `ShieldedWalletTypes`, and the capabilities
+    package's `V8UnboundTransaction` or `V9UnboundTransaction`.
+  - **`CustomShieldedWallet`** composes one ledger-v9 variant, from a V2 builder, instead of a ledger-v8 one. Its
+    synchronous starts remain, its instance `start` takes `{ v9: keys }`, and it cannot cross a fork.
+  - **Transaction history.** `txHistoryStorage` is a `ShieldedHistoryStorage`, and a `ShieldedTransactionHistoryEntry`
+    is the common lifecycle entry with an optional `shielded` section. A custom `TransactionHistoryService` returns
+    `TransactionDetails` with the `block` (`hash`, `height`, `timestamp`) and the transaction's `identifiers` in place
+    of `timestamp`, and may fail with `BlocklessFinalizedEntryError`.
+  - **Custom sync and variants.** Sync updates are a tagged union with a `VersionSignal` member, and
+    `WalletSyncUpdate.create` takes the instant the source stamped the update as a third argument. `EventsSyncUpdate`
+    carries the event's `raw` hex, decoded with `readEvent`. `applyUpdate` receives the protocol-version range its
+    variant owns and must leave updates beyond it unapplied. `TransactingCapability` requires `revertFailedSegments`. A
+    custom variant (`V1Variant`, `V2Variant`) must supply `startAux`, the `StartMaterial.StartAuxCapability` its builder
+    sets with `withStartAux(Defaults)`, and takes an optional fifth type parameter for the previous variant's state. The
+    `./v1` `Simulator` is the capabilities `V8` simulator, without `getBlockEventsSince`.
+  - **Errors.** The `WalletError` union of `./v1` and `./v2` gains `SnapshotRestoreError` and
+    `OutOfOrderSyncUpdateError`, so an exhaustive match over it must handle them.
+  - **Snapshots.** An unreadable snapshot is refused with `SnapshotRestoreError` instead of `Wallet.Other`, and
+    `restore` throws that tagged error.
+  - **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `^1.0.0` beside `@midnightntwrk/ledger-v8`.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 3.x
+
+  - **Following the chain across the v9 fork.** Coins cross at their positions in the commitment tree. Their commitments
+    and nullifiers are recomputed on the first synced update after the crossing, so until then `balances`,
+    `availableCoins` and `pendingCoins` read empty. Coins booked for a ledger-v8 transaction still in flight are
+    released in that same update, since nothing on ledger-v9 can include it. A wallet with no traffic of its own still
+    notices the fork: its sync re-asks the chain's tip every 30 seconds (`versionWatch.intervalMs` of the variants'
+    `Sync.DefaultSyncConfiguration`, not of `DefaultShieldedConfiguration`; zero or less disables it), and the recorded
+    protocol version only increases.
+  - **Restoring.** A snapshot restores on the variant that wrote it (`writtenBy`), and snapshots written by 3.x still
+    load. `ShieldedWallet(configuration).tryRestore(snapshot)` returns an `Either` instead of throwing, and the
+    `Restore` namespace inspects a snapshot (`peekProtocolVersion`, `peekWriter`, `variantForSnapshot`,
+    `UnsupportedSnapshotVersionError`). Snapshot fields this build does not declare are kept and written back.
+  - **Reserved coins.** `ShieldedWalletState.reservedCoins` lists the coins booked for a transaction that has not
+    settled, each with `reservedSince` and `releasableAfter`; not to be confused with `pendingCoins`, the coins the
+    wallet expects to receive. `balanceTransaction`, `transferTransaction` and `initSwap` take an optional trailing
+    `ttl` that caps how long the coins they book stay booked.
+  - **Composition.** A `./v2` subpath (the ledger-v9 variant) beside `./v1`; both export `Migration` and `coreStateOf`,
+    and their builders gain `withStartAux(Defaults)` and `withMigration(Defaults)`. `CustomForkingShieldedWallet`
+    composes both variants from your own builders, and `ShieldedWalletTypes` holds the SDK-owned data and capability
+    types.
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 3.x
+
+  - Coins booked for a transaction that is never submitted, or never included, are released. Such a booking was saved
+    with the wallet and never cleared, so an abandoned transaction locked its coins for good, across restarts. A booking
+    is now released once its transaction's TTL has passed, or 14 days after sync first saw it if that is sooner, and
+    only once sync has caught up. A quiet chain still releases them: the sync checks in every version-watch interval.
+  - A partially successful transaction no longer has all its coins released while the chain has spent some:
+    `revertFailedSegments(tx, failedSegments)` releases only the coins booked in its failed segments, and the facade now
+    uses it instead of reverting the whole transaction.
+  - Balancing a fallible section no longer fails with `InsufficientFundsError` when the deficit needs several coins of
+    the same type and value: candidates are told apart by nonce, as the guaranteed section already did.
+  - A reordered event batch is refused whole, and the sync retries from the same position, instead of applying it.
+  - A shielded wallet syncing from a `Simulator` reports the chain tip and `isConnected`, so it can become complete.
+  - A transaction's shielded history section is no longer dropped when its event arrives before the indexer can serve
+    the transaction's details: the lookup is retried for `transactionDetailsRetryWindow` (default 2 minutes), and a
+    section still missing after that is logged with its transaction hash. History lookups run at most eight at a time.
+  - The transaction history embedded in a 1.0.0 snapshot survives restoring and saving.
+  - The README examples use real shielded token types rather than `'NIGHT'`, which is unshielded.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [2e933df]
+- Updated dependencies [9907a64]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0
+  - @midnightntwrk/wallet-sdk-runtime@2.0.0
+
+## 4.0.0-rc.3
+
+### Patch Changes
+
+- Updated dependencies [2e933df]
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-rc.2
+
+## 4.0.0-rc.2
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 3.x
+
+  - **Two ledger versions.** `ShieldedWallet(configuration)` runs a ledger-v8 variant (V1) below `forks.v9` and a
+    ledger-v9 variant (V2) from it, and carries the wallet's coins across when the chain crosses. `forks` is required,
+    and `DefaultShieldedConfiguration` is declared by the package rather than aliased to a variant's.
+  - **Starting.** `ShieldedWallet(configuration).startWithSeed(seed)` returns a `Promise`, and `startWithSecretKeys` is
+    replaced by `startWithKeys({ v8, v9 })`, also asynchronous. A fresh start asks the chain which protocol version its
+    first block was produced under (`chainVersionProbe`, by default the indexer) and starts on the matching variant; if
+    the probe fails, it starts on V1. An instance's `start` takes `ShieldedKeysByEpoch`, `{ v8, v9 }` (each ledger
+    version's `ZswapSecretKeys`), whichever variant it resumes on, and keeps them until `stop()`.
+  - **Transacting.** `balanceTransaction(tx, ttl?)`, `transferTransaction(outputs, ttl?)` and
+    `initSwap(inputs, outputs, ttl?)` no longer take secret keys, and transactions go in and out as `WalletTransaction`
+    handles stamped with the protocol version they were built for. A handle for the other ledger version is refused by
+    the methods that build and balance, and ignored by `revertTransaction` and `revertFailedSegments`. Transacting after
+    `stop()`, which drops the keys, fails with `MissingStartAuxError`. `balanceTransaction` returns a
+    `ShieldedBalancingResult`.
+  - **API types.** `ShieldedWalletAPI<TKeys = never, TSerialized>` and `ShieldedWalletState` drop the transaction type
+    parameter, and a wallet typed as a bare `ShieldedWalletAPI` cannot be started. `ShieldedWalletAPI` requires
+    `revertFailedSegments`. `ShieldedWalletState.state` is sealed: read it with `coreStateOf` from `./v1` or `./v2`. The
+    state loses `capabilities`, `services` and `mapState` (use `fromVariant`), and its constructor takes
+    `(protocolVersion, state, projections)` in place of `(state, capabilities, services)`. `ShieldedWalletCapabilities`,
+    `ShieldedWalletServices` and `UnboundTransaction` are removed: use `ShieldedWalletTypes`, and the capabilities
+    package's `V8UnboundTransaction` or `V9UnboundTransaction`.
+  - **`CustomShieldedWallet`** composes one ledger-v9 variant, from a V2 builder, instead of a ledger-v8 one. Its
+    synchronous starts remain, its instance `start` takes `{ v9: keys }`, and it cannot cross a fork.
+  - **Transaction history.** `txHistoryStorage` is a `ShieldedHistoryStorage`, and a `ShieldedTransactionHistoryEntry`
+    is the common lifecycle entry with an optional `shielded` section. A custom `TransactionHistoryService` returns
+    `TransactionDetails` with the `block` (`hash`, `height`, `timestamp`) and the transaction's `identifiers` in place
+    of `timestamp`, and may fail with `BlocklessFinalizedEntryError`.
+  - **Custom sync and variants.** Sync updates are a tagged union with a `VersionSignal` member, and
+    `WalletSyncUpdate.create` takes the instant the source stamped the update as a third argument. `EventsSyncUpdate`
+    carries the event's `raw` hex, decoded with `readEvent`. `applyUpdate` receives the protocol-version range its
+    variant owns and must leave updates beyond it unapplied. `TransactingCapability` requires `revertFailedSegments`. A
+    custom variant (`V1Variant`, `V2Variant`) must supply `startAux`, the `StartMaterial.StartAuxCapability` its builder
+    sets with `withStartAux(Defaults)`, and takes an optional fifth type parameter for the previous variant's state. The
+    `./v1` `Simulator` is the capabilities `V8` simulator, without `getBlockEventsSince`.
+  - **Errors.** The `WalletError` union of `./v1` and `./v2` gains `SnapshotRestoreError` and
+    `OutOfOrderSyncUpdateError`, so an exhaustive match over it must handle them.
+  - **Snapshots.** An unreadable snapshot is refused with `SnapshotRestoreError` instead of `Wallet.Other`, and
+    `restore` throws that tagged error.
+  - **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` beside `@midnight-ntwrk/ledger-v8`.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 3.x
+
+  - **Following the chain across the v9 fork.** Coins cross at their positions in the commitment tree. Their commitments
+    and nullifiers are recomputed on the first synced update after the crossing, so until then `balances`,
+    `availableCoins` and `pendingCoins` read empty. Coins booked for a ledger-v8 transaction still in flight are
+    released in that same update, since nothing on ledger-v9 can include it. A wallet with no traffic of its own still
+    notices the fork: its sync re-asks the chain's tip every 30 seconds (`versionWatch.intervalMs` of the variants'
+    `Sync.DefaultSyncConfiguration`, not of `DefaultShieldedConfiguration`; zero or less disables it), and the recorded
+    protocol version only increases.
+  - **Restoring.** A snapshot restores on the variant that wrote it (`writtenBy`), and snapshots written by 3.x still
+    load. `ShieldedWallet(configuration).tryRestore(snapshot)` returns an `Either` instead of throwing, and the
+    `Restore` namespace inspects a snapshot (`peekProtocolVersion`, `peekWriter`, `variantForSnapshot`,
+    `UnsupportedSnapshotVersionError`). Snapshot fields this build does not declare are kept and written back.
+  - **Reserved coins.** `ShieldedWalletState.reservedCoins` lists the coins booked for a transaction that has not
+    settled, each with `reservedSince` and `releasableAfter`; not to be confused with `pendingCoins`, the coins the
+    wallet expects to receive. `balanceTransaction`, `transferTransaction` and `initSwap` take an optional trailing
+    `ttl` that caps how long the coins they book stay booked.
+  - **Composition.** A `./v2` subpath (the ledger-v9 variant) beside `./v1`; both export `Migration` and `coreStateOf`,
+    and their builders gain `withStartAux(Defaults)` and `withMigration(Defaults)`. `CustomForkingShieldedWallet`
+    composes both variants from your own builders, and `ShieldedWalletTypes` holds the SDK-owned data and capability
+    types.
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 3.x
+
+  - Coins booked for a transaction that is never submitted, or never included, are released. Such a booking was saved
+    with the wallet and never cleared, so an abandoned transaction locked its coins for good, across restarts. A booking
+    is now released once its transaction's TTL has passed, or 14 days after sync first saw it if that is sooner, and
+    only once sync has caught up. A quiet chain still releases them: the sync checks in every version-watch interval.
+  - A partially successful transaction no longer has all its coins released while the chain has spent some:
+    `revertFailedSegments(tx, failedSegments)` releases only the coins booked in its failed segments, and the facade now
+    uses it instead of reverting the whole transaction.
+  - Balancing a fallible section no longer fails with `InsufficientFundsError` when the deficit needs several coins of
+    the same type and value: candidates are told apart by nonce, as the guaranteed section already did.
+  - A reordered event batch is refused whole, and the sync retries from the same position, instead of applying it.
+  - A shielded wallet syncing from a `Simulator` reports the chain tip and `isConnected`, so it can become complete.
+  - A transaction's shielded history section is no longer dropped when its event arrives before the indexer can serve
+    the transaction's details: the lookup is retried for `transactionDetailsRetryWindow` (default 2 minutes), and a
+    section still missing after that is logged with its transaction hash. History lookups run at most eight at a time.
+  - The transaction history embedded in a 1.0.0 snapshot survives restoring and saving.
+  - The README examples use real shielded token types rather than `'NIGHT'`, which is unshielded.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-runtime@2.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0-rc.1
+
 ## 4.0.0-rc.1
 
 ### Major Changes

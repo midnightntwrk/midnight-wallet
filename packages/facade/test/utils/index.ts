@@ -12,6 +12,7 @@
 // limitations under the License.
 export * from './helpers.js';
 export * from './drivenStates.js';
-export * from './silentPendingTransactions.js';
 export * from './forkingFacade.js';
 export * from './unbound.js';
+export * from './drivenLifecycle.js';
+export * from './lifecycleRecords.js';

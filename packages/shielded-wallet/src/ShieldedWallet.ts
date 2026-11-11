@@ -18,14 +18,15 @@
  *   One wallet, two ledger versions. Before the boundary the V1 variant reads the chain with the ledger version that
  *   produced it; from the boundary the V2 variant does, having been handed identity and a place in the timeline and
  *   nothing else. Which one is running is the runtime's business, not the application's: the wallet's public API speaks
- *   ledger-v9 throughout except for the keys it is started with — one ledger version's per side of the boundary, since
- *   that is where the two sides genuinely differ — and each variant takes its own side from what the wallet retained.
+ *   the SDK's own types (`ShieldedWalletTypes`) throughout except for the keys it is started with — one ledger
+ *   version's per side of the boundary, since that is where the two sides genuinely differ — and each variant takes its
+ *   own side from what the wallet retained.
  *
  *   `ShieldedWallet(configuration)` at the bottom is how this package ships it. `CustomForkingShieldedWallet` is the same
  *   wallet over builders the caller chooses, and `SingleVariantShieldedWallet.ts` is the composition that gives up the
  *   crossing to run one variant only.
  */
-import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
@@ -183,7 +184,7 @@ export interface ForkingShieldedWalletClass<
   TConfiguration extends ForkingShieldedConfiguration = ForkingShieldedConfiguration,
 > extends WalletLike.BaseWalletClass<ForkingShieldedVariants<TV1SyncUpdate, TV2SyncUpdate>, TConfiguration> {
   /**
-   * Builds a wallet from a seed, and remembers the seed.
+   * Builds a wallet from a seed, and keeps the keys each ledger version derives from it, not the seed itself.
    *
    * @remarks
    *   The only start that can follow the chain the whole way. The seed is the one piece of key material that crosses a
@@ -255,7 +256,7 @@ export interface ForkingShieldedWalletClass<
  *     { builder: new V1Builder().withDefaults(), configuration: v1Configuration },
  *     { builder: new V2Builder().withDefaults().withMigration(makeCrossLedgerMigration), configuration: v2Configuration },
  *   );
- *   const wallet = Wallet.startWithSeed(seed);
+ *   const wallet = await Wallet.startWithSeed(seed);
  *   ```;
  *
  * @param configuration What the wallet layer needs: the network, and where the boundary lies.
@@ -755,6 +756,45 @@ export function CustomForkingShieldedWallet<
                 ledgerV9.Transaction<ledgerV9.Signaturish, ledgerV9.Proofish, ledgerV9.Bindingish>
               >(transaction, v9Epoch),
               { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
+            ),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    /**
+     * Releases the coins a transaction booked in the fallible segments the chain did not apply.
+     *
+     * @remarks
+     *   For a transaction that landed as a partial success: its guaranteed section and its successful fallible segments
+     *   were applied, so the coins they spent stay booked until sync settles them. Only the coins spent in the fallible
+     *   offers of `failedSegments` were never spent, and only those become available again. A segment id the
+     *   transaction has no fallible offer for is ignored.
+     *
+     *   As with {@link revertTransaction}, a transaction built on the other side of the boundary is not one the current
+     *   variant could have booked coins for, so this resolves having done nothing.
+     * @example
+     *   await wallet.revertFailedSegments(transaction, [1, 3]);
+     *
+     * @param transaction The transaction whose failed segments to release.
+     * @param failedSegments The ids of the fallible segments the chain did not apply.
+     * @returns A promise that resolves once the coins are released.
+     */
+    revertFailedSegments(transaction: AnyTx, failedSegments: ReadonlyArray<number>): Promise<void> {
+      return this.runtime
+        .dispatch<void, TransactingError>({
+          [V1Tag]: (v1) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledgerV8.Transaction<ledgerV8.Signaturish, ledgerV8.Proofish, ledgerV8.Bindingish>
+              >(transaction, v8Epoch),
+              { onLeft: () => Effect.void, onRight: (unwrapped) => v1.revertFailedSegments(unwrapped, failedSegments) },
+            ),
+          [V2Tag]: (v2) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledgerV9.Transaction<ledgerV9.Signaturish, ledgerV9.Proofish, ledgerV9.Bindingish>
+              >(transaction, v9Epoch),
+              { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertFailedSegments(unwrapped, failedSegments) },
             ),
         })
         .pipe(Effect.runPromise);

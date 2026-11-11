@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { type CoinRecipe } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { pipe, Array as Arr, Order } from 'effect';
@@ -77,7 +77,7 @@ export const makeDefaultCoinsAndBalancesCapability = (
     });
 
   const availableDustTokens = (state: CoreWallet): Dust[] => {
-    const pendingSpends = new Set([...state.pendingDust.values()].map((coin) => coin.nonce));
+    const pendingSpends = new Set(state.pendingDust.map(({ coin }) => coin.nonce));
     return pipe(
       state.state.utxos,
       Arr.filter((coin) => !pendingSpends.has(coin.nonce)),
@@ -88,7 +88,11 @@ export const makeDefaultCoinsAndBalancesCapability = (
     toFullInfo(state, availableDustTokens(state), resolveTime(state, time));
 
   const getPendingCoins = (state: CoreWallet, time?: Date): readonly DustFullInfo[] =>
-    toFullInfo(state, state.pendingDust, resolveTime(state, time));
+    toFullInfo(
+      state,
+      state.pendingDust.map(({ coin }) => coin),
+      resolveTime(state, time),
+    );
 
   const getTotalCoins = (state: CoreWallet, time?: Date): ReadonlyArray<DustFullInfo> => {
     const effectiveTime = resolveTime(state, time);

@@ -17,10 +17,10 @@ When building or inspecting transactions, consult the spec — don't guess proto
 ## Type and spec sources
 
 - **Ledger types**: `node_modules/@midnightntwrk/ledger-v9/ledger-v9.d.ts` and
-  `node_modules/@midnight-ntwrk/ledger-v8/ledger-v8.d.ts` — `Transaction`, `Intent`, `ZswapOffer`, `DustActions`, etc.
-  Two ledgers are installed and both are real: ledger-v9 (`@midnightntwrk`, dashless scope) from `forks.v9`, ledger-v8
-  (`@midnight-ntwrk`, dashed scope) below it. Use the types of the version that **produced** the transaction — decided by
-  the transaction's own protocol version, never by which package is easier to import.
+  `node_modules/@midnightntwrk/ledger-v8/ledger-v8.d.ts` — `Transaction`, `Intent`, `ZswapOffer`, `DustActions`, etc.
+  Two ledgers are installed and both are real: ledger-v9 from `forks.v9`, ledger-v8 below it, both from the dashless
+  `@midnightntwrk` scope. Use the types of the version that **produced** the transaction — decided by the transaction's
+  own protocol version, never by which package is easier to import.
 - **The handle**: a `WalletTransaction` (`packages/abstractions/src/WalletTransaction.ts`) carries that version as data.
   `WalletTransaction.unwrapWithin(handle, range)` is how a test gets at the transaction inside; it refuses a stamp
   outside the range rather than handing bytes to a ledger that would misread them. E2e suites wrap this as

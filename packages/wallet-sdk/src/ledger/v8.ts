@@ -35,4 +35,4 @@
  *   const handle = WalletTransaction.adopt('Unproven', authored, state.activeProtocolVersion);
  *   ```;
  */
-export * from '@midnight-ntwrk/ledger-v8';
+export * from '@midnightntwrk/ledger-v8';

@@ -20,7 +20,7 @@
  *   handed ledger-v9's cost model fails at the wasm-bindgen boundary, and a proof-server request framed by ledger-v9 is
  *   not the request ledger-v8 would have sent.
  */
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { HttpProverClient, WasmProver } from '@midnightntwrk/wallet-sdk-prover-client/effect';
 import {
   ClientError,

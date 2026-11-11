@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import { SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 
@@ -63,9 +63,17 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
 // The format version lives beside the twins, not in either of them, so the V2 variant can read it without loading
 // ledger-v8. Re-exported here because the version is part of this variant's serialization surface.
 export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
-import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import {
+  PendingDustSchema,
+  SNAPSHOT_FORMAT_VERSION,
+  SNAPSHOT_FORMAT_VERSIONS,
+  SyncKindSchema,
+  upgradeSnapshotV1ToV2,
+} from '../SnapshotFormat.js';
 
 const SnapshotSchema = Schema.Struct({
+  // Both variants write this shape; a `v1` payload is upgraded in one step before this schema sees it
+  // (`upgradeSnapshotV1ToV2` in `../SnapshotFormat.ts`).
   version: SnapshotFormat.versionField('dust', SNAPSHOT_FORMAT_VERSION),
   writtenBy: SnapshotFormat.writtenByField(),
   publicKey: Schema.Struct({
@@ -75,6 +83,11 @@ const SnapshotSchema = Schema.Struct({
   protocolVersion: Schema.BigInt,
   networkId: Schema.String,
   offset: Schema.optional(Schema.BigInt),
+  // Which synchronization saved `offset`. Shared with the V2 variant, which can run either; this one only ever replays
+  // events, so it always writes `events`, its `offset` is always an event id, and it has nothing to check on the way in:
+  // a snapshot this variant can decode holds a ledger-v8 state, which only event replay produces.
+  syncKind: SyncKindSchema,
+  pendingDust: Schema.Array(PendingDustSchema),
 });
 
 type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
@@ -90,6 +103,8 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
         offset: w.progress?.appliedIndex,
+        syncKind: 'events',
+        pendingDust: w.pendingDust,
       });
 
       return SnapshotFormat.writeSnapshot(SnapshotSchema, buildSnapshot(wallet), wallet.unknownFields);
@@ -99,8 +114,9 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         serialized,
         SnapshotFormat.readSnapshotWithUnknownFields({
           surface: 'dust',
-          reads: [SNAPSHOT_FORMAT_VERSION],
+          reads: SNAPSHOT_FORMAT_VERSIONS,
           schema: SnapshotSchema,
+          upgrade: upgradeSnapshotV1ToV2,
         }),
         Either.flatMap(({ snapshot, unknownFields }) =>
           Either.try({
@@ -109,7 +125,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
                 CoreWallet.restore(
                   snapshot.state,
                   snapshot.publicKey,
-                  [],
+                  [...snapshot.pendingDust],
                   {
                     appliedIndex: snapshot.offset ?? 0n,
                     highestRelevantWalletIndex: 0n,

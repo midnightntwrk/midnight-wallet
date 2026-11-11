@@ -28,7 +28,7 @@
  *   restored is what this package actually produces rather than a fixture that could drift from it.
  */
 
-import { DustSecretKey as V8SecretKey, LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { DustSecretKey as V8SecretKey, LedgerParameters as V8LedgerParameters } from '@midnightntwrk/ledger-v8';
 import { DustSecretKey as V9SecretKey } from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';

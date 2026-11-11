@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import type * as ledger from '@midnightntwrk/ledger-v8';
 import {
   type Option,
   Effect,
@@ -316,6 +316,18 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   ): Effect.Effect<void, WalletError> {
     return SubscriptionRef.updateEffect(this.#context.stateRef, (state) => {
       return pipe(this.#v1Context.transactingCapability.revertTransaction(state, transaction), EitherOps.toEffect);
+    });
+  }
+
+  revertFailedSegments(
+    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+    failedSegments: ReadonlyArray<number>,
+  ): Effect.Effect<void, WalletError> {
+    return SubscriptionRef.updateEffect(this.#context.stateRef, (state) => {
+      return pipe(
+        this.#v1Context.transactingCapability.revertFailedSegments(state, transaction, failedSegments),
+        EitherOps.toEffect,
+      );
     });
   }
 

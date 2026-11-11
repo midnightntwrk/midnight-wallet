@@ -118,7 +118,9 @@ for the vendored `midnight-storage` patch it applies on the way through.
 
 ### Internal private registry and credentials
 
-Follow all authentication steps from the
+npm dependencies install from the public npmjs registry and need no credentials. The node, indexer and proof server
+images the integration and end-to-end tests run are pulled from `ghcr.io`, which does: follow the authentication steps
+from the
 [Authentication setup document](https://input-output.atlassian.net/wiki/spaces/MN/pages/3696001685/Authentication+setup).
 
 ## Install dependencies

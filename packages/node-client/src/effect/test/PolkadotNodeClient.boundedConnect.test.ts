@@ -10,8 +10,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Cause, Duration, Effect, Exit, Fiber, Option, Scope } from 'effect';
+import { Cause, Duration, Effect, Exit, Fiber, FiberId, Option, Scope } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
+
+/**
+ * Every provider the client created, in order, with whether it was disconnected — the only thing that stops its
+ * retries.
+ */
+const providers = vi.hoisted(() => [] as Array<{ disconnected: boolean }>);
+
+/** Runs inside the provider's constructor, the moment the provider exists and has started retrying. */
+const onProviderCreated = vi.hoisted(() => ({ run: (): void => undefined }));
 
 /**
  * A stub whose connection never establishes, standing in for a node that accepts nothing — the condition under which
@@ -22,7 +31,19 @@ vi.mock('@polkadot/api', () => ({
   ApiPromise: {
     create: vi.fn(() => new Promise(() => {})),
   },
-  WsProvider: vi.fn(),
+  WsProvider: class {
+    disconnected = false;
+
+    constructor() {
+      providers.push(this);
+      onProviderCreated.run();
+    }
+
+    disconnect(): Promise<void> {
+      this.disconnected = true;
+      return Promise.resolve();
+    }
+  },
 }));
 
 const { PolkadotNodeClient } = await import('../PolkadotNodeClient.js');
@@ -94,11 +115,11 @@ describe('PolkadotNodeClient.make', () => {
 
   it('should not fire a finite timeout early when it exceeds the 32-bit setTimeout range', async () => {
     // `setTimeout` with a delay of 2^31ms or more overflows and fires after ~1ms, so a generous bound such as 30 days
-    // failed every connection attempt instantly — the opposite of what the caller asked for. The delay is clamped to
-    // the largest value `setTimeout` honours; a bound that large behaves as "still waiting" on any human timescale.
+    // failed every connection attempt instantly — the opposite of what the caller asked for. Effect's clock treats a
+    // delay beyond what `setTimeout` honours as one that never elapses; a bound that large behaves as "still waiting"
+    // on any human timescale.
     //
-    // Observed by polling rather than racing, for the same reason as the unbounded test below: the acquire is
-    // uninterruptible, so a race against it can never resolve.
+    // Observed by polling rather than racing, for the same reason as the unbounded test below.
     const stillRunning = await Effect.runPromise(
       Effect.gen(function* () {
         const fiber = yield* Effect.forkDaemon(makeClient(Duration.days(30)));
@@ -114,13 +135,12 @@ describe('PolkadotNodeClient.make', () => {
     // Submission passes no timeout and relies on retrying until the node appears. That behaviour must not change: this
     // asserts the absence of a bound, which is the whole reason the bound is opt-in.
     //
-    // Forked and polled rather than raced against a timer: `Effect.acquireRelease` acquires uninterruptibly, so a race
-    // could never resolve and would report the runner's timeout instead of this property. Polling observes "has not
-    // settled" without needing to interrupt anything. The fibre is left running, which is the point of the test.
+    // Forked and polled rather than raced against a timer: polling observes "has not settled" without ending the
+    // attempt it observes. The fibre is left running, which is the point of the test.
     const stillRunning = await Effect.runPromise(
       Effect.gen(function* () {
-        // `forkDaemon`, not `fork`: a child fibre is interrupted when its parent completes, and
-        // interrupting an uninterruptible acquire would block the test forever.
+        // `forkDaemon`, not `fork`: a child fibre is interrupted when its parent completes, which would end the
+        // attempt this test means to leave running.
         const fiber = yield* Effect.forkDaemon(makeClient());
         yield* Effect.sleep(Duration.millis(200));
         return yield* Fiber.poll(fiber);
@@ -128,5 +148,103 @@ describe('PolkadotNodeClient.make', () => {
     );
 
     expect(Option.isNone(stillRunning)).toBe(true);
+  });
+
+  it('should stop connecting once interrupted while the node is unreachable, so its owner can always tear it down', async () => {
+    // A caller closing a wallet whose node never answered interrupts the connection attempt. The attempt has produced no
+    // client to release, so it has to disconnect the provider itself; the caller's scope is left open here to show that
+    // the disconnect does not wait for it.
+    const createdBefore = providers.length;
+
+    const interrupted = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkDaemon(makeClient());
+        yield* Effect.sleep(Duration.millis(100));
+        return yield* Fiber.interrupt(fiber).pipe(Effect.timeout(Duration.seconds(1)), Effect.option);
+      }),
+    );
+
+    expect(Option.isSome(interrupted)).toBe(true);
+    const created = providers.slice(createdBefore);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.disconnected).toBe(true);
+  });
+
+  it('should fail within a finite reconnectionTimeout even for a caller that cannot be interrupted, so the bound always holds', async () => {
+    // The liveness check builds its client uninterruptibly, so that a poll failing fast cannot strand a built client
+    // before it is cached. The bound it asks for must therefore hold without anyone interrupting the attempt. Forked and
+    // polled rather than raced, because a race would wait for an uninterruptible loser and hang instead of failing.
+    const createdBefore = providers.length;
+
+    const settled = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkDaemon(Effect.uninterruptible(makeClient(Duration.millis(200))));
+        yield* Effect.sleep(Duration.seconds(1));
+        return yield* Fiber.poll(fiber);
+      }),
+    );
+
+    expect(Option.isSome(settled)).toBe(true);
+    const exit = Option.getOrThrow(settled);
+    const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none<{ _tag: string }>();
+    expect(Option.map(failure, (error) => error._tag)).toEqual(Option.some('ConnectionError'));
+    const created = providers.slice(createdBefore);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.disconnected).toBe(true);
+  });
+
+  it('should abandon an unfinished handshake when interrupted, even under an uninterruptible caller, so nothing keeps retrying', async () => {
+    // Effect forwards an interrupt to a fiber's children whatever the fiber's own status, and the raced wait is a child
+    // that accepts it. A liveness poll that fails fast therefore gives up a handshake still in progress, well inside
+    // the bound, and the attempt disconnects its provider.
+    const createdBefore = providers.length;
+
+    const settled = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkDaemon(Effect.uninterruptible(makeClient(Duration.seconds(10))));
+        yield* Effect.sleep(Duration.millis(100));
+        yield* Fiber.interruptFork(fiber);
+        yield* Effect.sleep(Duration.millis(400));
+        return yield* Fiber.poll(fiber);
+      }),
+    );
+
+    expect(Option.isSome(settled)).toBe(true);
+    const exit = Option.getOrThrow(settled);
+    expect(Exit.isFailure(exit) && Cause.isInterruptedOnly(exit.cause)).toBe(true);
+    const created = providers.slice(createdBefore);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.disconnected).toBe(true);
+  });
+
+  it('should disconnect a provider it has just created when interrupted at that moment, so no interrupt strands one', async () => {
+    // The provider starts retrying in its constructor. An interrupt delivered then must still reach the step that
+    // disconnects it, so the hook interrupts the build from inside the constructor, the earliest moment it can.
+    const createdBefore = providers.length;
+    const build: { fiber?: Fiber.RuntimeFiber<unknown, unknown> } = {};
+    const interruptsSent = { count: 0 };
+    onProviderCreated.run = () => {
+      if (build.fiber !== undefined) {
+        interruptsSent.count += 1;
+        build.fiber.unsafeInterruptAsFork(FiberId.none);
+      }
+    };
+
+    const settled = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkDaemon(makeClient());
+        build.fiber = fiber;
+        yield* Effect.sleep(Duration.millis(200));
+        return yield* Fiber.poll(fiber);
+      }).pipe(Effect.ensuring(Effect.sync(() => (onProviderCreated.run = () => undefined)))),
+    );
+
+    expect(interruptsSent.count).toBe(1);
+    expect(Option.isSome(settled)).toBe(true);
+    const exit = Option.getOrThrow(settled);
+    expect(Exit.isFailure(exit) && Cause.isInterruptedOnly(exit.cause)).toBe(true);
+    const created = providers.slice(createdBefore);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.disconnected).toBe(true);
   });
 });

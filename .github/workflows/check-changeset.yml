@@ -41,12 +41,6 @@ jobs:
           corepack --version
           yarn --version
 
-      - name: Configure yarn
-        env:
-          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
-        run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
-
       - name: Install dependencies
         run: yarn install --immutable
 

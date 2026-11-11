@@ -27,6 +27,8 @@ You can install the required package globally by running "npm install -g adr-log
   transaction's TTL, and are reconciled against a durable record
 - [ADR-0010](0010-shielded-bookings-expire-in-the-wallet.md) - Shielded bookings expire in the shielded wallet, at most
   a lifetime after sync first sees them
+- [ADR-0011](0011-one-lifecycle-record-per-transaction.md) - One lifecycle record per transaction, from balancing to its
+  final state
 
 <!-- adrlogstop -->
 

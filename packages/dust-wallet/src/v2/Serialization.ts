@@ -11,11 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
-import { SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
+import { SnapshotFormat, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
-import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import {
+  PendingDustSchema,
+  SNAPSHOT_FORMAT_VERSION,
+  SNAPSHOT_FORMAT_VERSIONS,
+  type SyncKind,
+  SyncKindSchema,
+  upgradeSnapshotV1ToV2,
+} from '../SnapshotFormat.js';
 // Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
 export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 
@@ -64,11 +71,9 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
 );
 
 const SnapshotSchema = Schema.Struct({
-  // The version names the snapshot's shape, not the variant that wrote it, and the constant lives in
-  // `../SnapshotFormat.ts` so the twins cannot drift apart. Both variants write this shape — the V2 variant adds only
-  // optional fields to it, which is not a new version. A V1 reader never meets a V2 snapshot anyway: `../Restore.ts`
-  // routes each snapshot to the variant it names as its writer, and by the variant that owns its `protocolVersion`
-  // when it names none.
+  // The version names the snapshot's shape, not the variant that wrote it, and the constants live in
+  // `../SnapshotFormat.ts` so the twins cannot drift apart. Both variants write this shape; a `v1` payload is upgraded
+  // in one step before this schema sees it (`upgradeSnapshotV1ToV2`).
   version: SnapshotFormat.versionField('dust', SNAPSHOT_FORMAT_VERSION),
   writtenBy: SnapshotFormat.writtenByField(),
   publicKey: Schema.Struct({
@@ -77,10 +82,44 @@ const SnapshotSchema = Schema.Struct({
   state: HexedState,
   protocolVersion: Schema.BigInt,
   networkId: Schema.String,
+  // The position the synchronization named by `syncKind` resumes from: see {@link offsetOf}.
   offset: Schema.optional(Schema.BigInt),
+  // Which synchronization moved the position, because the two that this variant can run resume from different ones.
+  syncKind: SyncKindSchema,
+  pendingDust: Schema.Array(PendingDustSchema),
 });
 
 type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
+
+/**
+ * The position a wallet's synchronization resumes from, as a snapshot saves it in `offset`.
+ *
+ * @remarks
+ *   Event replay resumes from the last event it applied, `appliedIndex`. A projections pass resumes from the height of
+ *   the block its last pass synced to, `highestIndex`; its `appliedIndex` is a count of the work a pass has done, which
+ *   the next pass works out again from the ledger state, so it is not saved.
+ * @param wallet The wallet being saved.
+ * @returns What the snapshot records as `offset`.
+ */
+const offsetOf = (wallet: CoreWallet): bigint =>
+  wallet.syncKind === 'projections' ? wallet.progress.highestIndex : wallet.progress.appliedIndex;
+
+/**
+ * The progress a snapshot's `offset` restores, put back where the synchronization that saved it reads it.
+ *
+ * @param syncKind Which synchronization saved `offset`.
+ * @param offset The saved position; `0` when the snapshot recorded none.
+ * @returns The restored progress, every index it does not carry at `0`.
+ */
+const progressFromOffset = (
+  syncKind: SyncKind,
+  offset: bigint,
+): Omit<SyncProgress.SyncProgressData, 'isConnected'> => ({
+  appliedIndex: syncKind === 'projections' ? 0n : offset,
+  highestRelevantWalletIndex: 0n,
+  highestIndex: syncKind === 'projections' ? offset : 0n,
+  highestRelevantIndex: 0n,
+});
 
 export const makeDefaultV2SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   return {
@@ -92,7 +131,9 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         state: w.state,
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
-        offset: w.progress?.appliedIndex,
+        offset: offsetOf(w),
+        syncKind: w.syncKind,
+        pendingDust: w.pendingDust,
       });
 
       return SnapshotFormat.writeSnapshot(SnapshotSchema, buildSnapshot(wallet), wallet.unknownFields);
@@ -102,8 +143,9 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         serialized,
         SnapshotFormat.readSnapshotWithUnknownFields({
           surface: 'dust',
-          reads: [SNAPSHOT_FORMAT_VERSION],
+          reads: SNAPSHOT_FORMAT_VERSIONS,
           schema: SnapshotSchema,
+          upgrade: upgradeSnapshotV1ToV2,
         }),
         Either.flatMap(({ snapshot, unknownFields }) =>
           Either.try({
@@ -112,15 +154,11 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
                 CoreWallet.restore(
                   snapshot.state,
                   snapshot.publicKey,
-                  [],
-                  {
-                    appliedIndex: snapshot.offset ?? 0n,
-                    highestRelevantWalletIndex: 0n,
-                    highestIndex: 0n,
-                    highestRelevantIndex: 0n,
-                  },
+                  [...snapshot.pendingDust],
+                  progressFromOffset(snapshot.syncKind, snapshot.offset ?? 0n),
                   snapshot.protocolVersion,
                   snapshot.networkId,
+                  snapshot.syncKind,
                 ),
                 unknownFields,
               ),

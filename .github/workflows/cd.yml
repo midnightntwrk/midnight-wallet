@@ -44,14 +44,6 @@ jobs:
       - name: Enable corepack
         run: corepack enable
 
-      - name: Configure yarn (install-time auth for GH Packages)
-        env:
-          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
-        run: |
-          # Upstream @midnight-ntwrk deps (ledger-v8, zkir-v2, etc.)
-          # still live on GH Packages, so install needs that token.
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
-
       - name: Import GPG key
         id: gpg
         uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd #v7.0.0
@@ -161,12 +153,6 @@ jobs:
       - name: Enable corepack
         run: corepack enable
 
-      - name: Configure yarn (install-time auth for GH Packages)
-        env:
-          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
-        run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
-
       - name: Import GPG key
         id: gpg
         uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd #v7.0.0
@@ -244,12 +230,6 @@ jobs:
 
       - name: Enable corepack
         run: corepack enable
-
-      - name: Configure yarn (install-time auth for GH Packages)
-        env:
-          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
-        run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Install dependencies
         run: yarn install --immutable

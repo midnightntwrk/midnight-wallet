@@ -1,5 +1,79 @@
 # @midnightntwrk/wallet-sdk-address-format
 
+## 4.0.0
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 3.x
+
+  - Built on `@midnightntwrk/ledger-v9` `^1.0.0` instead of `@midnight-ntwrk/ledger-v8`, so importing the package loads
+    the ledger-v9 WASM module. `ShieldedEncryptionSecretKey` (its constructor, `zswap` and `codec.decode`) holds a
+    ledger-v9 `EncryptionSecretKey`: do not hand it to ledger-v8 APIs. The Bech32m encoding of every address type is
+    unchanged.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 3.x
+
+  - `DustAddress.hexString`, the address's serialized bytes as hex.
+
+### Patch Changes
+
+- 2e933df: Fixes and other changes since 3.x
+
+  - `MidnightBech32m.parse` accepts addresses longer than 90 characters again. From `@scure/base` 2.4.0, Bech32m
+    decoding rejects strings over 90 characters by default, so every shielded address (124 characters on mainnet, more
+    on other networks) failed with `invalid string length`. The package now depends on `@scure/base` `^2.4.0` and
+    decodes without that limit; each address type still checks its own payload length.
+  - Decoding a shielded address whose payload is not 64 bytes, or a shielded encryption public key that is not 32 bytes,
+    now throws instead of returning a malformed key. The same check applies to
+    `ShieldedEncryptionPublicKey.fromHexString` and the `ShieldedEncryptionPublicKey` constructor.
+
+- 9907a64: build: depend on the final ledger, zkir and proof server releases, all from `@midnightntwrk`
+
+  - `@midnightntwrk/ledger-v9` `^1.0.0` (was `1.0.0-rc.7`). Its key material pins are those `midnight-ledger`
+    `ledger-9.1.0.0` declares, the same circuits as `ledger-9.1.0.0-rc.7`.
+  - `@midnightntwrk/ledger-v8` `^8.1.3` (was `@midnight-ntwrk/ledger-v8` `^8.1.0`), with the same key material as 8.1.0.
+  - `@midnightntwrk/zkir-v2` `^2.2.0` (was `@midnight-ntwrk/zkir-v2` `2.2.0-rc.6`).
+  - The testing helpers' proof server image is `9.0.0` (was `9.0.0-rc.10`).
+
+  Every Midnight package the SDK depends on now installs from the public npmjs registry, without credentials.
+
+  BREAKING CHANGE: ledger-v8 comes from `@midnightntwrk/ledger-v8`. An application that builds ledger-v8 objects and
+  hands them to the wallet imports them from `@midnightntwrk/ledger-v8` as well; objects from
+  `@midnight-ntwrk/ledger-v8` belong to a second copy of the ledger, which the wallet's own does not accept.
+
+## 4.0.0-rc.2
+
+### Patch Changes
+
+- 2e933df: Fixes and other changes since 3.x
+
+  - `MidnightBech32m.parse` accepts addresses longer than 90 characters again. From `@scure/base` 2.4.0, Bech32m
+    decoding rejects strings over 90 characters by default, so every shielded address (124 characters on mainnet, more
+    on other networks) failed with `invalid string length`. The package now depends on `@scure/base` `^2.4.0` and
+    decodes without that limit; each address type still checks its own payload length.
+  - Decoding a shielded address whose payload is not 64 bytes, or a shielded encryption public key that is not 32 bytes,
+    now throws instead of returning a malformed key. The same check applies to
+    `ShieldedEncryptionPublicKey.fromHexString` and the `ShieldedEncryptionPublicKey` constructor.
+
+## 4.0.0-rc.1
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 3.x
+
+  - Built on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` instead of `@midnight-ntwrk/ledger-v8`, so importing the package
+    loads the ledger-v9 WASM module. `ShieldedEncryptionSecretKey` (its constructor, `zswap` and `codec.decode`) holds a
+    ledger-v9 `EncryptionSecretKey`: do not hand it to ledger-v8 APIs. The Bech32m encoding of every address type is
+    unchanged.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 3.x
+
+  - `DustAddress.hexString`, the address's serialized bytes as hex.
+
 ## 4.0.0-rc.0
 
 ### Patch Changes

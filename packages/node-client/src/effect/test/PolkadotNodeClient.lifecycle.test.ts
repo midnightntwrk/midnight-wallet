@@ -66,7 +66,7 @@ vi.mock('@polkadot/api', () => ({
   ApiPromise: {
     create: vi.fn(() => {
       mockApi.isConnected = true;
-      return mockApi;
+      return Promise.resolve(mockApi);
     }),
   },
   WsProvider: vi.fn(),
@@ -241,9 +241,8 @@ describe('PolkadotNodeClient lifecycle', () => {
   it('waits for the socket to actually close when the last call releases it', async () => {
     // `api.disconnect()` returns while the socket is still CLOSING; `isConnected` clears only when the close event
     // fires. A release that does not wait leaves the next call reading a stale `true`: it skips `connect()`, drops its
-    // readiness probe on the dying socket, sleeps `reconnectionDelay`, reconnects, and usually fails one more pre-open
-    // probe — two seconds or more of a liveness read's ten-second budget. `make()` already waits for the event for this
-    // reason; the release path must too.
+    // readiness probe on the dying socket, sleeps `reconnectionDelay` and reconnects — a second or more of a liveness
+    // read's ten-second budget. `make()` already waits for the event for this reason; the release path must too.
     const { client } = await makeClient();
     mockApi.rpc.chain.getBlock.mockResolvedValue({ block: { extrinsics: [] } });
 
@@ -339,11 +338,10 @@ describe('PolkadotNodeClient lifecycle', () => {
 
   it('make() stops waiting for the close once a finite reconnectionTimeout elapses', async () => {
     // A node that completes the handshake and then goes half-open never acknowledges the close frame. Only ws's own
-    // 30-second close timeout ended that wait, from inside an uninterruptible acquire no outer deadline can cut short —
-    // so a caller who asked for a 10-second bound waited 40. The bound the caller asked for covers the whole build,
-    // the close included.
+    // 30-second close timeout ended that wait, so a caller who asked for a 10-second bound waited 40. The bound the
+    // caller asked for covers the whole build, the close included.
     //
-    // Forked and polled rather than raced: interrupting an uninterruptible acquire would block the test forever.
+    // Forked and polled rather than raced, so it is `make()`'s own bound that ends the wait rather than the test's.
     mockApi.disconnect.mockImplementationOnce(() => Promise.resolve()); // never emits 'disconnected'
 
     const settled = await Effect.runPromise(

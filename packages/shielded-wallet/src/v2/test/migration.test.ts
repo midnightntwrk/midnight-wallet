@@ -19,13 +19,13 @@
  *   what these pin down: everything (same ledger version), nothing (no previous wallet at all), and, across a ledger
  *   version boundary, everything again, because the local state crosses as bytes.
  *
- *   The previous wallet here is a real `@midnight-ntwrk/ledger-v8` one, grown against a real ledger-v8 chain. Nothing
+ *   The previous wallet here is a real `@midnightntwrk/ledger-v8` one, grown against a real ledger-v8 chain. Nothing
  *   about the crossing can be checked against a hand-written stand-in: what is under test is whether one ledger
  *   version's serialization is something the other can read, and only the two modules themselves can answer that.
  *   `byteCrossing.test.ts` is where that codec is characterized; this file is about what the migration does with it.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';

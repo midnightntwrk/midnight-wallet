@@ -21,9 +21,11 @@
         "src/**/*.{ts,tsx}",
         "tsconfig*.json",
         "$TURBO_ROOT$/tsconfig.base.json",
-        "vitest.config.ts"
+        "vitest.config.ts",
+        "$TURBO_ROOT$/vitest.outputs.ts"
       ],
-      "outputs": ["coverage/**", "reports/**"],
+      // Each vitest lane writes under its own folder (vitest.outputs.ts), so each task claims only its own.
+      "outputs": ["coverage/all/**", "reports/all/**"],
       "env": ["DEBUG", "APP_INFRA_SECRET"],
       "outputLogs": "new-only",
       "dependsOn": ["^dist", "typecheck"]
@@ -34,9 +36,10 @@
         "src/**/*.{ts,tsx}",
         "tsconfig*.json",
         "$TURBO_ROOT$/tsconfig.base.json",
-        "vitest.config.ts"
+        "vitest.config.ts",
+        "$TURBO_ROOT$/vitest.outputs.ts"
       ],
-      "outputs": ["coverage/**", "reports/**"],
+      "outputs": ["coverage/unit/**", "reports/unit/**"],
       "env": ["DEBUG"],
       "outputLogs": "new-only",
       "dependsOn": ["^dist", "typecheck"]
@@ -48,9 +51,10 @@
         "src/**/*.{ts,tsx}",
         "tsconfig*.json",
         "$TURBO_ROOT$/tsconfig.base.json",
-        "vitest.config.ts"
+        "vitest.config.ts",
+        "$TURBO_ROOT$/vitest.outputs.ts"
       ],
-      "outputs": ["coverage/**", "reports/**"],
+      "outputs": ["coverage/integration/**", "reports/integration/**"],
       "env": ["DEBUG", "APP_INFRA_SECRET", "NETWORK"],
       "outputLogs": "new-only",
       "dependsOn": ["^dist", "typecheck"]

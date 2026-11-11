@@ -39,7 +39,7 @@ import { type KeysCapability } from './Keys.js';
 import { type CoinSelection } from '@midnightntwrk/wallet-sdk-capabilities';
 import { CoreWallet } from './CoreWallet.js';
 import { type TransactionHistoryService } from './TransactionHistory.js';
-import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import type * as ledger from '@midnightntwrk/ledger-v8';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedId = state.progress?.appliedId ?? 0n;
@@ -334,6 +334,18 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     return SubscriptionRef.updateEffect(this.#context.stateRef, (state) => {
       return pipe(this.#v1Context.transactingCapability.revertTransaction(state, transaction), EitherOps.toEffect);
     });
+  }
+
+  revertFailedSegments(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    failedSegments: ReadonlyArray<number>,
+  ): Effect.Effect<void, WalletError> {
+    return SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
+      pipe(
+        this.#v1Context.transactingCapability.revertFailedSegments(state, transaction, failedSegments),
+        EitherOps.toEffect,
+      ),
+    );
   }
 
   revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Effect.Effect<void, WalletError> {

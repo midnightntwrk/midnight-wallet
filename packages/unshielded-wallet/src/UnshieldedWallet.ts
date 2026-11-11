@@ -21,7 +21,7 @@
  *   is re-earned from a replay, so the wallet never passes through a state in which it has forgotten what it owns;
  *   `test/forkSimulation.test.ts` proves that, and proves the boundary transaction is applied exactly once, by the new
  *   variant. Which variant is running is the runtime's business, not the application's: the wallet's public API speaks
- *   ledger-v9 throughout.
+ *   the SDK's own types (`UnshieldedWalletTypes`) throughout.
  *
  *   This wallet retains nothing, and that is the honest difference from the shielded and dust wallets. Unshielded
  *   synchronization is watch-only — the address is public and signing is supplied per call by the caller — so
@@ -33,7 +33,7 @@
  *   same wallet over builders the caller chooses, and `SingleVariantUnshieldedWallet.ts` is the composition that gives
  *   up the crossing to run one variant only.
  */
-import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
@@ -272,7 +272,7 @@ export const createKeystore = (secretKey: UnshieldedSecretKey, networkId: Networ
  *     { builder: new V1Builder().withDefaults(), configuration: v1Configuration },
  *     { builder: new V2Builder().withDefaults().withMigration(...), configuration: v2Configuration },
  *   );
- *   const wallet = Wallet.startWithPublicKey(publicKey);
+ *   const wallet = await Wallet.startWithPublicKey(publicKey);
  *   ```;
  *
  * @param configuration What the wallet layer needs: the network, and where the boundary lies.
@@ -796,6 +796,48 @@ export function CustomForkingUnshieldedWallet<
                 ledgerV9.Transaction<ledgerV9.SignatureEnabled, ledgerV9.Proofish, ledgerV9.Bindingish>
               >(transaction, v9Epoch),
               { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
+            ),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    /**
+     * Un-books the UTxOs that the failed fallible segments of a partially successful transaction had reserved,
+     * returning them to the available set.
+     *
+     * @remarks
+     *   A partial success applied every intent's guaranteed offer (all in segment 0) and every fallible segment not in
+     *   `failedSegments`; the intent at segment `s` runs its fallible offer in segment `s`. So only the own inputs of
+     *   the fallible offers of the intents in `failedSegments` are released. Coins the guaranteed offers and the
+     *   successful segments spent stay pending until sync settles them.
+     *
+     *   As with {@link revertTransaction}, a transaction built on the other side of the boundary has nothing booked in the
+     *   running variant, so this resolves having done nothing rather than failing.
+     * @param transaction The transaction that landed as a partial success.
+     * @param failedSegments Ids of the fallible segments the chain did not apply.
+     */
+    revertFailedSegments(transaction: AnyTx, failedSegments: ReadonlyArray<number>): Promise<void> {
+      return this.runtime
+        .dispatch<void, WalletError>({
+          [V1Tag]: (v1) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledgerV8.Transaction<ledgerV8.SignatureEnabled, ledgerV8.Proofish, ledgerV8.Bindingish>
+              >(transaction, v8Epoch),
+              {
+                onLeft: () => Effect.void,
+                onRight: (unwrapped) => v1.revertFailedSegments(unwrapped, failedSegments),
+              },
+            ),
+          [V2Tag]: (v2) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledgerV9.Transaction<ledgerV9.SignatureEnabled, ledgerV9.Proofish, ledgerV9.Bindingish>
+              >(transaction, v9Epoch),
+              {
+                onLeft: () => Effect.void,
+                onRight: (unwrapped) => v2.revertFailedSegments(unwrapped, failedSegments),
+              },
             ),
         })
         .pipe(Effect.runPromise);

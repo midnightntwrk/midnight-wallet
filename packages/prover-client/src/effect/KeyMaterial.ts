@@ -21,7 +21,7 @@
  *   the descriptors below are copies of those declarations, one per ledger version. Nothing at runtime can re-derive
  *   them: the published ledger packages neither expose the generation nor embed the Dust spend verifier key.
  */
-import type { KeyMaterialProvider, ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
+import type { KeyMaterialProvider, ProvingKeyMaterial } from '@midnightntwrk/zkir-v2';
 import { Cache, Cause, Data, Duration, Effect, Exit, Option, Record as ERecord, Schedule, pipe } from 'effect';
 
 /** The host the ledger's own data provider reads key material from: its `MIDNIGHT_PARAM_SOURCE` default. */
@@ -100,9 +100,9 @@ const zswapFiles = {
   'zswap/sign.bzkir': '37ea2094516e145a738126307cf92bd293f7cb524b1ccd49fa6f3225a9ec3a50',
 } as const;
 
-/** Ledger-v9's key material: circuit generation 10, as `midnight-ledger` `ledger-9.1.0.0-rc.6` declares it. */
+/** Ledger-v9's key material: circuit generation 10, as `midnight-ledger` `ledger-9.1.0.0` declares it. */
 export const V9KeyMaterial: KeyMaterialDescriptor = {
-  ledgerRelease: { packageName: '@midnightntwrk/ledger-v9', version: '1.0.0-rc.6', tag: 'ledger-9.1.0.0-rc.6' },
+  ledgerRelease: { packageName: '@midnightntwrk/ledger-v9', version: '1.0.0', tag: 'ledger-9.1.0.0' },
   generation: 10,
   files: {
     ...zswapFiles,
@@ -113,9 +113,9 @@ export const V9KeyMaterial: KeyMaterialDescriptor = {
   params: publicParameters,
 };
 
-/** Ledger-v8's key material: circuit generation 9, as `midnight-ledger` `ledger-8.1.0` declares it. */
+/** Ledger-v8's key material: circuit generation 9, as `midnight-ledger` `ledger-8.1.3` declares it. */
 export const V8KeyMaterial: KeyMaterialDescriptor = {
-  ledgerRelease: { packageName: '@midnight-ntwrk/ledger-v8', version: '8.1.0', tag: 'ledger-8.1.0' },
+  ledgerRelease: { packageName: '@midnightntwrk/ledger-v8', version: '8.1.3', tag: 'ledger-8.1.3' },
   generation: 9,
   files: {
     ...zswapFiles,

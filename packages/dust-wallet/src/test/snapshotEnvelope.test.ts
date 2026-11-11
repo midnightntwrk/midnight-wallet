@@ -28,7 +28,7 @@
 // variant's own directory could not state that.
 //
 // Tier: unit.
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Either, Order, Schema } from 'effect';
@@ -102,6 +102,10 @@ const expectedPaths = [
   'protocolVersion',
   'publicKey.publicKey',
   'state',
+  // The Dust pending transactions have spent, so a restored wallet can still release it. Empty for these wallets.
+  'pendingDust[]',
+  // Which synchronization recorded `offset`, so a wallet that cannot resume from it refuses the snapshot at restore.
+  'syncKind',
 ];
 
 describe('the dust snapshot envelope', () => {

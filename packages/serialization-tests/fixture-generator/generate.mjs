@@ -31,7 +31,7 @@
 //   dust.json                dust wallet with a real generated dust UTXO (registration + claim)
 //   tx-history.json          (T4/T6) storage payload exercising every field shape the era's
 //                            schema allowed, using the facade's app-level WalletEntrySchema
-//   pending-transactions.json (T2+) PendingTransactions payload with mock-proven ledger txs —
+//   transaction-lifecycle.json (T2+) PendingTransactions payload with mock-proven ledger txs —
 //                            the wire schema is versioned and stable, but the embedded tx blobs
 //                            cross the ledger v7→v8 boundary
 import { createRequire } from 'node:module';
@@ -445,12 +445,12 @@ const generatePendingTransactions = async (train, capAlias, shAlias) => {
   const state = txs.reduce((s, tx) => PT.addPendingTransaction(s, tx, now, txTrait), PT.empty());
   const serialized = PT.serialize(state, txTrait);
 
-  const restored = selfCheck(`${capAlias} pending-transactions`, PT.deserialize(serialized, txTrait));
+  const restored = selfCheck(`${capAlias} transaction-lifecycle`, PT.deserialize(serialized, txTrait));
   if (restored.all.length !== txs.length) {
-    throw new Error(`${capAlias} pending-transactions self-check: expected ${txs.length}, got ${restored.all.length}`);
+    throw new Error(`${capAlias} transaction-lifecycle self-check: expected ${txs.length}, got ${restored.all.length}`);
   }
 
-  writeFixture(train, 'pending-transactions', {
+  writeFixture(train, 'transaction-lifecycle', {
     train,
     ...pkgMeta(capAlias),
     ledgerUsed: pkgMeta(shAlias).ledgerDep,
@@ -576,7 +576,7 @@ const TRAINS = [
 
 // ONLY=<surface>[,<surface>] regenerates one surface's fixtures and leaves every other frozen file untouched. Published
 // fixtures are a record; nothing here should rewrite one that is not the reason the generator was run.
-const only = new Set((process.env['ONLY'] ?? 'shielded,unshielded,dust,tx-history,pending-transactions').split(','));
+const only = new Set((process.env['ONLY'] ?? 'shielded,unshielded,dust,tx-history,transaction-lifecycle').split(','));
 const wants = (surface) => only.has(surface);
 
 for (const t of TRAINS) {
@@ -585,7 +585,7 @@ for (const t of TRAINS) {
   if (wants('unshielded')) await generateUnshieldedSet(t.train, t.un);
   if (wants('dust')) await generateDust(t.train, t.du, t.sh, { flatDist: t.dustFlat === true });
   if (wants('tx-history') && t.abs) await generateTxHistory(t.train, t.abs, t.fa);
-  if (wants('pending-transactions') && t.cap) await generatePendingTransactions(t.train, t.cap, t.sh);
+  if (wants('transaction-lifecycle') && t.cap) await generatePendingTransactions(t.train, t.cap, t.sh);
 }
 
 if (wants('shielded')) {

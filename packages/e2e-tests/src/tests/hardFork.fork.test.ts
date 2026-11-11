@@ -26,7 +26,7 @@ import { Cause, Either, Option, Runtime } from 'effect';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 // Both ledgers, because this file is the one that authors on both sides of the boundary: the spend before the v9 fork is
 // ledger-v8's transaction and everything from `re-registers its NIGHT` onwards is ledger-v9's.
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletSeeds as WalletSeedsType, WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
@@ -50,13 +50,22 @@ import { SyncService, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2
 import {
   type DefaultConfiguration,
   type FacadeState,
+  isAwaiting,
   type WalletEntry,
   WalletFacade,
 } from '@midnightntwrk/wallet-sdk-facade';
+import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
+import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { type ForkFixture, useForkFixture } from './fork-fixture.js';
 import * as utils from './utils.js';
 import { carried } from './helpers/transactions.js';
-import { rootsEqual, sameDustCoins, dustLocalStateOf } from './helpers/dustComparison.js';
+import {
+  type EncodedDustTreeRoots,
+  encodedDustTreeRoots,
+  rootsEqual,
+  sameDustCoins,
+  dustLocalStateOf,
+} from './helpers/dustComparison.js';
 import { logger } from './logger.js';
 
 /** The dev preset's funded account. */
@@ -119,6 +128,18 @@ const phaseOf = (state: FacadeState): string =>
     ? `Settled@${state.protocol.version}`
     : `Crossing ${state.protocol.from}->${state.protocol.to} behind=[${state.protocol.behind.join(',')}]`;
 
+/**
+ * A shielded or dust wallet's sync position: how far it has applied, how far the source says there is, and whether it
+ * is connected.
+ */
+const syncPositionOf = (
+  progress: Readonly<{ appliedIndex: bigint; highestRelevantWalletIndex: bigint; isConnected: boolean }>,
+) => ({
+  applied: progress.appliedIndex,
+  highest: progress.highestRelevantWalletIndex,
+  connected: progress.isConnected,
+});
+
 const summarize = (state: FacadeState): string =>
   asJson({
     phase: phaseOf(state),
@@ -132,7 +153,19 @@ const summarize = (state: FacadeState): string =>
     },
     shieldedBalances: state.shielded.balances,
     unshieldedBalances: state.unshielded.balances,
-    pending: state.pending.length,
+    awaiting: state.lifecycle.filter(isAwaiting).length,
+    // Each wallet's own sync position, because `synced` is the conjunction of all three: when it stays false, these say
+    // which wallet is behind, and whether the gap is in what it has applied or in what it has been told exists.
+    progress: {
+      shielded: syncPositionOf(state.shielded.progress),
+      unshielded: {
+        applied: state.unshielded.progress.appliedId,
+        highest: state.unshielded.progress.highestTransactionId,
+        connected: state.unshielded.progress.isConnected,
+        liveness: state.unshielded.progress.indexerLiveness._tag,
+      },
+      dust: syncPositionOf(state.dust.progress),
+    },
   });
 
 /** How a UTxO is named in both the wallet's state and a transaction's inputs. */
@@ -406,7 +439,8 @@ describe.sequential('Hard fork crossing @fork', () => {
     return await stateWhere(
       `the wallet to settle on the Night transfer ${label}`,
       wallet,
-      (state) => state.isSynced && state.pending.length === 0 && state.unshielded.balances[NIGHT] !== nightBefore,
+      (state) =>
+        state.isSynced && !state.lifecycle.some(isAwaiting) && state.unshielded.balances[NIGHT] !== nightBefore,
     );
   };
 
@@ -561,6 +595,57 @@ describe.sequential('Hard fork crossing @fork', () => {
     SPEND_TIMEOUT_MS + 5 * 60 * 1000,
   );
 
+  test(
+    'holds the dust tree roots the ledger-v8 indexer reports for a block it has synced to',
+    async () => {
+      // The dust wallet dates a fee spend only at a block whose roots it holds, matched in the encoding below. Were its
+      // encoding of its own roots to differ from the indexer's, no ledger-v8 block would ever match and every
+      // ledger-v8 fee would be refused.
+      // One reading: the indexer's newest block, then the wallet's state once it reports itself synced. Read in that
+      // order so the wallet has had the chance to apply everything up to the block; the two can still be a block apart
+      // when the chain moves between the reads, which is why a disagreeing reading is retried rather than failed.
+      const readRoots = async () => {
+        const { block } = await QueryRunner.runPromise(BlockHash, { offset: null }, { url: fixture.getIndexerUri() });
+        if (block === null) throw new Error('the indexer reported no block');
+        const state = await wallet.waitForSyncedState();
+        return {
+          height: block.height,
+          protocolVersion: block.protocolVersion,
+          walletDustVersion: state.protocolVersion.dust,
+          wallet: encodedDustTreeRoots(dustLocalStateOf(state.dust)),
+          indexer: {
+            commitment: block.dustCommitmentMerkleTreeRoot ?? '',
+            generation: block.dustGenerationMerkleTreeRoot ?? '',
+          } satisfies EncodedDustTreeRoots,
+        };
+      };
+      type Reading = Awaited<ReturnType<typeof readRoots>>;
+      const agree = (reading: Reading): boolean =>
+        reading.wallet.commitment === reading.indexer.commitment &&
+        reading.wallet.generation === reading.indexer.generation;
+
+      // The first agreeing reading, or the last one taken before the deadline, so a failure shows both sides' roots.
+      const reading = await rx.firstValueFrom(
+        rx.timer(0, DUST_POLL_MS).pipe(
+          rx.concatMap(() => rx.defer(readRoots)),
+          rx.tap((each) => logger.info(`ledger-v8 dust roots at block ${each.height}: ${asJson(each)}`)),
+          rx.takeUntil(rx.timer(RESYNC_TIMEOUT_MS)),
+          rx.takeWhile((each) => !agree(each), true),
+          rx.last(),
+        ),
+      );
+
+      // A ledger-v8 block, read by the V1 variant: this is the encoding ledger-v8 fees are dated against.
+      expect(reading.protocolVersion).toBe(V8_SPEC_VERSION);
+      expect(reading.walletDustVersion).toBeLessThan(ProtocolVersion.V9NativeForkVersion);
+      // The indexer must report roots for the comparison to say anything: two absent roots agree vacuously.
+      expect(reading.indexer.commitment).not.toBe('');
+      expect(reading.indexer.generation).not.toBe('');
+      expect(reading.wallet).toEqual(reading.indexer);
+    },
+    RESYNC_TIMEOUT_MS + 60_000,
+  );
+
   test('enacts the ledger 8 to 9 hard fork through governance', async () => {
     enactment = await fixture.enactFork();
     logger.info(`FORK ENACTED ${JSON.stringify(enactment)}`);
@@ -636,7 +721,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       [NIGHT]: v8State.unshielded.balances[NIGHT] - TRANSFER_AMOUNT,
     });
     expect(v9State.shielded.balances).toEqual(v8State.shielded.balances);
-    expect(v9State.pending.length).toBe(0);
+    expect(v9State.lifecycle.filter(isAwaiting)).toStrictEqual([]);
   });
 
   test('restores a V2 snapshot on the version it declares', async () => {
@@ -815,7 +900,7 @@ describe.sequential('Hard fork crossing @fork', () => {
         (state) =>
           state.isSynced &&
           state.unshielded.pendingCoins.length === 0 &&
-          state.pending.length === 0 &&
+          !state.lifecycle.some(isAwaiting) &&
           state.unshielded.balances[NIGHT] !== nightBefore,
       );
       logger.info(`AFTER UNSHIELDED SPEND ${summarize(afterUnshieldedSpend)}`);
@@ -824,7 +909,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       // Fees are dust, so the Night that left the wallet is exactly what was transferred.
       expect(afterUnshieldedSpend.unshielded.balances[NIGHT]).toBe(nightBefore - TRANSFER_AMOUNT);
       expect(afterUnshieldedSpend.unshielded.pendingCoins.length).toBe(0);
-      expect(afterUnshieldedSpend.pending.length).toBe(0);
+      expect(afterUnshieldedSpend.lifecycle.filter(isAwaiting)).toStrictEqual([]);
 
       const receiverAfter = await stateWhere(
         'the receiver to see the transferred Night',
@@ -897,7 +982,7 @@ describe.sequential('Hard fork crossing @fork', () => {
         (state) =>
           state.isSynced &&
           state.shielded.pendingCoins.length === 0 &&
-          state.pending.length === 0 &&
+          !state.lifecycle.some(isAwaiting) &&
           state.shielded.balances[shieldedToken] !== shieldedBefore,
       );
       logger.info(`AFTER SHIELDED SPEND ${summarize(afterShieldedSpend)}`);
@@ -905,7 +990,7 @@ describe.sequential('Hard fork crossing @fork', () => {
 
       expect(afterShieldedSpend.shielded.balances[shieldedToken]).toBe(shieldedBefore - TRANSFER_AMOUNT);
       expect(afterShieldedSpend.shielded.pendingCoins.length).toBe(0);
-      expect(afterShieldedSpend.pending.length).toBe(0);
+      expect(afterShieldedSpend.lifecycle.filter(isAwaiting)).toStrictEqual([]);
 
       const receiverAfter = await stateWhere(
         'the receiver to see the transferred shielded token',

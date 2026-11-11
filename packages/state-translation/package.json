@@ -1,7 +1,7 @@
 {
   "name": "@midnightntwrk/wallet-sdk-state-translation",
   "description": "Wallet-side access to the ledger's v8-to-v9 ledger state translation. Test and migration tooling; not published.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -37,7 +37,7 @@
     "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp"
   },
   "devDependencies": {
-    "@midnight-ntwrk/ledger-v8": "^8.1.0",
-    "@midnightntwrk/ledger-v9": "1.0.0-rc.6"
+    "@midnightntwrk/ledger-v8": "^8.1.3",
+    "@midnightntwrk/ledger-v9": "^1.0.0"
   }
 }

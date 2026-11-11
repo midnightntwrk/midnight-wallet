@@ -31,7 +31,7 @@
  *   floor pass as the stamp being kept.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
@@ -55,7 +55,6 @@ import {
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
-  SilentPendingTransactions,
   unshieldedAt,
   v8UnboundOf,
   v9UnboundOf,
@@ -120,7 +119,6 @@ const facadeAt = async (kind: 'schnorr' | 'ecdsa', version: ProtocolVersion.Prot
     unshielded: () => unshielded,
     dust: () => dust,
     provingService: () => createV8MockProvingService(),
-    pendingTransactionsService: () => new SilentPendingTransactions(),
   });
   expect((await rx.firstValueFrom(facade.state())).activeProtocolVersion).toBe(version);
   return facade;

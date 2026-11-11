@@ -1,5 +1,114 @@
 # @midnightntwrk/wallet-sdk-node-client
 
+## 2.0.0
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 1.x
+
+  - `NodeClient.Service` requires `getFinalizedBlock()`, `getGenesisHash()` and `getBlockHashAt(height)`, which returns
+    `Option.none` for a height with no block. Only implementers of the service are affected; the module also exports
+    them as functions, with the `NodeClient.FinalizedBlock` type.
+  - The optional peer dependencies of `./testing` are `@midnightntwrk/ledger-v9` `^1.0.0`, instead of
+    `@midnight-ntwrk/ledger-v8`, and `@midnightntwrk/wallet-sdk-prover-client` 2.x (was `^1.2.3`); the transactions it
+    produces are ledger-v9's.
+  - The `PolkadotNodeClient` constructor takes a third argument; build clients with `make` or `layer`.
+
+### Patch Changes
+
+- 9907a64: build: depend on the final ledger, zkir and proof server releases, all from `@midnightntwrk`
+
+  - `@midnightntwrk/ledger-v9` `^1.0.0` (was `1.0.0-rc.7`). Its key material pins are those `midnight-ledger`
+    `ledger-9.1.0.0` declares, the same circuits as `ledger-9.1.0.0-rc.7`.
+  - `@midnightntwrk/ledger-v8` `^8.1.3` (was `@midnight-ntwrk/ledger-v8` `^8.1.0`), with the same key material as 8.1.0.
+  - `@midnightntwrk/zkir-v2` `^2.2.0` (was `@midnight-ntwrk/zkir-v2` `2.2.0-rc.6`).
+  - The testing helpers' proof server image is `9.0.0` (was `9.0.0-rc.10`).
+
+  Every Midnight package the SDK depends on now installs from the public npmjs registry, without credentials.
+
+  BREAKING CHANGE: ledger-v8 comes from `@midnightntwrk/ledger-v8`. An application that builds ledger-v8 objects and
+  hands them to the wallet imports them from `@midnightntwrk/ledger-v8` as well; objects from
+  `@midnight-ntwrk/ledger-v8` belong to a second copy of the ledger, which the wallet's own does not accept.
+
+- 1e0ea94: Fixes and other changes since 1.x
+
+  - A transaction submitted right after `PolkadotNodeClient.make()` no longer fails with a disconnect error. `make()`
+    returned while the socket it had closed still reported `isConnected`, so the next call skipped the reconnect and
+    sent on a dying socket; it now waits for the close to complete (#327).
+  - Operations that share one connection count their holds, and the socket closes when the last one finishes: one
+    operation completing no longer closes the connection another is still using.
+  - Connection and RPC failures are typed `ConnectionError`s rather than defects, including a node URL that is not
+    `ws://` or `wss://`. A finite `reconnectionTimeout` also bounds the initial connection, failing with a
+    `ConnectionError` whose `cause` is Effect's `TimeoutException`.
+  - `make()` can be interrupted while it waits for the node, and an attempt that ends without a client disconnects its
+    provider, so a wallet whose node never answers can be stopped.
+  - Each of the client's calls waits for the socket to open before using it, so they work right after `make()`, and a
+    call after an idle gap no longer waits an extra `reconnectionDelay`. A node that accepts the socket but fails three
+    readiness probes in a row is reported as a `ConnectionError`.
+  - `./testing` declares the packages it imports, `@effect/platform`, `tar-stream` and `testcontainers`, as optional
+    peer dependencies beside `@midnightntwrk/ledger-v9` and `@midnightntwrk/wallet-sdk-prover-client`; install them to
+    use it. 1.x left them undeclared, so `./testing` failed to resolve unless something else had installed them.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [9907a64]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0
+  - @midnightntwrk/wallet-sdk-prover-client@2.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0
+
+## 2.0.0-rc.2
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 1.x
+
+  - `NodeClient.Service` requires `getFinalizedBlock()`, `getGenesisHash()` and `getBlockHashAt(height)`, which returns
+    `Option.none` for a height with no block. Only implementers of the service are affected; the module also exports
+    them as functions, with the `NodeClient.FinalizedBlock` type.
+  - The optional peer dependencies of `./testing` are `@midnightntwrk/ledger-v9` `1.0.0-rc.7`, instead of
+    `@midnight-ntwrk/ledger-v8`, and `@midnightntwrk/wallet-sdk-prover-client` 2.x (was `^1.2.3`); the transactions it
+    produces are ledger-v9's.
+  - The `PolkadotNodeClient` constructor takes a third argument; build clients with `make` or `layer`.
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 1.x
+
+  - A transaction submitted right after `PolkadotNodeClient.make()` no longer fails with a disconnect error. `make()`
+    returned while the socket it had closed still reported `isConnected`, so the next call skipped the reconnect and
+    sent on a dying socket; it now waits for the close to complete (#327).
+  - Operations that share one connection count their holds, and the socket closes when the last one finishes: one
+    operation completing no longer closes the connection another is still using.
+  - Connection and RPC failures are typed `ConnectionError`s rather than defects, including a node URL that is not
+    `ws://` or `wss://`. A finite `reconnectionTimeout` also bounds the initial connection, failing with a
+    `ConnectionError` whose `cause` is Effect's `TimeoutException`.
+  - `make()` can be interrupted while it waits for the node, and an attempt that ends without a client disconnects its
+    provider, so a wallet whose node never answers can be stopped.
+  - Each of the client's calls waits for the socket to open before using it, so they work right after `make()`, and a
+    call after an idle gap no longer waits an extra `reconnectionDelay`. A node that accepts the socket but fails three
+    readiness probes in a row is reported as a `ConnectionError`.
+  - `./testing` declares the packages it imports, `@effect/platform`, `tar-stream` and `testcontainers`, as optional
+    peer dependencies beside `@midnightntwrk/ledger-v9` and `@midnightntwrk/wallet-sdk-prover-client`; install them to
+    use it. 1.x left them undeclared, so `./testing` failed to resolve unless something else had installed them.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-prover-client@2.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0-rc.1
+
 ## 2.0.0-rc.1
 
 ### Major Changes

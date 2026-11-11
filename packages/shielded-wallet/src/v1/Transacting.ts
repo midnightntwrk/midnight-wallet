@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Either, Option, pipe, Record } from 'effect';
 import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -69,6 +69,12 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
   revertTransaction(
     state: TState,
     transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+  ): Either.Either<TState, WalletError>;
+
+  revertFailedSegments(
+    state: TState,
+    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+    failedSegments: ReadonlyArray<number>,
   ): Either.Either<TState, WalletError>;
 }
 
@@ -274,6 +280,24 @@ export class TransactingCapabilityImplementation<
       catch: (err) => {
         return new OtherWalletError({
           message: `Error while reverting transaction ${transaction.identifiers().at(0)!}`,
+          cause: err,
+        });
+      },
+    });
+  }
+
+  revertFailedSegments(
+    state: CoreWallet,
+    transaction: TTransaction | ledger.UnprovenTransaction,
+    failedSegments: ReadonlyArray<number>,
+  ): Either.Either<CoreWallet, WalletError> {
+    return Either.try({
+      try: () => {
+        return CoreWallet.revertFailedSegments(state, transaction, failedSegments);
+      },
+      catch: (err) => {
+        return new OtherWalletError({
+          message: `Error while reverting the failed segments of transaction ${transaction.identifiers().at(0)!}`,
           cause: err,
         });
       },

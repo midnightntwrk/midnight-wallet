@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
-  type Option,
+  Option,
   Effect,
   SubscriptionRef,
   Stream,
@@ -23,6 +23,7 @@ import {
   Schedule,
   Array as Arr,
   Ref,
+  Either,
 } from 'effect';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import {
@@ -31,9 +32,19 @@ import {
   type SignatureVerifyingKey,
   type FinalizedTransaction,
   type UnprovenTransaction,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { ProtocolVersion, Token, VariantState } from '@midnightntwrk/wallet-sdk-abstractions';
-import { InsufficientDustForFeeError, OtherWalletError, type WalletError } from './WalletError.js';
+import { InsufficientDustForFeeError, OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
+import { dustTreeRoots } from './Utils.js';
+import {
+  awaitTreesAtBlock,
+  describeNotAtBlock,
+  type DustTreesNotAtBlockError,
+  type RootedBlock,
+  spendTimeAt,
+  type SpendTime,
+  warnIfUnchecked,
+} from '../SpendTime.js';
 import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   type WalletRuntimeError,
@@ -55,6 +66,16 @@ import { type CoreWallet } from './CoreWallet.js';
 import { type SerializationCapability } from './Serialization.js';
 import { type AnyTransaction } from './types/ledger.js';
 import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
+
+/** A block's height, time and Dust roots, as dating a spend reads them; a root the block does not report is `''`. */
+const rootedBlock = (block: BlockData): RootedBlock => ({
+  height: block.height,
+  timestamp: block.timestamp,
+  roots: {
+    commitment: block.dustCommitmentMerkleTreeRoot ?? '',
+    generation: block.dustGenerationMerkleTreeRoot ?? '',
+  },
+});
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
@@ -514,30 +535,91 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     );
   }
 
+  /**
+   * Pays the transactions' fees with Dust.
+   *
+   * @remarks
+   *   Without a `currentTime`, the spend is dated at the newest block once the local Dust trees hold its roots, because
+   *   the node checks the spend's proof against the roots it recorded at the spend's time and the proof is built from
+   *   the local trees. This variant syncs by events, which keep no block height, so it has no block of its own to fall
+   *   back on. Until the roots match, balancing reads the newest block again every second, reserving nothing, and fails
+   *   with a {@link SyncWalletError} after two minutes. A newest block that reports no roots is used at once, with a
+   *   warning. A `ttl` more than the Dust grace period after the spend's time lets the transaction land too late to be
+   *   accepted.
+   * @example
+   *   ```ts
+   *   const { transaction, blockData } = yield* variant.balanceTransactions(dustSecretKey, [tx], ttl);
+   *   ```;
+   *
+   * @param secretKey The Dust secret key to spend with.
+   * @param transactions The transactions to pay for.
+   * @param ttl The time the balancing transaction stays valid until.
+   * @param currentTime The time to date the spend at; when given, it is used as it is, at once.
+   * @returns The balancing transaction and the newest block, which it was priced at.
+   */
   balanceTransactions(
     secretKey: DustSecretKey,
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
   ): Effect.Effect<{ transaction: UnprovenTransaction; blockData: BlockData }, WalletError> {
-    return pipe(
+    const attempt = pipe(
       this.#v1Context.syncService.blockData(),
-      Effect.flatMap((blockData) =>
+      Effect.flatMap((tip) =>
         pipe(
-          SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
+          SubscriptionRef.modifyEffect(
+            this.#context.stateRef,
+            this.#spendFrom(secretKey, transactions, ttl, currentTime, tip),
+          ),
+          Effect.tap(([, spendTime]) => warnIfUnchecked(spendTime)),
+          Effect.map(([transaction]) => ({ transaction, blockData: tip })),
+        ),
+      ),
+    );
+    return awaitTreesAtBlock(
+      attempt,
+      (error) =>
+        new SyncWalletError({ message: `No Dust spend can be dated yet: ${describeNotAtBlock(error)}`, cause: error }),
+    );
+  }
+
+  /** Dates and builds the spend against `state`, the state it is proved from, and returns the state it leaves. */
+  #spendFrom(
+    secretKey: DustSecretKey,
+    transactions: ReadonlyArray<AnyTransaction>,
+    ttl: Date,
+    currentTime: Date | undefined,
+    tip: BlockData,
+  ): (
+    state: CoreWallet,
+  ) => Either.Either<[[UnprovenTransaction, SpendTime], CoreWallet], WalletError | DustTreesNotAtBlockError> {
+    return (state) =>
+      pipe(
+        spendTimeAt(
+          dustTreeRoots(state.state),
+          rootedBlock(tip),
+          Option.none(),
+          Number(tip.ledgerParameters.dust.dustGracePeriodSeconds),
+          ttl,
+          currentTime,
+        ),
+        Either.flatMap((spendTime) =>
+          pipe(
             this.#v1Context.transactingCapability.balanceTransactions(
               secretKey,
               state,
               transactions,
               ttl,
-              currentTime ?? blockData.timestamp,
-              blockData.ledgerParameters,
+              spendTime.time,
+              tip.ledgerParameters,
             ),
+            Either.map(([transaction, next]): [[UnprovenTransaction, SpendTime], CoreWallet] => [
+              [transaction, spendTime],
+              next,
+            ]),
           ),
-          Effect.map((transaction) => ({ transaction, blockData })),
         ),
-      ),
-    );
+      );
   }
 
   revertTransaction(transaction: AnyTransaction): Effect.Effect<void, WalletError> {

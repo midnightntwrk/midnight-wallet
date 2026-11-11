@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   InMemoryTransactionHistoryStorage,
@@ -28,7 +28,6 @@ import {
   type AnyVersionUnboundTransaction,
   type AnyVersionUnprovenTransaction,
   type ProvingBackends,
-  type V9UnboundTransaction,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
@@ -45,14 +44,7 @@ import {
   WalletFacade,
   mergeWalletEntries,
 } from '../src/index.js';
-import {
-  getDustSeed,
-  getShieldedSeed,
-  getUnshieldedSeed,
-  isV9Transaction,
-  provingOnly,
-  type AnyVersionProvingService,
-} from './utils/index.js';
+import { getDustSeed, getShieldedSeed, getUnshieldedSeed, type AnyVersionProvingService } from './utils/index.js';
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
@@ -62,19 +54,15 @@ const V8_VERSION = ProtocolVersion.ProtocolVersion(1_000n);
 class RecordingProver implements AnyVersionProvingService {
   readonly askedFor: ProtocolVersion.ProtocolVersion[] = [];
 
-  // The unproven transaction is already unbound and carries no real proofs in these tests, so it stands in for the
-  // proven result. Type cast required because: the simulator's proof-erased transaction is not `Proof`-typed, and this
-  // stand-in only has to travel back through the facade untouched.
-  readonly #proving = provingOnly('ledger-v9', isV9Transaction, (transaction) =>
-    Promise.resolve(transaction as unknown as V9UnboundTransaction),
-  );
-
   prove(
     transaction: AnyVersionUnprovenTransaction,
     protocolVersion: ProtocolVersion.ProtocolVersion,
   ): Promise<AnyVersionUnboundTransaction> {
     this.askedFor.push(protocolVersion);
-    return this.#proving.prove(transaction, protocolVersion);
+    // The unproven transaction carries no real proofs in these tests, so it stands in for the proven result, on
+    // whichever ledger it was built. Type cast required because: it is not `Proof`-typed, and this stand-in only has to
+    // travel back through the facade untouched.
+    return Promise.resolve(transaction as unknown as AnyVersionUnboundTransaction);
   }
 }
 
@@ -114,17 +102,29 @@ describe('Proving a transaction at the version it was built for', () => {
     await facade?.stop();
   });
 
+  /** A transaction on the ledger its stamp names: ledger-v8 below `forks.v9`, ledger-v9 from it. */
   const anyTransaction = (stamp: ProtocolVersion.ProtocolVersion = ProtocolVersion.MinSupportedVersion) =>
-    WalletTransaction.adopt(
-      'Unproven',
-      ledgerV9.Transaction.fromParts(
-        configuration.networkId,
-        undefined,
-        undefined,
-        ledgerV9.Intent.new(new Date(Date.now() + 60_000)),
-      ),
-      stamp,
-    );
+    stamp >= configuration.forks.v9
+      ? WalletTransaction.adopt(
+          'Unproven',
+          ledgerV9.Transaction.fromParts(
+            configuration.networkId,
+            undefined,
+            undefined,
+            ledgerV9.Intent.new(new Date(Date.now() + 60_000)),
+          ),
+          stamp,
+        )
+      : WalletTransaction.adopt(
+          'Unproven',
+          ledgerV8.Transaction.fromParts(
+            configuration.networkId,
+            undefined,
+            undefined,
+            ledgerV8.Intent.new(new Date(Date.now() + 60_000)),
+          ),
+          stamp,
+        );
 
   it('proves at the version the wallets have reached when nothing says otherwise', async () => {
     const observed = await rx.firstValueFrom(facade.state());

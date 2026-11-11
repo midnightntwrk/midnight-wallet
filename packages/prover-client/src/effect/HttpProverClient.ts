@@ -20,7 +20,7 @@ import {
   ServerError,
 } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { BlobOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 
 const PROVE_TX_PATH = '/prove';

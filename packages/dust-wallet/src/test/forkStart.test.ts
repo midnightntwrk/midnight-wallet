@@ -30,8 +30,8 @@
  *   version a chain reports is a property of the chain, and the real fork's value is not final.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
-import { LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
+import { LedgerParameters as V8LedgerParameters } from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
@@ -757,23 +757,22 @@ describe('a dust wallet on a chain that has shown it no events', () => {
 
 describe('projections fast-sync and the two-variant wallet', () => {
   it('is a ledger-v9 capability the V1 variant does not have and never will', () => {
-    // The load-bearing fact behind the finding below, asserted rather than asserted-in-prose: the projections path
-    // exists only on the V2 variant. It needs `DustLocalState` APIs no published ledger-v8 has, so this
-    // is permanent rather than a gap to be closed — the V1 variant syncs by event replay, full stop.
+    // The fact the next test rests on, asserted rather than stated in prose: the projections path exists only on the V2
+    // variant. It needs `DustLocalState` APIs no published ledger-v8 has, so this is permanent rather than a gap to be
+    // closed — the V1 variant syncs by event replay, full stop.
     expect(V2Sync.makeEventLessSyncService).toBeDefined();
     expect(V2Sync.makeEventLessSyncCapability).toBeDefined();
     expect('makeEventLessSyncService' in V1Sync).toBe(false);
     expect('makeEventLessSyncCapability' in V1Sync).toBe(false);
   });
 
-  it('is still reachable only through a single-variant composition, probe or no probe', async () =>
+  it('runs only from the boundary in a two-variant wallet, which is on its V1 variant wherever the chain has not forked', async () =>
     Effect.gen(function* () {
-      // The finding survives the start probe, which changes where a wallet begins and not what it can sync with. A
-      // two-variant wallet has to be able to read a chain below the boundary, and below the boundary there is only the
-      // event path — so its V2 variant is composed with the event sync too, and it is on the V1 variant
-      // whenever the chain has not forked, was not asked, or did not answer. A wallet that wants projections therefore
-      // still composes a *single* V2 variant (`CustomDustWallet` + `makeEventLessSyncService`, as
-      // `docs-snippets`' `dust-fast-sync.ts` does).
+      // Projections are a V2 capability, so a two-variant wallet whose V2 variant syncs by projections — the composition
+      // `docs-snippets`' `dust-fast-sync.ts` builds with `CustomForkingDustWallet` — runs them exactly while it is on that
+      // variant, and replays events below the boundary. Which variant that is follows the chain, and the start probe only
+      // changes where a wallet begins, not what each variant syncs with: on a chain past the boundary the probed wallet
+      // starts on V2, and on one that has not forked it is on V1.
       const chain = yield* Effect.promise(() => buildDustChain());
 
       const probed = yield* walletOnChainAt(chain, v9Version, chainReporting(v9Version));

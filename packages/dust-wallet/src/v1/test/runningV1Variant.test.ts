@@ -16,7 +16,7 @@ import {
   type DustStateChanges,
   type FinalizedTransaction,
   LedgerParameters,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   Chunk,
