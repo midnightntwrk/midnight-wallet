@@ -41,7 +41,7 @@ type RemoteKnownNetwork = Exclude<KnownNetwork, 'undeployed'>;
 // listed. The hosts match the testkit's `NETWORK_PRESETS`.
 const REMOTE_HOSTS: Record<RemoteKnownNetwork, { readonly indexer: string; readonly node: string }> = {
   preview: { indexer: 'indexer.preview.midnight.network', node: 'rpc.preview.midnight.network' },
-  preprod: { indexer: 'indexer.preprod.shielded.tools', node: 'rpc.preprod.midnight.network' },
+  preprod: { indexer: 'indexer.preprod.shielded.tools', node: 'rpc.preprod.shielded.tools' },
   devnet: { indexer: 'indexer.devnet.shielded.tools', node: 'rpc.devnet.shielded.tools' },
   qanet: { indexer: 'indexer.qanet.shielded.tools', node: 'rpc.qanet.shielded.tools' },
 };
