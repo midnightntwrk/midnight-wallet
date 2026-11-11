@@ -141,13 +141,16 @@ Each test wallet is brought to:
 
 - at least five Night UTxOs, one of them 10,000 tNight (ten times the usual 1000 tNight);
 - at least 1000 shielded tNight, 25 of native token `…01` and 50 of `…02`;
-- Night registered for Dust generation, and Dust. A wallet with nothing registered has the 10,000 tNight UTxO and one
-  1000 tNight UTxO registered together; the registration pays its own fee from the Dust they generate, so a new wallet
-  waits for that before it registers — longer the smaller its Night.
+- the 10,000 tNight UTxO and at least one other registered for Dust generation, two other UTxOs left unregistered, and
+  Dust. The generator is registered whenever it is not, together with as many 1000 tNight UTxOs as it takes to reach two
+  registered. A new wallet pays that registration's fee from the Dust its Night generates, so when the first attempt
+  falls short it waits for the rest — longer the smaller its Night.
 
-Dust registration belongs to a wallet's Night address, not to a UTxO: once a wallet is registered, every Night UTxO sent
-to it arrives registered. Funding can therefore add unregistered UTxOs only to a wallet with nothing registered, and
-warns when a registered wallet has fewer than two left.
+Dust generation is keyed on a wallet's Night address, while each UTxO carries its own flag. Night sent to a registered
+address arrives registered. A deregistration, which the dust deregistration healthcheck makes on every run, removes the
+address's registration but leaves the flag on the UTxOs it did not spend, so Night sent afterwards arrives unregistered.
+The script therefore never assumes how sent Night will arrive: it reads the flags once the funds are there, registers
+what is missing, and fails, naming the remedy, when a registered address leaves it short of unregistered UTxOs.
 
 ### Tests overview
 

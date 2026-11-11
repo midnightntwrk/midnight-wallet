@@ -1029,7 +1029,7 @@ describe.sequential('Hard fork crossing @fork', () => {
     async () => {
       // Every wallet this file starts after the boundary, the receiver among them, is built from the fixture's
       // configuration. If that configuration skipped the ledger-v8 dust history, those wallets would start at the
-      // ledger-v9 timeline and a broken hand-over for a wallet started after the fork could no longer fail this lane.
+      // ledger-v9 timeline and a broken hand-over for a wallet started from `forks.v9` could no longer fail this lane.
       // Only the test below opts in to the skip, and it does so explicitly.
       const fromDefaults = await DustWallet(makeConfiguration()).startWithSeed(seeds.dust);
       try {

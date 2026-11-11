@@ -28,7 +28,6 @@ import { logger } from './logger.js';
 import {
   isGenerator,
   isRegistered,
-  MIN_UNREGISTERED_OTHERS,
   planNightTopUp,
   planRegistration,
   readinessProblems,
@@ -234,7 +233,6 @@ describe('Fund remote test wallets', () => {
       const nightBefore = nightUtxosOf(before);
       const hasGenerator = nightBefore.some(isGenerator);
       const unregisteredOthers = nightBefore.filter((coin) => !isGenerator(coin) && !isRegistered(coin));
-      const registeredBefore = nightBefore.filter(isRegistered).length;
       const nightAmounts = planNightTopUp(nightBefore);
       const shieldedShortfalls = TEST_WALLET_SHIELDED_MINIMUMS.map((minimum) => ({
         ...minimum,
@@ -290,19 +288,13 @@ describe('Fund remote test wallets', () => {
       }
 
       const funded = await target.wallet.waitForSyncedState();
-      if (registeredBefore > 0) {
-        expect(
-          nightUtxosOf(funded).filter(isRegistered).length,
-          'Night sent to a wallet with registered Night must arrive registered',
-        ).toBe(registeredBefore + nightAmounts.length);
-      }
       expect(nightUtxosOf(funded).some(isGenerator), 'No generator UTxO on the target wallet').toBe(true);
       const step = planRegistration(nightUtxosOf(funded), dustOf(funded));
       if (step._tag === 'Ready') {
-        logger.info(`Target has registered Night and ${dustOf(funded)} Specks of Dust; not registering`);
+        logger.info(`Target's generator and registered Night are in place, with ${dustOf(funded)} Specks of Dust`);
       } else {
         if (step._tag === 'WaitForDust') {
-          logger.info('Target has registered Night but no Dust yet; waiting for it to generate');
+          logger.info('Target has its registered Night but no Dust yet; waiting for it to generate');
         } else {
           await registerForDust(target, step.utxos);
           // Registration spends the registered UTxOs and recreates them, so they are pending until it settles.
@@ -310,8 +302,8 @@ describe('Fund remote test wallets', () => {
         }
         await waitForState(
           target,
-          (state) => dustOf(state) > 0n && nightUtxosOf(state).some(isRegistered),
-          'the target wallet to have registered Night and Dust',
+          (state) => planRegistration(nightUtxosOf(state), dustOf(state))._tag === 'Ready',
+          'the target wallet to have its generator and registered Night, and Dust',
         );
       }
 
@@ -321,15 +313,6 @@ describe('Fund remote test wallets', () => {
       logger.info(`Target Dust: ${dustOf(final)} Specks`);
       const problems = readinessProblems(nightFinal, dustOf(final));
       expect(problems, `Target wallet cannot serve the dust healthchecks: ${problems.join('; ')}`).toEqual([]);
-      const unregisteredOthersFinal = nightFinal.filter((coin) => !isGenerator(coin) && !isRegistered(coin)).length;
-      if (registeredBefore === 0) {
-        expect(unregisteredOthersFinal).toBeGreaterThanOrEqual(MIN_UNREGISTERED_OTHERS);
-      } else if (unregisteredOthersFinal < MIN_UNREGISTERED_OTHERS) {
-        logger.warn(
-          `Target holds ${unregisteredOthersFinal} unregistered Night UTxOs; the dust registration healthcheck needs ` +
-            `${MIN_UNREGISTERED_OTHERS}, and funding a registered wallet cannot add them`,
-        );
-      }
       expect(holdsShieldedMinimums(final), `Shielded balances below minimum: ${inspect(final.shielded.balances)}`).toBe(
         true,
       );

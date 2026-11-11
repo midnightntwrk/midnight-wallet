@@ -36,20 +36,38 @@ export type NightCoin = {
 export const isGenerator = (coin: NightCoin): boolean => coin.utxo.value >= DUST_GENERATOR_AMOUNT;
 export const isRegistered = (coin: NightCoin): boolean => coin.meta.registeredForDustGeneration;
 
+/**
+ * Dust generation is keyed on a Night address, while each UTxO carries its own flag. A deregistration removes the
+ * address's registration but leaves the flag on the UTxOs it did not spend, so a wallet can hold flagged UTxOs on an
+ * address that is no longer registered; Night sent to it then arrives unregistered, while Night sent to a registered
+ * address arrives registered. Nothing here relies on how sent Night will arrive: the top-up plans as if it arrives
+ * unregistered, and registration is decided from the flags read once the funds are there.
+ */
+const registeredCount = (coins: readonly NightCoin[]): number => coins.filter(isRegistered).length;
+const isUnregisteredOther = (coin: NightCoin): boolean => !isGenerator(coin) && !isRegistered(coin);
+const hasRegisteredGenerator = (coins: readonly NightCoin[]): boolean =>
+  coins.some((coin) => isGenerator(coin) && isRegistered(coin));
+
+/**
+ * How many base UTxOs a registration must take besides the generator to bring the registered count to
+ * {@link MIN_REGISTERED}. The generator is always registered first, whether it is already held or about to be sent.
+ */
+const othersToRegister = (coins: readonly NightCoin[]): number =>
+  Math.max(0, MIN_REGISTERED - registeredCount(coins) - (hasRegisteredGenerator(coins) ? 0 : 1));
+
 /** The Night UTxO amounts to send so the wallet reaches what the dust healthchecks need. */
 export const planNightTopUp = (coins: readonly NightCoin[]): readonly bigint[] => {
-  const hasGenerator = coins.some(isGenerator);
   const others = coins.filter((coin) => !isGenerator(coin));
-  const unregisteredOthers = others.filter((coin) => !isRegistered(coin));
-  const registeredBefore = coins.filter(isRegistered).length;
-  // A registered wallet receives Night already registered, so sending more raises its registered count. A wallet
-  // with none registers one of its others alongside the generator, so it needs one unregistered other to spare.
+  // Registration takes unregistered others, and the registration healthcheck needs MIN_UNREGISTERED_OTHERS left after.
   const baseCount = Math.max(
     0,
     MIN_NIGHT_UTXOS - 1 - others.length,
-    registeredBefore > 0 ? MIN_REGISTERED - registeredBefore : MIN_UNREGISTERED_OTHERS + 1 - unregisteredOthers.length,
+    MIN_UNREGISTERED_OTHERS + othersToRegister(coins) - coins.filter(isUnregisteredOther).length,
   );
-  return [...(hasGenerator ? [] : [DUST_GENERATOR_AMOUNT]), ...Array.from({ length: baseCount }, () => BASE_AMOUNT)];
+  return [
+    ...(coins.some(isGenerator) ? [] : [DUST_GENERATOR_AMOUNT]),
+    ...Array.from({ length: baseCount }, () => BASE_AMOUNT),
+  ];
 };
 
 /** What the funding script does about Dust once the funds have arrived. */
@@ -60,27 +78,37 @@ export type RegistrationStep<C extends NightCoin> =
 
 /**
  * Decides, from the wallet's Night UTxOs and Dust once the funds have arrived, whether to register Night for Dust
- * generation, wait for registered Night to generate Dust, or do nothing.
+ * generation, wait for registered Night to generate Dust, or do nothing. The generator is registered whenever it is
+ * not, and unregistered base UTxOs join it until {@link MIN_REGISTERED} are registered. A Dust balance does not stand in
+ * for a registration: a deregistered wallet keeps decaying Dust for a while.
  */
 export const planRegistration = <C extends NightCoin>(coins: readonly C[], dust: bigint): RegistrationStep<C> => {
-  const anyRegistered = coins.some(isRegistered);
-  if (anyRegistered && dust > 0n) return { _tag: 'Ready' };
-  const unregisteredGenerator = coins.find((coin) => isGenerator(coin) && !isRegistered(coin));
-  if (anyRegistered || unregisteredGenerator === undefined) return { _tag: 'WaitForDust' };
-  // One base-amount UTxO is registered with the generator, so the deregistration healthcheck finds two.
-  const companion = coins.find((coin) => !isGenerator(coin) && !isRegistered(coin));
-  return {
-    _tag: 'Register',
-    utxos: companion === undefined ? [unregisteredGenerator] : [unregisteredGenerator, companion],
-  };
+  const generator = hasRegisteredGenerator(coins)
+    ? []
+    : coins.filter((coin) => isGenerator(coin) && !isRegistered(coin)).slice(0, 1);
+  const others = coins
+    .filter(isUnregisteredOther)
+    .slice(0, Math.max(0, MIN_REGISTERED - registeredCount(coins) - generator.length));
+  const utxos = [...generator, ...others];
+  if (utxos.length > 0) return { _tag: 'Register', utxos };
+  return dust > 0n ? { _tag: 'Ready' } : { _tag: 'WaitForDust' };
 };
 
 /** Why the funded wallet still cannot serve the dust healthchecks; empty when it can. */
 export const readinessProblems = (coins: readonly NightCoin[], dust: bigint): readonly string[] => {
-  const registered = coins.filter(isRegistered).length;
+  const registered = registeredCount(coins);
+  const unregisteredOthers = coins.filter(isUnregisteredOther).length;
   return [
     ...(coins.length < MIN_NIGHT_UTXOS ? [`${coins.length} Night UTxOs, needs ${MIN_NIGHT_UTXOS}`] : []),
     ...(dust > 0n ? [] : ['no Dust to pay fees']),
     ...(registered < MIN_REGISTERED ? [`${registered} registered Night UTxOs, needs ${MIN_REGISTERED}`] : []),
+    ...(hasRegisteredGenerator(coins) ? [] : ['the generator is not registered for Dust generation']),
+    ...(unregisteredOthers < MIN_UNREGISTERED_OTHERS
+      ? [
+          `${unregisteredOthers} unregistered Night UTxOs besides the generator, the dust registration healthcheck needs ` +
+            `${MIN_UNREGISTERED_OTHERS}. Night sent to this wallet arrives registered while its address is registered; ` +
+            'after a deregistration (as the dust deregistration healthcheck makes) a funding run can add unregistered ones',
+        ]
+      : []),
   ];
 };
