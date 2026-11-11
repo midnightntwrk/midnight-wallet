@@ -18,6 +18,7 @@ import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } 
 import { type StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
 import { type MidnightNetwork, sleep } from './helpers/network.js';
 import { logger } from './logger.js';
+import { NETWORK_PRESETS, type RemoteNetworkPreset } from '@midnightntwrk/wallet-sdk-testkit/core';
 import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import { type DefaultV2Configuration as DefaultDustV2Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
@@ -95,6 +96,18 @@ export function useTestContainersFixture() {
   return () => fixture!;
 }
 
+/**
+ * The testkit's endpoint preset for a remote network, so the remote lanes reach the same hosts the testkit ships.
+ *
+ * `NETWORK` is read without parsing, so a name outside the presets is reported here rather than as a missing URL.
+ */
+const remotePreset = (network: Exclude<MidnightNetwork, 'undeployed'>): RemoteNetworkPreset => {
+  if (!Object.hasOwn(NETWORK_PRESETS, network)) {
+    throw new Error(`Unrecognized network: ${String(network)}`);
+  }
+  return NETWORK_PRESETS[network];
+};
+
 export class TestContainersFixture {
   public readonly composeEnvironment: StartedDockerComposeEnvironment;
   private readonly uid: string | undefined;
@@ -135,103 +148,29 @@ export class TestContainersFixture {
   }
 
   public getIndexerUri(): string {
-    switch (TestContainersFixture.network) {
-      case 'devnet': {
-        return 'https://indexer.devnet.shielded.tools/api/v4/graphql';
-      }
-      case 'qanet': {
-        return 'https://indexer.qanet.shielded.tools/api/v4/graphql';
-      }
-      case 'preview': {
-        return 'https://indexer.preview.midnight.network/api/v4/graphql';
-      }
-      case 'preprod': {
-        return 'https://indexer.preprod.shielded.tools/api/v4/graphql';
-      }
-      case 'stagenet': {
-        return 'https://indexer.stagenet.shielded.tools/api/v4/graphql';
-      }
-      case 'undeployed': {
-        const indexerPort = this.getIndexerPort();
-        return `http://localhost:${indexerPort}/api/v3/graphql`;
-      }
-      default: {
-        throw new Error(`Unrecognized network: ${String(TestContainersFixture.network)}`);
-      }
-    }
+    const network = TestContainersFixture.network;
+    return network === 'undeployed'
+      ? `http://localhost:${this.getIndexerPort()}/api/v3/graphql`
+      : remotePreset(network).indexerHttpUrl;
   }
 
   public getIndexerWsUri(): string {
-    switch (TestContainersFixture.network) {
-      case 'devnet': {
-        return 'wss://indexer.devnet.shielded.tools/api/v4/graphql/ws';
-      }
-      case 'qanet': {
-        return 'wss://indexer.qanet.shielded.tools/api/v4/graphql/ws';
-      }
-      case 'preview': {
-        return 'wss://indexer.preview.midnight.network/api/v4/graphql/ws';
-      }
-      case 'preprod': {
-        return 'wss://indexer.preprod.shielded.tools/api/v4/graphql/ws';
-      }
-      case 'stagenet': {
-        return 'wss://indexer.stagenet.shielded.tools/api/v4/graphql/ws';
-      }
-      case 'undeployed': {
-        const indexerPort = this.getIndexerPort();
-        return `ws://localhost:${indexerPort}/api/v4/graphql/ws`;
-      }
-      default: {
-        throw new Error(`Unrecognized network: ${String(TestContainersFixture.network)}`);
-      }
-    }
+    const network = TestContainersFixture.network;
+    return network === 'undeployed'
+      ? `ws://localhost:${this.getIndexerPort()}/api/v4/graphql/ws`
+      : remotePreset(network).indexerWsUrl;
   }
 
   public getNodeUri(): string {
-    switch (TestContainersFixture.network) {
-      case 'devnet': {
-        return 'wss://rpc.devnet.shielded.tools';
-      }
-      case 'qanet': {
-        return 'wss://rpc.qanet.shielded.tools';
-      }
-      case 'preview': {
-        return 'wss://rpc.preview.midnight.network';
-      }
-      case 'preprod': {
-        return 'wss://rpc.preprod.midnight.network';
-      }
-      case 'stagenet': {
-        return 'wss://rpc.stagenet.shielded.tools';
-      }
-      case 'undeployed': {
-        const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);
-        return `ws://localhost:${nodePortRpc}`;
-      }
-      default: {
-        throw new Error(`Unrecognized network: ${String(TestContainersFixture.network)}`);
-      }
-    }
+    const network = TestContainersFixture.network;
+    return network === 'undeployed'
+      ? `ws://localhost:${this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC)}`
+      : remotePreset(network).nodeUrl;
   }
 
   public getNetworkId(): NetworkId.NetworkId {
-    switch (TestContainersFixture.network) {
-      case 'undeployed':
-        return NetworkId.NetworkId.Undeployed;
-      case 'devnet':
-        return NetworkId.NetworkId.DevNet;
-      case 'qanet':
-        return NetworkId.NetworkId.QaNet;
-      case 'preview':
-        return NetworkId.NetworkId.Preview;
-      case 'preprod':
-        return NetworkId.NetworkId.PreProd;
-      case 'stagenet':
-        return NetworkId.NetworkId.StageNet;
-      default:
-        throw new Error(`Unrecognized network: ${String(TestContainersFixture.network)}`);
-    }
+    const network = TestContainersFixture.network;
+    return network === 'undeployed' ? NetworkId.NetworkId.Undeployed : remotePreset(network).networkId;
   }
 
   public getWalletConfig(): DefaultShieldedConfiguration &

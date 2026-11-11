@@ -57,8 +57,9 @@ export const parseMidnightNetwork = (raw: string | undefined): MidnightNetwork =
 };
 
 /**
- * Endpoint presets lifted verbatim from the old `TestContainersFixture` getters. The proof server is intentionally
- * absent — there is no public prover, so every remote environment must be told where to find one.
+ * Public service endpoints for each remote network: the single list of hosts, which the e2e suites' fixture reads as
+ * well. The proof server is intentionally absent — there is no public prover, so every remote environment must be told
+ * where to find one.
  */
 export const NETWORK_PRESETS: Record<RemoteNetwork, RemoteNetworkPreset> = {
   devnet: {
