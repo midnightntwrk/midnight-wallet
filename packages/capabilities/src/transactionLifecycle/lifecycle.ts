@@ -135,8 +135,16 @@ const settle = <TTransaction>(
   ),
 });
 
-/** A record stands for the same spend as a transaction when they share any identifier. */
-const isCoveredBy =
+/**
+ * Whether a record stands for the same spend as the transaction with `identifiers`: they share any identifier.
+ *
+ * @example
+ *   const covering = state.records.filter(isCoveredBy(tx.identifiers()));
+ *
+ * @param identifiers The transaction's identifiers.
+ * @returns A predicate on records, `true` for each that shares one of them.
+ */
+export const isCoveredBy =
   (identifiers: readonly string[]) =>
   <TTransaction>(record: LifecycleRecord<TTransaction>): boolean =>
     record.identifiers.some((id) => identifiers.includes(id));
@@ -252,7 +260,7 @@ export const finalized = <TTransaction>(
 /**
  * Records a transaction as submitted, from balanced, finalized, reverted or nothing: a transaction proven outside the
  * facade arrives still balanced, and an adopted one arrives unrecorded. A reverted one is sent again after a submission
- * that threw: once it is sent it is in flight, whatever the wallet concluded before.
+ * that proved it was in no block: once it is sent it is in flight, whatever the wallet concluded before.
  *
  * @example
  *   const sent = submitted(state, { tx: finalizedTx, identifiers, intentHashes, inputs, ttl, protocolVersion }, now);

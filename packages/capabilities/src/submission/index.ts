@@ -13,4 +13,5 @@
  * limitations under the License.
  */
 
+export * from './submissionFailure.js';
 export * from './submissionService.js';
