@@ -300,6 +300,9 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     );
   }
 
+  // Each request is run to its end on its own. The ledger asks through a promise, for every proof of a transaction up
+  // front, and has no way to say it has stopped waiting; and a proof server makes every proof it has accepted whether
+  // or not anyone still wants it. So interrupting whoever asked for the transaction's proof stops none of these.
   private serverProverProvider = (framing: PayloadFraming): ledgerV9.ProvingProvider => ({
     check: async (serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> =>
       pipe(

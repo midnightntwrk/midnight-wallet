@@ -64,8 +64,10 @@ A request the Proof Server has not answered within 10 minutes is given up, which
 among the requests in flight. It is not sent again: a request still waiting after that long may be a proof still being
 made.
 
-Interrupting a proof does not withdraw the requests it has already asked the client for: each is still sent in its turn,
-ahead of anything the client is asked to prove afterwards.
+Interrupting a proof does not withdraw the requests it has already asked the client for. The ledger asks for every proof
+of a transaction up front and has no way to take one back, and a Proof Server makes every proof it has accepted whether
+or not anyone is still waiting for it. So each of those requests is still sent in its turn, ahead of anything the client
+is asked to prove afterwards.
 
 `retrySchedule` is how often, and how far apart, a request is sent again after the Proof Server could not take it: its
 queue was full (HTTP 429), or something between the client and it gave way (HTTP 502, 503, 504). Unless set, the client

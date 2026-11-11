@@ -35,6 +35,9 @@ export declare namespace ProverClient {
      *   A ledger asks for every proof of a transaction at once, and a Proof Server refuses the requests its queue has no
      *   room for, which fails the whole transaction. Requests past this number are held back, and sent as earlier ones
      *   are answered. `/check` and `/prove` requests wait in the same queue at the server, so both count.
+     *
+     *   A proof that is interrupted keeps the turns of the requests it has already asked for: the ledger asks for all of
+     *   them up front and cannot take one back, so they are still sent, ahead of anything proved afterwards.
      */
     readonly maxConcurrentRequests?: number;
     /**
