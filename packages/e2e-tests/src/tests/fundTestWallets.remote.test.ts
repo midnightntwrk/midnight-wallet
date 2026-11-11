@@ -25,6 +25,14 @@ import { useTestContainersFixture } from './test-fixture.js';
 import { carried } from './helpers/transactions.js';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
+import {
+  isGenerator,
+  isRegistered,
+  MIN_UNREGISTERED_OTHERS,
+  planNightTopUp,
+  planRegistration,
+  readinessProblems,
+} from './helpers/fundingPlan.js';
 
 // Provisions the wallets the remote suites run against. Run it on its own with `yarn test-fund`; no other run selects
 // it, so a nightly or a bare `yarn test-e2e` never spends the funding wallet.
@@ -52,21 +60,6 @@ const stableSeed = envOf('SEED_STABLE');
 
 const unshieldedTokenRaw = ledger.unshieldedToken().raw;
 
-/** The amount a test wallet normally receives in one UTxO. */
-const BASE_AMOUNT = utils.tNightAmount(1000n);
-/** One Night UTxO is this much larger and registered, so the wallet generates enough Dust to pay its own fees. */
-const DUST_GENERATOR_AMOUNT = BASE_AMOUNT * 10n;
-/**
- * The dust healthchecks register two unregistered Night UTxOs and then deregister two registered ones, so the wallet
- * needs at least two of each: the registered generator and one more registered UTxO, and two unregistered others.
- *
- * Registration belongs to the wallet's Night address, not to a UTxO: the ledger creates Dust generation for every Night
- * output whose owner has a registration. Funding can therefore add unregistered UTxOs only to a wallet with no
- * registered Night; Night sent to a registered wallet arrives registered.
- */
-const MIN_NIGHT_UTXOS = 5;
-const MIN_UNREGISTERED_OTHERS = 2;
-const MIN_REGISTERED = 2;
 /**
  * Shielded balances every test wallet holds at least: tNight, and the two native tokens the native-token transfer suite
  * moves between its wallets. They are the stable wallet's amounts, which the stable wallet holds exactly.
@@ -86,8 +79,6 @@ const balanceOf = (balances: Record<string, bigint>, tokenType: string): bigint 
 
 const nightUtxosOf = (state: FacadeState): readonly UtxoWithMeta[] =>
   state.unshielded.availableCoins.filter((coin) => coin.utxo.type === unshieldedTokenRaw);
-
-const isGenerator = (coin: UtxoWithMeta): boolean => coin.utxo.value >= DUST_GENERATOR_AMOUNT;
 
 const dustOf = (state: FacadeState): bigint => state.dust.balance(new Date());
 
@@ -242,22 +233,9 @@ describe('Fund remote test wallets', () => {
       const before = await target.wallet.waitForSyncedState();
       const nightBefore = nightUtxosOf(before);
       const hasGenerator = nightBefore.some(isGenerator);
-      const others = nightBefore.filter((coin) => !isGenerator(coin));
-      const unregisteredOthers = others.filter((coin) => !coin.meta.registeredForDustGeneration);
-      const registeredBefore = nightBefore.filter((coin) => coin.meta.registeredForDustGeneration).length;
-      // A registered wallet receives Night already registered, so sending more raises its registered count. A wallet
-      // with none registers one of its others alongside the generator, so it needs one unregistered other to spare.
-      const baseCount = Math.max(
-        0,
-        MIN_NIGHT_UTXOS - 1 - others.length,
-        registeredBefore > 0
-          ? MIN_REGISTERED - registeredBefore
-          : MIN_UNREGISTERED_OTHERS + 1 - unregisteredOthers.length,
-      );
-      const nightAmounts = [
-        ...(hasGenerator ? [] : [DUST_GENERATOR_AMOUNT]),
-        ...Array.from({ length: baseCount }, () => BASE_AMOUNT),
-      ];
+      const unregisteredOthers = nightBefore.filter((coin) => !isGenerator(coin) && !isRegistered(coin));
+      const registeredBefore = nightBefore.filter(isRegistered).length;
+      const nightAmounts = planNightTopUp(nightBefore);
       const shieldedShortfalls = TEST_WALLET_SHIELDED_MINIMUMS.map((minimum) => ({
         ...minimum,
         short: minimum.amount - balanceOf(before.shielded.balances, minimum.tokenType),
@@ -314,57 +292,36 @@ describe('Fund remote test wallets', () => {
       const funded = await target.wallet.waitForSyncedState();
       if (registeredBefore > 0) {
         expect(
-          nightUtxosOf(funded).filter((coin) => coin.meta.registeredForDustGeneration).length,
+          nightUtxosOf(funded).filter(isRegistered).length,
           'Night sent to a wallet with registered Night must arrive registered',
         ).toBe(registeredBefore + nightAmounts.length);
       }
-      const generators = nightUtxosOf(funded).filter(isGenerator);
-      expect(generators.length, 'No generator UTxO on the target wallet').toBeGreaterThan(0);
-      // The wallet needs Night registered for Dust generation, so it keeps generating, and Dust to pay fees with now.
-      // The dust healthchecks deregister registered UTxOs, the generator among them, and a deregistered wallet still
-      // holds decaying Dust for a while — so a Dust balance alone does not show the wallet will keep paying fees.
-      const anyRegistered = nightUtxosOf(funded).some((coin) => coin.meta.registeredForDustGeneration);
-      const dustBefore = dustOf(funded);
-      if (anyRegistered && dustBefore > 0n) {
-        logger.info(`Target has registered Night and ${dustBefore} Specks of Dust; not registering`);
+      expect(nightUtxosOf(funded).some(isGenerator), 'No generator UTxO on the target wallet').toBe(true);
+      const step = planRegistration(nightUtxosOf(funded), dustOf(funded));
+      if (step._tag === 'Ready') {
+        logger.info(`Target has registered Night and ${dustOf(funded)} Specks of Dust; not registering`);
       } else {
-        const unregisteredGenerator = generators.find((coin) => !coin.meta.registeredForDustGeneration);
-        if (anyRegistered || unregisteredGenerator === undefined) {
+        if (step._tag === 'WaitForDust') {
           logger.info('Target has registered Night but no Dust yet; waiting for it to generate');
         } else {
-          // One base-amount UTxO is registered with the generator, so the deregistration healthcheck finds two.
-          const companion = nightUtxosOf(funded).find(
-            (coin) => !isGenerator(coin) && !coin.meta.registeredForDustGeneration,
-          );
-          await registerForDust(
-            target,
-            companion === undefined ? [unregisteredGenerator] : [unregisteredGenerator, companion],
-          );
-          // Registration spends the generator and recreates it, so it is pending until the transaction settles.
+          await registerForDust(target, step.utxos);
+          // Registration spends the registered UTxOs and recreates them, so they are pending until it settles.
           await utils.waitForFacadePendingClear(target.wallet);
         }
         await waitForState(
           target,
-          (state) => dustOf(state) > 0n && nightUtxosOf(state).some((coin) => coin.meta.registeredForDustGeneration),
+          (state) => dustOf(state) > 0n && nightUtxosOf(state).some(isRegistered),
           'the target wallet to have registered Night and Dust',
         );
       }
 
       const final = await target.wallet.waitForSyncedState();
       const nightFinal = nightUtxosOf(final);
-      logger.info(
-        nightFinal.map((coin) => `${coin.utxo.value} registered=${coin.meta.registeredForDustGeneration}`).join(', '),
-      );
-      expect(nightFinal.length).toBeGreaterThanOrEqual(MIN_NIGHT_UTXOS);
+      logger.info(nightFinal.map((coin) => `${coin.utxo.value} registered=${isRegistered(coin)}`).join(', '));
       logger.info(`Target Dust: ${dustOf(final)} Specks`);
-      expect(dustOf(final), 'Target wallet holds no Dust').toBeGreaterThan(0n);
-      expect(
-        nightFinal.filter((coin) => coin.meta.registeredForDustGeneration).length,
-        'Registered Night UTxOs on the target wallet',
-      ).toBeGreaterThanOrEqual(MIN_REGISTERED);
-      const unregisteredOthersFinal = nightFinal.filter(
-        (coin) => !isGenerator(coin) && !coin.meta.registeredForDustGeneration,
-      ).length;
+      const problems = readinessProblems(nightFinal, dustOf(final));
+      expect(problems, `Target wallet cannot serve the dust healthchecks: ${problems.join('; ')}`).toEqual([]);
+      const unregisteredOthersFinal = nightFinal.filter((coin) => !isGenerator(coin) && !isRegistered(coin)).length;
       if (registeredBefore === 0) {
         expect(unregisteredOthersFinal).toBeGreaterThanOrEqual(MIN_UNREGISTERED_OTHERS);
       } else if (unregisteredOthersFinal < MIN_UNREGISTERED_OTHERS) {
