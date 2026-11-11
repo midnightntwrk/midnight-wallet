@@ -2654,6 +2654,7 @@ __metadata:
     "@midnightntwrk/ledger-v9": "npm:^1.0.0"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.3.0"
     "@midnightntwrk/zkir-v2": "npm:^2.2.0"
+    "@midnightntwrk/zkir-v3": "npm:^3.2.0"
     effect: "npm:^3.19.19"
     web-worker: "npm:^1.5.0"
   languageName: unknown
@@ -2817,6 +2818,13 @@ __metadata:
   version: 2.2.0
   resolution: "@midnightntwrk/zkir-v2@npm:2.2.0"
   checksum: 10c0/879ee985ccda420e74614ab48289920e4d9e58f928efab6ea1676defef294c53f321e7ce4284be12ec864699d825024f1dfa9fc83a88f7af4aa7dcd5e05203d2
+  languageName: node
+  linkType: hard
+
+"@midnightntwrk/zkir-v3@npm:^3.2.0":
+  version: 3.2.0
+  resolution: "@midnightntwrk/zkir-v3@npm:3.2.0"
+  checksum: 10c0/24769db20f2f384bd9164bef4efd1cd486d750fa1eeefb60584795fc9dcbd52a14b5444972cf4643d466f7003b6d46c6f4a999228aec274c6d5837285060326d
   languageName: node
   linkType: hard
 

@@ -10,97 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Schema } from 'effect';
-import { check, prove, type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnightntwrk/zkir-v2';
-import {
-  GetParamsOperationResultSchema,
-  CheckOperationSchema,
-  ProveOperationSchema,
-  LookupKeyOperationResultSchema,
-  ResponseFromWorkerSchema,
-  LookupKeyRequestSchema,
-  GetParamsRequestSchema,
-} from './effect/WasmProver.js';
+/**
+ * The proof worker for ZKIR v2 circuits: the wallet's own zswap and Dust circuits on both ledger versions, and contract
+ * circuits compiled before compactc 0.36.0.
+ */
+import { check, prove } from '@midnightntwrk/zkir-v2';
+import { serveProofs } from './proof-worker-loop.js';
 
-const MAX_TIME_TO_PROCESS = 10 * 60 * 1000;
-
-const keyMaterialProvider: KeyMaterialProvider = {
-  lookupKey(keyLocation: string): Promise<ProvingKeyMaterial | undefined> {
-    return new Promise((resolve, reject) => {
-      postMessage(Schema.encodeSync(LookupKeyRequestSchema)({ op: 'lookupKey', keyLocation }));
-
-      const subscription = ({ data }: MessageEvent<MessageData>) => {
-        const decoded = Schema.decodeUnknownSync(MessageDataSchema)(data);
-        if (decoded.op === 'lookupKey' && decoded.keyLocation === keyLocation) {
-          removeEventListener('message', subscription);
-          resolve(decoded.result);
-        }
-      };
-
-      addEventListener('message', subscription);
-      setTimeout(() => reject(new Error(`Promise timed out for lookupKey: ${keyLocation}`)), MAX_TIME_TO_PROCESS);
-    });
-  },
-  getParams(k: number): Promise<Uint8Array> {
-    return new Promise((resolve, reject) => {
-      postMessage(Schema.encodeSync(GetParamsRequestSchema)({ op: 'getParams', k }));
-
-      const subscription = ({ data }: MessageEvent<MessageData>) => {
-        const decoded = Schema.decodeUnknownSync(MessageDataSchema)(data);
-        if (decoded.op === 'getParams' && decoded.k === k) {
-          removeEventListener('message', subscription);
-          resolve(decoded.result);
-        }
-      };
-
-      addEventListener('message', subscription);
-      setTimeout(() => reject(new Error(`Promise timed out for getParams: ${k}`)), MAX_TIME_TO_PROCESS);
-    });
-  },
-};
-
-const MessageDataSchema = Schema.Union(
-  CheckOperationSchema,
-  ProveOperationSchema,
-  LookupKeyOperationResultSchema,
-  GetParamsOperationResultSchema,
-);
-
-type MessageData = Schema.Schema.Type<typeof MessageDataSchema>;
-
-addEventListener('message', ({ data }: MessageEvent<MessageData>) => {
-  const decoded = Schema.decodeUnknownSync(MessageDataSchema)(data);
-  const { op } = decoded;
-
-  if (op === 'check') {
-    const [a] = decoded.args;
-
-    check(a, keyMaterialProvider)
-      .then((result) => {
-        postMessage(
-          Schema.encodeSync(ResponseFromWorkerSchema)({
-            op: 'result',
-            value: result,
-          }),
-        );
-      })
-      .catch((e) => {
-        throw e;
-      });
-  } else if (op === 'prove') {
-    const [a, b] = decoded.args;
-
-    prove(a, keyMaterialProvider, b)
-      .then((result) => {
-        postMessage(
-          Schema.encodeSync(ResponseFromWorkerSchema)({
-            op: 'result',
-            value: result,
-          }),
-        );
-      })
-      .catch((e) => {
-        throw e;
-      });
-  }
-});
+serveProofs({ check, prove });
