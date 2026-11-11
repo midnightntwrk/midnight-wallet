@@ -19,4 +19,5 @@ the cap holds across the transactions it is proving at once.
 It sends a request again when the proof server could not take it: when its queue was full (HTTP 429), which is what
 carries a transaction through a proof server that other clients are also using, and on HTTP 502, 503 and 504, which used
 to be sent again only when the reply broke off before it could be read. It waits 1 second, doubling up to 10 seconds,
-for 5 minutes in all, unless `retrySchedule` says otherwise. Any other reply still fails the request at once.
+for 5 minutes in all, unless `retrySchedule` says otherwise. Any other reply still fails the request at once. A request
+the proof server has not answered within 10 minutes is given up, which fails the proof.

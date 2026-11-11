@@ -428,14 +428,170 @@ describe('What the HTTP prover client does with a request the proof server does 
     expect(server.arrived()).toBe(3);
   });
 
-  it('does not send it again when the server turned down what it holds, because the answer would be the same', async () => {
-    const server = aProofServerAnswering({ status: 400, body: 'not a proof preimage' });
-    const provider = aProviderRetrying(Schedule.recurs(4));
-    const preimage = await aV9Preimage();
+  it.each([
+    { status: 400, body: 'not a proof preimage' },
+    { status: 500, body: 'internal error' },
+  ])(
+    'does not send it again when the answer was $status, because the same request would get the same answer',
+    async (answer) => {
+      const server = aProofServerAnswering(answer);
+      const provider = aProviderRetrying(Schedule.recurs(4));
+      const preimage = await aV9Preimage();
 
-    await expect(provider.prove(preimage, 'midnight/zswap/output')).rejects.toThrow(
-      'Failed to prove: not a proof preimage',
-    );
+      await expect(provider.prove(preimage, 'midnight/zswap/output')).rejects.toThrow(
+        `Failed to prove: ${answer.body}`,
+      );
+      expect(server.arrived()).toBe(1);
+    },
+  );
+});
+
+/**
+ * Reads off whether a proof has been made, has failed, or is still being waited for, without waiting for it.
+ *
+ * @remarks
+ *   Also takes the proof's failure off the promise, so that one a test never awaits is not reported as unhandled.
+ */
+const watching = (proving: Promise<unknown>): (() => 'waiting' | 'proved' | 'failed') => {
+  const seen: { outcome: 'waiting' | 'proved' | 'failed' } = { outcome: 'waiting' };
+  proving.then(
+    () => {
+      seen.outcome = 'proved';
+    },
+    () => {
+      seen.outcome = 'failed';
+    },
+  );
+  return () => seen.outcome;
+};
+
+const seconds = (count: number): number => count * 1_000;
+
+/**
+ * How the HTTP prover client sends a request again when it was not told how.
+ *
+ * @remarks
+ *   The schedule a client runs with unless it is given one is what carries a transaction through a proof server that is
+ *   busy with someone else's proofs, so it is pinned here as a client with no schedule of its own behaves: it waits
+ *   about a second before the first retry, comes back at most about ten seconds apart, and gives up after five
+ *   minutes.
+ *
+ *   Time is the test's own: the waits are jittered by a fifth either way, so each bound is taken on the far side of that.
+ */
+describe('How the HTTP prover client sends a request again when it was not told how', () => {
+  const realFetch = globalThis.fetch;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    globalThis.fetch = realFetch;
+  });
+
+  const aProofServerAnswering = (...script: readonly [Answer, ...Answer[]]) => {
+    const server = aScriptedProofServer(script);
+    globalThis.fetch = server.fetch;
+    return server;
+  };
+
+  const aProvider = () => Effect.runSync(HttpProverClient.create({ url: PROVER_URL })).asProvingProvider();
+
+  it('waits about a second before sending a refused request again, and takes the proof it then gets', async () => {
+    const preimage = await aV9Preimage();
+    vi.useFakeTimers();
+    const server = aProofServerAnswering(queueFull, aProof);
+
+    const proving = aProvider().prove(preimage, 'midnight/zswap/output');
+    const outcome = watching(proving);
+
+    await vi.advanceTimersByTimeAsync(799);
     expect(server.arrived()).toBe(1);
+    expect(outcome()).toBe('waiting');
+
+    await vi.advanceTimersByTimeAsync(401);
+    expect(server.arrived()).toBe(2);
+    await expect(proving).resolves.toStrictEqual(aCheckResponseBody);
+  });
+
+  it('keeps sending a request the server keeps refusing for 5 minutes, at most about 10 seconds apart, and then gives up with what the server said', async () => {
+    const preimage = await aV9Preimage();
+    vi.useFakeTimers();
+    const server = aProofServerAnswering(queueFull);
+
+    const proving = aProvider().prove(preimage, 'midnight/zswap/output');
+    const outcome = watching(proving);
+
+    await vi.advanceTimersByTimeAsync(seconds(285));
+    expect(outcome()).toBe('waiting');
+
+    // Past five minutes by the longest a last wait can be.
+    await vi.advanceTimersByTimeAsync(seconds(28));
+    expect(outcome()).toBe('failed');
+    await expect(proving).rejects.toThrow('Failed to prove: Job Queue full');
+
+    // One request, four more as the waits double from one second to eight, then one about every ten seconds.
+    expect(server.arrived()).toBeGreaterThanOrEqual(25);
+    expect(server.arrived()).toBeLessThanOrEqual(45);
+  });
+});
+
+/**
+ * What the HTTP prover client does with a request the proof server never answers.
+ *
+ * @remarks
+ *   A request holds one of the client's places in flight until its reply has been read, so a request that is never
+ *   answered — a connection that went quiet without closing — would hold its place for good, and enough of them would
+ *   leave a client unable to send anything. So a request is given up after ten minutes, which is as long as a proof
+ *   server lets a job run as released: no proof it would have made is lost. It is not sent again, because a request
+ *   still waiting after that long may be a proof still being made, and sending it again would have it made twice.
+ */
+describe('What the HTTP prover client does with a request the proof server never answers', () => {
+  const realFetch = globalThis.fetch;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    globalThis.fetch = realFetch;
+  });
+
+  const aSilentProofServer = () => {
+    const server = aHeldProofServer();
+    globalThis.fetch = server.fetch;
+    return server;
+  };
+
+  it('gives it up after 10 minutes, and does not send it again', async () => {
+    const preimage = await aV9Preimage();
+    vi.useFakeTimers();
+    const server = aSilentProofServer();
+    const provider = Effect.runSync(
+      HttpProverClient.create({ url: PROVER_URL, retrySchedule: Schedule.recurs(4) }),
+    ).asProvingProvider();
+
+    const proving = provider.prove(preimage, 'midnight/zswap/output');
+    const outcome = watching(proving);
+
+    await vi.advanceTimersByTimeAsync(seconds(599));
+    expect(outcome()).toBe('waiting');
+
+    await vi.advanceTimersByTimeAsync(seconds(1));
+    expect(outcome()).toBe('failed');
+    await expect(proving).rejects.toThrow('Failed to prove: the Proof Server did not answer within 10 minutes');
+    expect(server.arrived()).toBe(1);
+  });
+
+  it('frees its place when it gives it up, so requests that are never answered do not hold up the ones behind them for good', async () => {
+    const preimage = await aV9Preimage();
+    vi.useFakeTimers();
+    const server = aSilentProofServer();
+    const provider = Effect.runSync(
+      HttpProverClient.create({ url: PROVER_URL, maxConcurrentRequests: 1 }),
+    ).asProvingProvider();
+
+    watching(provider.prove(preimage, 'midnight/zswap/output'));
+    watching(provider.prove(preimage, 'midnight/zswap/output'));
+
+    await vi.advanceTimersByTimeAsync(seconds(599));
+    expect(server.arrived()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(seconds(1));
+    expect(server.arrived()).toBe(2);
   });
 });

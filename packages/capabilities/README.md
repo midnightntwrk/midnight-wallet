@@ -123,6 +123,9 @@ const service = makeDefaultVersionedProvingService(
 - A `server` backend takes `maxConcurrentRequests`, the most requests it has waiting at its proof server at once. It
   defaults to 10, the places a proof server has in its queue as released; a server run with a larger `--job-capacity`
   can be given more (`{ kind: 'server', url, maxConcurrentRequests: 32 }`). `provingServerUrl` always uses the default.
+  The cap is per backend, not per proof server: `provingServerUrl` registers its one server as two backends, one per
+  ledger version, each with its own cap, so a wallet proving for both ledger versions at once can have twice the cap
+  waiting there. A request the server then refuses is sent again.
 - `makeV9ServerProvingServiceEffect` / `makeV9WasmProvingServiceEffect` build a single ledger-v9 backend, a
   `V9ProvingServiceEffect` over `V9UnprovenTransaction`; `makeV8ServerProvingServiceEffect` /
   `makeV8WasmProvingServiceEffect` are their ledger-v8 twins (`V8ProvingServiceEffect`, `V8UnprovenTransaction`). The

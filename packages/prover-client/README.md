@@ -60,6 +60,13 @@ Proof Server refuses the requests its queue has no room for; requests past this 
 ones are answered. It has to be a whole number of at least one: anything else is refused when the client is created,
 with an `InvalidMaxConcurrentRequestsError`.
 
+A request the Proof Server has not answered within 10 minutes is given up, which fails the proof and frees its place
+among the requests in flight. It is not sent again: a request still waiting after that long may be a proof still being
+made.
+
+Interrupting a proof does not withdraw the requests it has already asked the client for: each is still sent in its turn,
+ahead of anything the client is asked to prove afterwards.
+
 `retrySchedule` is how often, and how far apart, a request is sent again after the Proof Server could not take it: its
 queue was full (HTTP 429), or something between the client and it gave way (HTTP 502, 503, 504). Unless set, the client
 waits 1 second, doubling up to 10 seconds, for 5 minutes in all, and then fails the request with what the server said

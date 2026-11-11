@@ -83,6 +83,21 @@ const defaultRetrySchedule: Schedule.Schedule<unknown, unknown> = pipe(
 );
 
 /**
+ * How many minutes a request may go without a reply before it is given up.
+ *
+ * @remarks
+ *   A request holds one of its client's permits until its reply has been read, so one that is never answered would hold
+ *   it for good, and enough of them would leave the client unable to send anything. This is as long as a proof server
+ *   lets a job run as released (`--job-timeout`), so no proof it would have made is lost by giving up here.
+ */
+const REQUEST_TIMEOUT_MINUTES = 10;
+
+/** A request the proof server had not answered when its time ran out. */
+class Unanswered extends Data.TaggedError('Unanswered')<{
+  readonly message: string;
+}> {}
+
+/**
  * A reply that was not a result: what the proof server, or something answering in its place, said and with which
  * status.
  */
@@ -248,6 +263,15 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
           return yield* receiveBody(response);
         }),
       ),
+      // Given up inside its permit, so that giving up is what frees the place. It is not sent again: a request still
+      // waiting after this long may be a proof still being made, and sending it again would have it made twice.
+      Effect.timeoutFail({
+        duration: Duration.minutes(REQUEST_TIMEOUT_MINUTES),
+        onTimeout: () =>
+          new Unanswered({
+            message: `${failurePrefix}: the Proof Server did not answer within ${REQUEST_TIMEOUT_MINUTES} minutes`,
+          }),
+      }),
       // Held from the moment a request is sent until its reply has been read, so that no more requests than there
       // are permits wait at the proof server at once. Taken per attempt: a request waiting to be tried again has
       // nothing at the server, and holds no place another could use.
@@ -265,6 +289,7 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     return proveTxRequest.pipe(
       Effect.catchTags({
         Refusal: (refusal) => new ClientError({ message: refusal.message }),
+        Unanswered: (unanswered) => new ClientError({ message: unanswered.message }),
         RequestError: (err) => new ClientError({ message: `Failed to connect to Proof Server: ${err.message}` }),
         ResponseError: (err) =>
           Effect.orElseSucceed(err.response.text, () => 'Unknown server error').pipe(
