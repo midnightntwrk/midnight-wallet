@@ -377,3 +377,21 @@ describe('Balancer', () => {
     );
   });
 });
+
+describe('chooseCoin', () => {
+  test('should pick the smallest coin of the requested token type, so the default coin selection spends small coins first', () => {
+    const otherTokenType = sampleRawTokenType();
+    const coins = [
+      createQualifiedCoin(nativeTokenType, 50n),
+      createQualifiedCoin(otherTokenType, 1n),
+      createQualifiedCoin(nativeTokenType, 10n),
+      createQualifiedCoin(nativeTokenType, 30n),
+    ];
+
+    expect(chooseCoin(coins, nativeTokenType)).toBe(coins[2]);
+  });
+
+  test('should pick nothing when no coin has the requested token type', () => {
+    expect(chooseCoin([createQualifiedCoin(nativeTokenType, 10n)], sampleRawTokenType())).toBeUndefined();
+  });
+});
