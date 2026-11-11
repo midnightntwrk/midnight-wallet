@@ -41,7 +41,7 @@ describe('makeEnvironment', () => {
     nodeUrl: 'ws://localhost:9944',
   };
 
-  it.each(['undeployed', 'qanet'] as const)(
+  it.each(['qanet', 'devnet', 'preview', 'preprod', 'stagenet'] as const)(
     'should configure the %s dust wallet to skip the ledger-v8 dust history, so a fresh wallet on a network that crossed the v9 fork does not replay it',
     (network) => {
       // Every healthcheck wallet starts through this configuration; without the skip, its first Dust sync on a
@@ -49,6 +49,12 @@ describe('makeEnvironment', () => {
       expect(makeEnvironment(network, endpoints).getDustWalletConfig().skipLedgerV8DustHistory).toBe(true);
     },
   );
+
+  it('should leave the undeployed dust wallet without the skip, so a local chain that runs ledger-v9 from its first block pays no wait for a boundary search that cannot find anything', () => {
+    // The search waits out its event-tip probe on a chain with no dust events yet, so on a fresh local stack every new
+    // wallet would start that much later.
+    expect(makeEnvironment('undeployed', endpoints).getDustWalletConfig().skipLedgerV8DustHistory).not.toBe(true);
+  });
 });
 
 describe('NETWORK_PRESETS', () => {
