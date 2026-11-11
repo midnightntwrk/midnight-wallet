@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type Effect, Context } from 'effect';
+import { type Effect, type Schedule, Context } from 'effect';
 import type * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
@@ -27,6 +27,29 @@ export declare namespace ProverClient {
   interface ServerConfig {
     /** The base URL to the Proof Server. */
     readonly url: URL | string;
+    /**
+     * The most requests the client has waiting at the Proof Server at once. Defaults to 10, the places a Proof Server
+     * has in its queue as released.
+     *
+     * @remarks
+     *   A ledger asks for every proof of a transaction at once, and a Proof Server refuses the requests its queue has no
+     *   room for, which fails the whole transaction. Requests past this number are held back, and sent as earlier ones
+     *   are answered. `/check` and `/prove` requests wait in the same queue at the server, so both count.
+     *
+     *   A proof that is interrupted keeps the turns of the requests it has already asked for: the ledger asks for all of
+     *   them up front and cannot take one back, so they are still sent, ahead of anything proved afterwards.
+     */
+    readonly maxConcurrentRequests?: number;
+    /**
+     * How often, and how far apart, to send a request again after the Proof Server could not take it: its queue was
+     * full (HTTP 429), or something between the client and it gave way (HTTP 502, 503, 504). Defaults to a wait of 1
+     * second, doubling up to 10 seconds, for 5 minutes in all.
+     *
+     * @remarks
+     *   Once the schedule has run out the request fails with what the server said last. Any other reply fails it at once,
+     *   because sending the same request again would get the same reply.
+     */
+    readonly retrySchedule?: Schedule.Schedule<unknown, unknown>;
   }
 
   /** Provides wasm-related configuration for {@link KeyMaterialProvider} implementations. */

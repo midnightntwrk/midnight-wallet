@@ -41,7 +41,11 @@ const provenTransaction = await proverClient.proveTransaction(unprovenTransactio
 
 ```typescript
 class HttpProverClient {
-  constructor(config: { url: string });
+  constructor(config: {
+    url: string;
+    maxConcurrentRequests?: number;
+    retrySchedule?: Schedule.Schedule<unknown, unknown>;
+  });
 
   proveTransaction<S extends Signaturish, B extends Bindingish>(
     transaction: Transaction<S, PreProof, B>,
@@ -49,6 +53,27 @@ class HttpProverClient {
   ): Promise<Transaction<S, Proof, B>>;
 }
 ```
+
+`maxConcurrentRequests` is the most requests the client has waiting at the Proof Server at once. Unless set it is 10,
+the places a Proof Server has in its queue as released. A ledger asks for every proof of a transaction at once, and a
+Proof Server refuses the requests its queue has no room for; requests past this number are held back and sent as earlier
+ones are answered. It has to be a whole number of at least one: anything else is refused when the client is created,
+with an `InvalidMaxConcurrentRequestsError`.
+
+A request the Proof Server has not answered within 10 minutes is given up, which fails the proof and frees its place
+among the requests in flight. It is not sent again: a request still waiting after that long may be a proof still being
+made.
+
+Interrupting a proof does not withdraw the requests it has already asked the client for. The ledger asks for every proof
+of a transaction up front and has no way to take one back, and a Proof Server makes every proof it has accepted whether
+or not anyone is still waiting for it. So each of those requests is still sent in its turn, ahead of anything the client
+is asked to prove afterwards.
+
+`retrySchedule` is how often, and how far apart, a request is sent again after the Proof Server could not take it: its
+queue was full (HTTP 429), or something between the client and it gave way (HTTP 502, 503, 504). Unless set, the client
+waits 1 second, doubling up to 10 seconds, for 5 minutes in all, and then fails the request with what the server said
+last. This is what carries a transaction through a Proof Server that other clients, or other transactions of the same
+wallet, are also using.
 
 ### Proving providers, per ledger version
 
