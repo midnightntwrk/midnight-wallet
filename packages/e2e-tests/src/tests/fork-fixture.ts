@@ -246,6 +246,18 @@ export class ForkFixture extends TestContainersFixture {
     return `http://localhost:${this.#indexerPort()}/api/v3/graphql`;
   }
 
+  /**
+   * The fixture's Dust configuration, replaying the ledger-v8 dust history.
+   *
+   * @remarks
+   *   This chain crosses the v9 fork, so it has a ledger-v8 dust history to skip, and the base fixture's default skips
+   *   it. Here every wallet started after the boundary must replay it, because replaying it and handing over from V1 to
+   *   V2 is what this lane checks. A test that wants the skip opts in explicitly.
+   */
+  public override getDustWalletConfig(): ReturnType<TestContainersFixture['getDustWalletConfig']> {
+    return { ...super.getDustWalletConfig(), skipLedgerV8DustHistory: false };
+  }
+
   public override getIndexerWsUri(): string {
     return `ws://localhost:${this.#indexerPort()}/api/v4/graphql/ws`;
   }

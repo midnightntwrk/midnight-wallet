@@ -32,3 +32,4 @@ export * from './helpers/stateWaiters.js';
 export * from './helpers/txHistoryAsserts.js';
 export * from './helpers/network.js';
 export * from './helpers/primitives.js';
+export * from './helpers/stableWallet.js';

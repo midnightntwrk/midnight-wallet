@@ -56,7 +56,10 @@ export type V8ProvingService = ProvingService<V8UnboundTransaction, V8UnprovenTr
  * @returns A backend that proves ledger-v8 transactions.
  */
 export const fromV8ProvingProviderEffect = (
-  provider: Effect.Effect<ledger.ProvingProvider, InvalidProtocolSchemeError>,
+  provider: Effect.Effect<
+    ledger.ProvingProvider,
+    InvalidProtocolSchemeError | HttpProverClient.InvalidMaxConcurrentRequestsError
+  >,
 ): V8ProvingServiceEffect => ({
   prove(transaction: V8UnprovenTransaction): Effect.Effect<V8UnboundTransaction, ProvingFailure> {
     return pipe(
@@ -87,13 +90,24 @@ export const fromV8ProvingProvider = (provider: ledger.ProvingProvider): V8Provi
 /**
  * Proves ledger-v8 transactions at a proof server.
  *
+ * @remarks
+ *   One client serves everything the backend proves, made at its first proof and kept. The client's cap on requests in
+ *   flight is a cap on what this backend has waiting at its proof server, and that only holds while every transaction
+ *   it proves goes through the same client.
  * @param configuration The proof server to send ledger-v8 proving requests to.
  * @returns A backend that proves ledger-v8 transactions over HTTP.
  */
 export const makeV8ServerProvingServiceEffect = (configuration: ServerProvingConfiguration): V8ProvingServiceEffect =>
   pipe(
-    HttpProverClient.create({ url: configuration.provingServerUrl }),
+    HttpProverClient.create({
+      url: configuration.provingServerUrl,
+      ...(configuration.maxConcurrentRequests === undefined
+        ? {}
+        : { maxConcurrentRequests: configuration.maxConcurrentRequests }),
+    }),
     Effect.map((client) => client.asV8ProvingProvider()),
+    Effect.cached,
+    Effect.runSync,
     fromV8ProvingProviderEffect,
   );
 

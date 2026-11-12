@@ -44,8 +44,7 @@ describe('Token transfer', () => {
   const outputValue = 10n;
   const shieldedTokenRaw = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
-  const nativeToken1Raw = '0000000000000000000000000000000000000000000000000000000000000001';
-  const nativeToken2Raw = '0000000000000000000000000000000000000000000000000000000000000002';
+  const { nativeToken1Raw, nativeToken2Raw } = utils;
 
   // Optional, as in the other remote suites: unset or empty, the wallets are built from scratch and nothing is saved.
   const syncCacheDir = process.env['SYNC_CACHE'];
@@ -182,7 +181,7 @@ describe('Token transfer', () => {
         initialState.unshielded.availableCoins.length,
       );
       expect(finalState.unshielded.pendingCoins.length).toBe(0);
-      expect(finalState.unshielded.totalCoins.length).toBeLessThanOrEqual(initialState.shielded.totalCoins.length);
+      expect(finalState.unshielded.totalCoins.length).toBeLessThanOrEqual(initialState.unshielded.totalCoins.length);
 
       const receiverTxEntry = await utils.waitForTxInHistory(txHash, receiver.wallet, {
         ready: (entry) => entry.shielded !== undefined,
@@ -217,6 +216,9 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${initialBalance}`);
       logger.info(`Wallet 1 available coins: ${initialState.shielded.availableCoins.length}`);
 
+      // Every input of a self-transaction is one of this wallet's coins and every output — the payment and any change —
+      // comes back to it, so its coin count moves by outputs minus inputs, read from the transaction itself. How many
+      // coins it spends is coin selection's choice, pinned in the capabilities package's own tests, not this one's.
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
           type: 'shielded',
@@ -236,6 +238,17 @@ describe('Token transfer', () => {
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
+      const tx = carried<ledger.FinalizedTransaction>(finalizedTx);
+      const offers = [tx.guaranteedOffer, ...(tx.fallibleOffer?.values() ?? [])].filter((offer) => offer !== undefined);
+      const inputCount = offers.reduce((total, offer) => total + offer.inputs.length, 0);
+      const outputCount = offers.reduce((total, offer) => total + offer.outputs.length, 0);
+      logger.info(`Self-transaction spends ${inputCount} coins and creates ${outputCount}`);
+      expect(inputCount, 'Coins the self-transaction spends').toBeGreaterThan(0);
+      // The payment, plus change when the coins spent exceed it.
+      expect(outputCount, 'Coins the self-transaction creates').toBeGreaterThanOrEqual(1);
+      expect(outputCount, 'Coins the self-transaction creates').toBeLessThanOrEqual(2);
+      const expectedCoinDelta = outputCount - inputCount;
+
       await utils.waitForFacadePending(sender.wallet);
       await utils.waitForFacadePendingClear(sender.wallet);
       const finalState = await sender.wallet.waitForSyncedState();
@@ -243,8 +256,10 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${finalState.shielded.balances[shieldedTokenRaw]}`);
       expect(finalState.shielded.pendingCoins.length).toBe(0);
       expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(initialBalance);
-      expect(finalState.shielded.availableCoins.length).toBe(initialState.shielded.availableCoins.length + 1);
-      expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length + 1);
+      expect(finalState.shielded.availableCoins.length).toBe(
+        initialState.shielded.availableCoins.length + expectedCoinDelta,
+      );
+      expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length + expectedCoinDelta);
     },
     syncTimeout,
   );

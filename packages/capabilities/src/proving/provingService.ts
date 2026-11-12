@@ -137,6 +137,11 @@ export const wrapVersionedEffectService = <TProven, TUnproven>(
 
 export type ServerProvingConfiguration = {
   provingServerUrl: URL;
+  /**
+   * The most requests to have waiting at the proof server at once. Defaults to 10, the places a proof server has in its
+   * queue as released; a server run with a larger `--job-capacity` can be given more.
+   */
+  maxConcurrentRequests?: number;
 };
 
 export type WasmProvingConfiguration = {
@@ -152,7 +157,16 @@ export type WasmProvingConfiguration = {
  *   thing both times.
  */
 export type ProvingBackend =
-  Readonly<{ kind: 'server'; url: URL }> | Readonly<{ kind: 'wasm'; keyMaterialProvider?: KeyMaterialProvider }>;
+  | Readonly<{
+      kind: 'server';
+      url: URL;
+      /**
+       * The most requests to have waiting at the proof server at once. Defaults to 10, the places a proof server has in
+       * its queue as released; a server run with a larger `--job-capacity` can be given more.
+       */
+      maxConcurrentRequests?: number;
+    }>
+  | Readonly<{ kind: 'wasm'; keyMaterialProvider?: KeyMaterialProvider }>;
 
 /**
  * Which proving backend proves the transactions each ledger version authors.

@@ -67,6 +67,7 @@ import {
   dustLocalStateOf,
 } from './helpers/dustComparison.js';
 import { logger } from './logger.js';
+import { failingAfter, firstStateWhere, within } from './helpers/stateWaiters.js';
 
 /** The dev preset's funded account. */
 const FUNDED_SEED = '0000000000000000000000000000000000000000000000000000000000000001';
@@ -185,17 +186,6 @@ const unshieldedInputsOf = (transaction: ledgerV9.FinalizedTransaction): readonl
  */
 const describeFailure = (error: unknown): string => inspect(error, { depth: 6, breakLength: 160 });
 
-/** A deadline that says what was being waited for, rather than raising a bare `TimeoutError`. */
-const failingAfter = <T>(label: string, milliseconds: number): rx.MonoTypeOperatorFunction<T> =>
-  rx.timeout({
-    first: milliseconds,
-    with: () => rx.throwError(() => new Error(`Timed out after ${milliseconds}ms waiting for ${label}`)),
-  });
-
-/** Caps a wait that would otherwise only be bounded by the file's hour-long test timeout. */
-const within = <T>(label: string, milliseconds: number, work: Promise<T>): Promise<T> =>
-  rx.firstValueFrom(rx.from(work).pipe(failingAfter(label, milliseconds)));
-
 /**
  * Whether a failure is the wallet saying it has not been given enough dust to pay for something.
  *
@@ -239,8 +229,7 @@ const stateWhere = (
   wallet: WalletFacade,
   settled: (state: FacadeState) => boolean,
   milliseconds: number = SPEND_TIMEOUT_MS,
-): Promise<FacadeState> =>
-  rx.firstValueFrom(wallet.state().pipe(rx.filter(settled), failingAfter(label, milliseconds)));
+): Promise<FacadeState> => firstStateWhere(label, wallet, settled, milliseconds);
 
 /**
  * A wallet's states, each paired with the sequence of protocol phases observed up to it.
@@ -1022,6 +1011,27 @@ describe.sequential('Hard fork crossing @fork', () => {
       expect(twinState.dust.balance(now)).toBe(eventsState.dust.balance(now));
     },
     DUST_TIMEOUT_MS + 60_000,
+  );
+
+  test(
+    "should start a new wallet built from this file's configuration on the ledger-v8 dust history, so a wallet started after the v9 fork still exercises the V1 to V2 hand-over",
+    async () => {
+      // Every wallet this file starts after the boundary, the receiver among them, is built from the fixture's
+      // configuration. If that configuration skipped the ledger-v8 dust history, those wallets would start at the
+      // ledger-v9 timeline and a broken hand-over for a wallet started from `forks.v9` could no longer fail this lane.
+      // Only the test below opts in to the skip, and it does so explicitly.
+      const fromDefaults = await DustWallet(makeConfiguration()).startWithSeed(seeds.dust);
+      try {
+        // Read before sync starts, so it is the start the wallet chose. A number, not a bigint: the HTML reporter
+        // cannot serialize a failed bigint assertion.
+        const first = await rx.firstValueFrom(fromDefaults.state);
+        logger.info(`Start from the fixture's configuration: protocol version ${first.protocolVersion}`);
+        expect(Number(first.protocolVersion)).toBeLessThan(Number(ProtocolVersion.V9NativeForkVersion));
+      } finally {
+        await fromDefaults.stop();
+      }
+    },
+    DUST_TIMEOUT_MS,
   );
 
   test(
