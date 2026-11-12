@@ -1372,7 +1372,13 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         ];
       }
 
-      const { dustGenerations, spentUtxos, newUtxos, collapsedCommitments, latestBlock } = update;
+      const { dustGenerations, spentUtxos, collapsedCommitments, latestBlock } = update;
+
+      // The commitment tree's first free index is how far this wallet has applied the chain, so a coin whose commitment
+      // sits behind it is one already accounted for — still held, or since spent. Such a coin is left out of everything
+      // below: the tree refuses its commitment a second time, adding it again would bring back a coin the chain has
+      // spent, and reporting it again would record the same receipt twice.
+      const newUtxos = HashMap.filter(update.newUtxos, ({ qdo }) => qdo.mtIndex >= state.state.commitmentTreeFirstFree);
 
       const dustGenTreeUpdates = dustGenerations.rawUpdates
         .filter((u) => u.__typename === 'DustGenerationsItem' || u.__typename === 'DustGenerationsProgress')

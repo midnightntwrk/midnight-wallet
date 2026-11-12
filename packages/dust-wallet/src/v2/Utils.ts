@@ -111,12 +111,16 @@ export const calculatePrefixLength = (anonymityLevel: number, totalItems: number
   return Math.min(maxLength, Math.max(2, idealHexChars));
 };
 
-// The index ranges of [lastAppliedIndex + 1, maxIndex] left uncovered by the (sorted, ascending) skipIndexes.
+// The index ranges of [lastAppliedIndex + 1, maxIndex] left uncovered by the (sorted, ascending) skipIndexes. A skip at
+// or below lastAppliedIndex lies outside that span and is ignored, so no range reaches back into indexes already
+// applied.
 export const gapRanges = (
   lastAppliedIndex: number,
   maxIndex: number,
   skipIndexes: ReadonlyArray<number>,
-): { start: number; end: number }[] =>
-  [lastAppliedIndex, ...skipIndexes]
-    .map((boundary, i) => ({ start: boundary + 1, end: (skipIndexes.at(i) ?? maxIndex + 1) - 1 }))
+): { start: number; end: number }[] => {
+  const skipsAhead = skipIndexes.filter((index) => index > lastAppliedIndex);
+  return [lastAppliedIndex, ...skipsAhead]
+    .map((boundary, i) => ({ start: boundary + 1, end: (skipsAhead.at(i) ?? maxIndex + 1) - 1 }))
     .filter(({ start, end }) => start <= end);
+};
