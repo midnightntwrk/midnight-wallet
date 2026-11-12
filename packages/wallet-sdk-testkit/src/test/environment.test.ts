@@ -12,7 +12,7 @@
 // limitations under the License.
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { describe, expect, it } from 'vitest';
-import { makeEnvironment, NETWORK_PRESETS, parseMidnightNetwork } from '../environment.js';
+import { createRemoteEnvironment, makeEnvironment, NETWORK_PRESETS, parseMidnightNetwork } from '../environment.js';
 
 describe('parseMidnightNetwork', () => {
   it.each(['undeployed', 'qanet', 'devnet', 'preview', 'preprod', 'stagenet'] as const)('should read %s', (network) => {
@@ -64,6 +64,64 @@ describe('NETWORK_PRESETS', () => {
       // A wallet handed an explicit WebSocket URL uses it as given. Pointing it at a host that does not serve the
       // subscription leaves the wallet never connected and never synced, with nothing failing to say why.
       expect(new URL(preset.indexerWsUrl).host).toBe(new URL(preset.indexerHttpUrl).host);
+    },
+  );
+});
+
+describe('createRemoteEnvironment', () => {
+  // Written out rather than read from the presets, so a mistyped or retired host fails here instead of being copied in.
+  it.each([
+    [
+      'devnet',
+      {
+        networkId: NetworkId.NetworkId.DevNet,
+        indexerHttpUrl: 'https://indexer.devnet.shielded.tools/api/v4/graphql',
+        indexerWsUrl: 'wss://indexer.devnet.shielded.tools/api/v4/graphql/ws',
+        nodeUrl: 'wss://rpc.devnet.shielded.tools',
+      },
+    ],
+    [
+      'qanet',
+      {
+        networkId: NetworkId.NetworkId.QaNet,
+        indexerHttpUrl: 'https://indexer.qanet.shielded.tools/api/v4/graphql',
+        indexerWsUrl: 'wss://indexer.qanet.shielded.tools/api/v4/graphql/ws',
+        nodeUrl: 'wss://rpc.qanet.shielded.tools',
+      },
+    ],
+    [
+      'preview',
+      {
+        networkId: NetworkId.NetworkId.Preview,
+        indexerHttpUrl: 'https://indexer.preview.midnight.network/api/v4/graphql',
+        indexerWsUrl: 'wss://indexer.preview.midnight.network/api/v4/graphql/ws',
+        nodeUrl: 'wss://rpc.preview.midnight.network',
+      },
+    ],
+    [
+      'preprod',
+      {
+        networkId: NetworkId.NetworkId.PreProd,
+        indexerHttpUrl: 'https://indexer.preprod.shielded.tools/api/v4/graphql',
+        indexerWsUrl: 'wss://indexer.preprod.shielded.tools/api/v4/graphql/ws',
+        nodeUrl: 'wss://rpc.preprod.shielded.tools',
+      },
+    ],
+    [
+      'stagenet',
+      {
+        networkId: NetworkId.NetworkId.StageNet,
+        indexerHttpUrl: 'https://indexer.stagenet.shielded.tools/api/v4/graphql',
+        indexerWsUrl: 'wss://indexer.stagenet.shielded.tools/api/v4/graphql/ws',
+        nodeUrl: 'wss://rpc.stagenet.shielded.tools',
+      },
+    ],
+  ] as const)(
+    "should resolve the %s preset to that network's published endpoints, so a run reaches its indexer and node",
+    (network, expected) => {
+      const proverUrl = 'http://localhost:6300';
+
+      expect(createRemoteEnvironment({ network, proverUrl }).endpoints).toEqual({ ...expected, proverUrl });
     },
   );
 });

@@ -57,21 +57,22 @@ export const parseMidnightNetwork = (raw: string | undefined): MidnightNetwork =
 };
 
 /**
- * Endpoint presets lifted verbatim from the old `TestContainersFixture` getters. The proof server is intentionally
- * absent — there is no public prover, so every remote environment must be told where to find one.
+ * Public service endpoints for each remote network: the single list of hosts, which the e2e suites' fixture reads as
+ * well. The proof server is intentionally absent — there is no public prover, so every remote environment must be told
+ * where to find one.
  */
 export const NETWORK_PRESETS: Record<RemoteNetwork, RemoteNetworkPreset> = {
   devnet: {
     networkId: NetworkId.NetworkId.DevNet,
-    indexerHttpUrl: 'https://indexer.devnet.midnight.network/api/v4/graphql',
-    indexerWsUrl: 'wss://indexer.devnet.midnight.network/api/v4/graphql/ws',
-    nodeUrl: 'wss://rpc.devnet.midnight.network',
+    indexerHttpUrl: 'https://indexer.devnet.shielded.tools/api/v4/graphql',
+    indexerWsUrl: 'wss://indexer.devnet.shielded.tools/api/v4/graphql/ws',
+    nodeUrl: 'wss://rpc.devnet.shielded.tools',
   },
   qanet: {
     networkId: NetworkId.NetworkId.QaNet,
-    indexerHttpUrl: 'https://indexer.qanet.midnight.network/api/v4/graphql',
-    indexerWsUrl: 'wss://indexer.qanet.midnight.network/api/v4/graphql/ws',
-    nodeUrl: 'wss://rpc.qanet.midnight.network',
+    indexerHttpUrl: 'https://indexer.qanet.shielded.tools/api/v4/graphql',
+    indexerWsUrl: 'wss://indexer.qanet.shielded.tools/api/v4/graphql/ws',
+    nodeUrl: 'wss://rpc.qanet.shielded.tools',
   },
   preview: {
     networkId: NetworkId.NetworkId.Preview,
@@ -81,9 +82,9 @@ export const NETWORK_PRESETS: Record<RemoteNetwork, RemoteNetworkPreset> = {
   },
   preprod: {
     networkId: NetworkId.NetworkId.PreProd,
-    indexerHttpUrl: 'https://indexer.preprod.midnight.network/api/v4/graphql',
-    indexerWsUrl: 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws',
-    nodeUrl: 'wss://rpc.preprod.midnight.network',
+    indexerHttpUrl: 'https://indexer.preprod.shielded.tools/api/v4/graphql',
+    indexerWsUrl: 'wss://indexer.preprod.shielded.tools/api/v4/graphql/ws',
+    nodeUrl: 'wss://rpc.preprod.shielded.tools',
   },
   stagenet: {
     networkId: NetworkId.NetworkId.StageNet,
