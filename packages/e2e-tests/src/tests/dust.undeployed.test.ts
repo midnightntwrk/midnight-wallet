@@ -196,6 +196,7 @@ describe('Dust tests', () => {
       const walletStateBeforeDeregister = await receiver.wallet.waitForSyncedState();
       const initialNightBalance = walletStateBeforeDeregister.unshielded.balances[unshieldedTokenRaw];
       logger.info(`Initial Night Balance: ${initialNightBalance}`);
+      expect(initialNightBalance).toBeGreaterThan(0n);
 
       const initialDustBalance = walletStateBeforeDeregister.dust.balance(new Date());
       logger.info(`Initial Dust Balance: ${initialDustBalance}`);
