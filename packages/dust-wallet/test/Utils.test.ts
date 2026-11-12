@@ -140,5 +140,18 @@ describe('Utils', () => {
     it('returns nothing when skips cover the whole span', () => {
       expect(gapRanges(41, 43, [42, 43])).toEqual([]);
     });
+
+    // A range is fetched as a collapsed update and applied to the tree, and the tree rejects one over indexes it
+    // already holds. So whatever is skipped, no range may reach back to the last applied index or below it.
+    it('ignores skips at or below the last applied index, so every range starts after it', () => {
+      expect(gapRanges(42, 100, [10, 42, 50])).toEqual([
+        { start: 43, end: 49 },
+        { start: 51, end: 100 },
+      ]);
+    });
+
+    it('returns nothing for a span already applied, whatever is skipped behind it', () => {
+      expect(gapRanges(42, 42, [10, 11])).toEqual([]);
+    });
   });
 });

@@ -370,6 +370,97 @@ describe('V2 projections sync of pending Dust', () => {
   });
 });
 
+describe('V2 projections sync of Dust behind the commitment frontier', () => {
+  // The commitment tree's first free index is the wallet's record of how far it has applied the chain. A coin whose
+  // commitment sits behind it is one the wallet has already accounted for — still held, or since spent — so an update
+  // that hands such a coin back carries nothing new, and must change nothing.
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+
+  // An own coin at `index` in both trees, whose backing Night is never spent, so it keeps its value.
+  const ownCoin = (backingNightByte: string, index: number): NewDustGeneration => {
+    const backingNight = backingNightByte.repeat(32);
+    const qdo = {
+      initialValue: 1_000_000_000n,
+      owner: secretKey.publicKey,
+      nonce: dustFirstNonce(backingNight, secretKey.publicKey),
+      seq: 0,
+      ctime: new Date(1_000_000),
+      backingNight,
+      mtIndex: BigInt(index),
+    };
+    return {
+      dustNullifier: dustNullifier(qdo, secretKey),
+      genInfo: { value: 5_000_000_000n, owner: secretKey.publicKey, nonce: backingNight, dtime: undefined },
+      generationMtIndex: index,
+      qdo,
+      transactionId: 7,
+      transactionHash: 'cd'.repeat(32),
+    };
+  };
+
+  const first = ownCoin('ab', 0);
+  const second = ownCoin('ba', 1);
+
+  // A wallet that has applied both coins, so its commitment tree's first free index is 2.
+  const syncedWallet = (): CoreWallet => {
+    const coins = [first, second];
+    const utxos = DustUtxoMap.create(coins);
+    const withUtxos = CoreWallet.applyNewDustUtxos(CoreWallet.initEmpty(dustParameters, secretKey, networkId), utxos);
+    return CoreWallet.applyDustGenerations(CoreWallet.applyDustCommitments(withUtxos, utxos, []), [], coins, []);
+  };
+
+  const rootHex = (root: bigint | undefined): string => (root !== undefined ? leBigintToHex(root) : '');
+
+  // A projections update at the block the wallet is already level with, handing `coins` back as newly found.
+  const updateHandingBack = (wallet: CoreWallet, coins: NewDustGeneration[]) =>
+    StateUpdate({
+      dustGenerations: { rawUpdates: [], newGenerations: [], generationDtimeUpdates: [] },
+      newUtxos: DustUtxoMap.create(coins),
+      spentUtxos: DustUtxoMap.create([]),
+      collapsedCommitments: [],
+      latestBlock: {
+        height: 2,
+        hash: '00'.repeat(32),
+        protocolVersion: V9_NATIVE,
+        ledgerParameters: LedgerParameters.initialParameters(),
+        timestamp: new Date(2_000_000),
+        zswapEndIndex: 0,
+        dustCommitmentEndIndex: 2,
+        dustGenerationEndIndex: 2,
+        dustCommitmentMerkleTreeRoot: rootHex(wallet.state.commitmentTreeRoot()),
+        dustGenerationMerkleTreeRoot: rootHex(wallet.state.generatingTreeRoot()),
+      },
+    });
+
+  const backingNightsOf = (wallet: CoreWallet): readonly string[] =>
+    wallet.state.utxos.map((utxo) => utxo.backingNight).toSorted();
+
+  it('should change nothing when an update hands back coins the wallet already applied, so a pass that finds them again does not stop the wallet synchronizing', () => {
+    const wallet = syncedWallet();
+    expect(wallet.state.commitmentTreeFirstFree).toBe(2n);
+
+    const [synced, { changes }] = makeEventLessSyncCapability().applyUpdate(
+      wallet,
+      updateHandingBack(wallet, [first, second]),
+      fullSpan,
+    );
+
+    expect(synced.state.commitmentTreeFirstFree).toBe(2n);
+    expect(backingNightsOf(synced)).toEqual([first.qdo.backingNight, second.qdo.backingNight]);
+    // Reported once, when they were first applied: a second report would record the same receipt twice.
+    expect(changes).toEqual([]);
+  });
+
+  it('should not bring back a coin the chain has spent when an update hands it back, because the wallet stopped holding it when it applied the spend', () => {
+    const wallet = CoreWallet.applySpentNullifiers(syncedWallet(), [first.dustNullifier]);
+    expect(backingNightsOf(wallet)).toEqual([second.qdo.backingNight]);
+
+    const [synced] = makeEventLessSyncCapability().applyUpdate(wallet, updateHandingBack(wallet, [first]), fullSpan);
+
+    expect(backingNightsOf(synced)).toEqual([second.qdo.backingNight]);
+  });
+});
+
 describe('V2 projections nullifier subscription', () => {
   const ledgerParametersHex = Buffer.from(LedgerParameters.initialParameters().serialize()).toString('hex');
 
