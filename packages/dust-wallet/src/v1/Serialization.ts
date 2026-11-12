@@ -65,12 +65,12 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
 export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 import {
   FieldElementSchema,
+  OffsetSchema,
   PendingDustSchema,
   ProtocolVersionFieldSchema,
   SNAPSHOT_FORMAT_VERSION,
   SNAPSHOT_FORMAT_VERSIONS,
   SyncKindSchema,
-  U64Schema,
   upgradeSnapshotV1ToV2,
 } from '../SnapshotFormat.js';
 
@@ -85,7 +85,7 @@ const SnapshotSchema = Schema.Struct({
   state: HexedState,
   protocolVersion: ProtocolVersionFieldSchema,
   networkId: Schema.String,
-  offset: Schema.optional(U64Schema),
+  offset: Schema.optional(OffsetSchema),
   // Which synchronization saved `offset`. Shared with the V2 variant, which can run either; this one only ever replays
   // events, so it always writes `events`, its `offset` is always an event id, and it has nothing to check on the way in:
   // a snapshot this variant can decode holds a ledger-v8 state, which only event replay produces.

@@ -13,9 +13,11 @@
 import { DustLocalState, DustSecretKey, LedgerParameters, dustNullifier, maxField } from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Either, pipe } from 'effect';
+import { Either, Schema, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
+import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet, PublicKey } from '../CoreWallet.js';
+import { makeDefaultKeysCapability } from '../Keys.js';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { type Dust, type PendingDust } from '../types/Dust.js';
 
@@ -173,44 +175,67 @@ describe('V1 dust snapshot field bounds', () => {
   const u64Max = 2n ** 64n - 1n;
   const u128Max = 2n ** 128n - 1n;
   const u32Max = 2 ** 32 - 1;
+  const fieldMax = maxField();
+  /** The largest offset the indexer takes: its GraphQL `Int` is a signed 32-bit integer. */
+  const offsetMax = 2n ** 31n - 1n;
+  /** The largest protocol version a variant range holds: every range ends, exclusively, at `MaxSupportedVersion`. */
+  const protocolVersionMax = ProtocolVersion.MaxSupportedVersion - 1n;
 
-  type Json = Record<string, unknown>;
+  const keysCapability = makeDefaultKeysCapability();
+  const coinsAndBalances = makeDefaultCoinsAndBalancesCapability(undefined, () => ({ keysCapability }));
+
+  const JsonObject = Schema.Record({ key: Schema.String, value: Schema.Unknown });
+  type Json = typeof JsonObject.Type;
+  const decodeJsonObject = Schema.decodeUnknownSync(JsonObject);
+  const decodeJsonObjects = Schema.decodeUnknownSync(Schema.Array(JsonObject));
 
   /** The JSON of a snapshot the wallet can sync and value: one pending Dust coin, every field in range. */
   const validSnapshot = (): Json =>
-    JSON.parse(
-      capability.serialize(
-        CoreWallet.restore(
-          new DustLocalState(dustParameters),
-          PublicKey.fromSecretKey(secretKey),
-          [{ coin, nullifier: dustNullifier(coin, secretKey), declaredTime }],
-          { appliedIndex: 0n, highestRelevantWalletIndex: 0n, highestIndex: 0n, highestRelevantIndex: 0n },
-          ProtocolVersion.MinSupportedVersion,
-          networkId,
+    decodeJsonObject(
+      JSON.parse(
+        capability.serialize(
+          CoreWallet.restore(
+            new DustLocalState(dustParameters),
+            PublicKey.fromSecretKey(secretKey),
+            [{ coin, nullifier: dustNullifier(coin, secretKey), declaredTime }],
+            { appliedIndex: 0n, highestRelevantWalletIndex: 0n, highestIndex: 0n, highestRelevantIndex: 0n },
+            ProtocolVersion.MinSupportedVersion,
+            networkId,
+          ),
         ),
       ),
-    ) as Json;
+    );
 
   const withEntry = (snapshot: Json, fields: Json): Json => {
-    const [entry] = snapshot['pendingDust'] as Json[];
+    const [entry] = decodeJsonObjects(snapshot['pendingDust']);
     return { ...snapshot, pendingDust: [{ ...entry, ...fields }] };
   };
 
   const withCoin = (snapshot: Json, fields: Json): Json => {
-    const [entry] = snapshot['pendingDust'] as Json[];
-    return withEntry(snapshot, { coin: { ...(entry['coin'] as Json), ...fields } });
+    const [entry] = decodeJsonObjects(snapshot['pendingDust']);
+    return withEntry(snapshot, { coin: { ...decodeJsonObject(entry?.['coin']), ...fields } });
   };
 
-  const outOfRange: ReadonlyArray<readonly [string, (snapshot: Json) => Json]> = [
+  const expectRefused = (snapshot: Json): void => {
+    const restored = capability.deserialize(null, JSON.stringify(snapshot));
+
+    expect(Either.isLeft(restored)).toBe(true);
+    if (Either.isLeft(restored)) {
+      expect(restored.left).toBeInstanceOf(SnapshotFormat.SnapshotRestoreError);
+      expect(restored.left).toMatchObject({ surface: 'dust', reason: 'invalid-shape', detectedVersion: 'v2' });
+    }
+  };
+
+  const pendingEntryOutOfRange: ReadonlyArray<readonly [string, (snapshot: Json) => Json]> = [
     ['a negative nullifier', (s) => withEntry(s, { nullifier: '-1' })],
-    ['a nullifier outside the field', (s) => withEntry(s, { nullifier: String(maxField() + 1n) })],
+    ['a nullifier outside the field', (s) => withEntry(s, { nullifier: String(fieldMax + 1n) })],
     ['a negative initialValue', (s) => withCoin(s, { initialValue: '-1' })],
     ['an initialValue above u128', (s) => withCoin(s, { initialValue: String(u128Max + 1n) })],
     ['a negative owner', (s) => withCoin(s, { owner: '-1' })],
-    ['an owner outside the field', (s) => withCoin(s, { owner: String(maxField() + 1n) })],
+    ['an owner outside the field', (s) => withCoin(s, { owner: String(fieldMax + 1n) })],
     ['a negative nonce', (s) => withCoin(s, { nonce: '-1' })],
-    ['a nonce outside the field', (s) => withCoin(s, { nonce: String(maxField() + 1n) })],
-    ['a fractional seq', (s) => withCoin(s, { seq: -1.5 })],
+    ['a nonce outside the field', (s) => withCoin(s, { nonce: String(fieldMax + 1n) })],
+    ['a fractional seq', (s) => withCoin(s, { seq: 1.5 })],
     ['a negative seq', (s) => withCoin(s, { seq: -1 })],
     ['a seq above u32', (s) => withCoin(s, { seq: u32Max + 1 })],
     ['a backingNight of odd length', (s) => withCoin(s, { backingNight: 'abc' })],
@@ -219,39 +244,52 @@ describe('V1 dust snapshot field bounds', () => {
     ['a backingNight longer than 32 bytes', (s) => withCoin(s, { backingNight: 'ab'.repeat(33) })],
     ['a negative mtIndex', (s) => withCoin(s, { mtIndex: '-1' })],
     ['an mtIndex above u64', (s) => withCoin(s, { mtIndex: String(u64Max + 1n) })],
+  ];
+
+  const topLevelOutOfRange: ReadonlyArray<readonly [string, (snapshot: Json) => Json]> = [
     ['a negative public key', (s) => ({ ...s, publicKey: { publicKey: '-1' } })],
-    ['a public key outside the field', (s) => ({ ...s, publicKey: { publicKey: String(maxField() + 1n) } })],
+    ['a public key outside the field', (s) => ({ ...s, publicKey: { publicKey: String(fieldMax + 1n) } })],
     ['a negative protocolVersion', (s) => ({ ...s, protocolVersion: '-1' })],
+    [
+      'a protocolVersion at the exclusive end of every variant range',
+      (s) => ({ ...s, protocolVersion: String(ProtocolVersion.MaxSupportedVersion) }),
+    ],
+    [
+      'a protocolVersion past the end of every variant range',
+      (s) => ({ ...s, protocolVersion: String(ProtocolVersion.MaxSupportedVersion + 1n) }),
+    ],
     ['a negative offset', (s) => ({ ...s, offset: '-1' })],
+    ['an offset above the largest the indexer takes', (s) => ({ ...s, offset: String(2n ** 31n) })],
     ['an offset above u64', (s) => ({ ...s, offset: String(u64Max + 1n) })],
   ];
 
-  it.each(outOfRange)(
-    'should refuse a snapshot holding %s, because a wallet restored from it could neither sync nor value its Dust',
+  it.each(pendingEntryOutOfRange)(
+    'should refuse a snapshot holding %s, because the ledger cannot settle or value that pending entry',
     (_case, corrupt) => {
-      const restored = capability.deserialize(null, JSON.stringify(corrupt(validSnapshot())));
-
-      expect(Either.isLeft(restored)).toBe(true);
-      if (Either.isLeft(restored)) {
-        expect(restored.left).toBeInstanceOf(SnapshotFormat.SnapshotRestoreError);
-        expect(restored.left).toMatchObject({ surface: 'dust', reason: 'invalid-shape', detectedVersion: 'v2' });
-      }
+      expectRefused(corrupt(validSnapshot()));
     },
   );
 
-  it('should restore a snapshot whose every bounded field sits at the largest value the ledger accepts', () => {
+  it.each(topLevelOutOfRange)(
+    'should refuse a snapshot holding %s, because the wallet could not run or sync from it',
+    (_case, corrupt) => {
+      expectRefused(corrupt(validSnapshot()));
+    },
+  );
+
+  it('should restore a snapshot whose every bounded field sits at the largest value the wallet accepts, because the ledger settles and values them without throwing', () => {
     const atBounds = {
-      ...withCoin(withEntry(validSnapshot(), { nullifier: String(maxField()) }), {
+      ...withCoin(withEntry(validSnapshot(), { nullifier: String(fieldMax) }), {
         initialValue: String(u128Max),
-        owner: String(maxField()),
-        nonce: String(maxField()),
+        owner: String(fieldMax),
+        nonce: String(fieldMax),
         seq: u32Max,
         backingNight: 'AB'.repeat(32),
         mtIndex: String(u64Max),
       }),
-      publicKey: { publicKey: String(maxField()) },
-      protocolVersion: String(ProtocolVersion.MaxSupportedVersion),
-      offset: String(u64Max),
+      publicKey: { publicKey: String(fieldMax) },
+      protocolVersion: String(protocolVersionMax),
+      offset: String(offsetMax),
     };
 
     const restored = pipe(capability.deserialize(null, JSON.stringify(atBounds)), EitherOps.getOrThrowLeft);
@@ -261,18 +299,69 @@ describe('V1 dust snapshot field bounds', () => {
         coin: {
           ...coin,
           initialValue: u128Max,
-          owner: maxField(),
-          nonce: maxField(),
+          owner: fieldMax,
+          nonce: fieldMax,
           seq: u32Max,
           backingNight: 'AB'.repeat(32),
           mtIndex: u64Max,
         },
-        nullifier: maxField(),
+        nullifier: fieldMax,
         declaredTime,
       },
     ]);
-    expect(restored.publicKey).toEqual({ publicKey: maxField() });
-    expect(restored.protocolVersion).toBe(ProtocolVersion.MaxSupportedVersion);
-    expect(restored.progress.appliedIndex).toBe(u64Max);
+    expect(restored.publicKey).toEqual({ publicKey: fieldMax });
+    expect(restored.protocolVersion).toBe(protocolVersionMax);
+    expect(restored.progress.appliedIndex).toBe(offsetMax);
+
+    // The restored ledger state has never seen the pending coin, so it holds no generation info for it: a TTL pass
+    // settles the coin as worth nothing, and valuing finds no coin to report. Both hand every bounded value to the ledger.
+    const syncTime = new Date('2026-01-01T00:05:00.000Z');
+    const settled = CoreWallet.settlePendingDust(
+      restored.pendingDust,
+      restored.state,
+      restored.state.processTtls(syncTime),
+      [],
+      syncTime,
+    );
+
+    expect(settled).toEqual([]);
+    expect(coinsAndBalances.getPendingCoins(restored, syncTime)).toEqual([]);
+    expect(coinsAndBalances.getTotalCoins(restored, syncTime)).toEqual([]);
+  });
+
+  it('should restore a snapshot whose every bounded field sits at its lowest value, because zero is in range for each', () => {
+    const atLowest = {
+      ...withCoin(withEntry(validSnapshot(), { nullifier: '0' }), {
+        initialValue: '0',
+        owner: '0',
+        nonce: '0',
+        seq: 0,
+        mtIndex: '0',
+      }),
+      publicKey: { publicKey: '0' },
+      offset: '0',
+    };
+
+    const restored = pipe(capability.deserialize(null, JSON.stringify(atLowest)), EitherOps.getOrThrowLeft);
+
+    expect(restored.pendingDust).toEqual([
+      {
+        coin: { ...coin, initialValue: 0n, owner: 0n, nonce: 0n, seq: 0, mtIndex: 0n },
+        nullifier: 0n,
+        declaredTime,
+      },
+    ]);
+    expect(restored.publicKey).toEqual({ publicKey: 0n });
+    expect(restored.protocolVersion).toBe(ProtocolVersion.MinSupportedVersion);
+    expect(restored.progress.appliedIndex).toBe(0n);
+  });
+
+  it('should restore a snapshot on a custom network, because a network id is any string', () => {
+    const restored = pipe(
+      capability.deserialize(null, JSON.stringify({ ...validSnapshot(), networkId: 'my-custom-network' })),
+      EitherOps.getOrThrowLeft,
+    );
+
+    expect(restored.networkId).toBe('my-custom-network');
   });
 });

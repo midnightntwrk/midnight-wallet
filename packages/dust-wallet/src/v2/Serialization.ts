@@ -17,13 +17,13 @@ import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 import {
   FieldElementSchema,
+  OffsetSchema,
   PendingDustSchema,
   ProtocolVersionFieldSchema,
   SNAPSHOT_FORMAT_VERSION,
   SNAPSHOT_FORMAT_VERSIONS,
   type SyncKind,
   SyncKindSchema,
-  U64Schema,
   upgradeSnapshotV1ToV2,
 } from '../SnapshotFormat.js';
 // Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
@@ -86,7 +86,7 @@ const SnapshotSchema = Schema.Struct({
   protocolVersion: ProtocolVersionFieldSchema,
   networkId: Schema.String,
   // The position the synchronization named by `syncKind` resumes from: see {@link offsetOf}.
-  offset: Schema.optional(U64Schema),
+  offset: Schema.optional(OffsetSchema),
   // Which synchronization moved the position, because the two that this variant can run resume from different ones.
   syncKind: SyncKindSchema,
   pendingDust: Schema.Array(PendingDustSchema),

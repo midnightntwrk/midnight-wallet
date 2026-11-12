@@ -55,13 +55,20 @@ export const SNAPSHOT_FORMAT_VERSION = V2_SNAPSHOT_FORMAT_VERSION;
 const MAX_FIELD = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000n;
 
 /**
- * A field element: what the ledger takes for nullifiers, nonces and Dust public keys, and throws on outside
+ * A field element: what the ledger takes for nullifiers, nonces and Dust public keys, and throws on anything outside
  * `0..MAX_FIELD`.
  */
 export const FieldElementSchema = Schema.BigInt.pipe(Schema.betweenBigInt(0n, MAX_FIELD));
 
-/** An unsigned 64-bit integer, as the ledger reads Merkle tree indices and the wallet's sync offsets. */
-export const U64Schema = Schema.BigInt.pipe(Schema.betweenBigInt(0n, 2n ** 64n - 1n));
+/** An unsigned 64-bit integer, the ledger's width for Merkle tree indices. */
+const U64Schema = Schema.BigInt.pipe(Schema.betweenBigInt(0n, 2n ** 64n - 1n));
+
+/**
+ * A snapshot's `offset`: the position sync resumes from, which it hands the indexer as a GraphQL `Int` (the dust event
+ * id, or the dtime cutoff height). A GraphQL `Int` is a signed 32-bit integer, so a larger offset could never be
+ * resumed from.
+ */
+export const OffsetSchema = Schema.BigInt.pipe(Schema.betweenBigInt(0n, 2n ** 31n - 1n));
 
 /** An unsigned 128-bit integer, as the ledger reads Dust values. */
 const U128Schema = Schema.BigInt.pipe(Schema.betweenBigInt(0n, 2n ** 128n - 1n));
@@ -78,8 +85,8 @@ const BackingNightSchema = Schema.String.pipe(Schema.pattern(/^[0-9a-fA-F]{64}$/
  * ledgers; a date as an ISO string keeps its milliseconds.
  *
  * @remarks
- *   Each field is held to the bounds the ledger accepts, because an entry outside them restores but then throws on every
- *   sync that tries to settle it, and nothing else ever removes it.
+ *   Each field is held to the bounds the ledger accepts, because an entry outside them would restore and then throw on
+ *   every sync that tries to settle it, and nothing else would ever remove it.
  */
 export const PendingDustSchema = Schema.Struct({
   coin: Schema.Struct({
@@ -95,9 +102,13 @@ export const PendingDustSchema = Schema.Struct({
   declaredTime: Schema.Date,
 });
 
-/** A snapshot's `protocolVersion`, held to the range a {@link ProtocolVersion.ProtocolVersion} may take. */
+/**
+ * A snapshot's `protocolVersion`: from `MinSupportedVersion` up to, but not including, `MaxSupportedVersion`, which is
+ * the exclusive end of every variant's range, so a wallet restored at it would have no variant to run it.
+ */
 export const ProtocolVersionFieldSchema = Schema.BigInt.pipe(
-  Schema.betweenBigInt(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion),
+  Schema.greaterThanOrEqualToBigInt(ProtocolVersion.MinSupportedVersion),
+  Schema.lessThanBigInt(ProtocolVersion.MaxSupportedVersion),
 );
 
 /**
