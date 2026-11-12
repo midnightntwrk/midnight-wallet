@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Schema } from 'effect';
 
 /**
@@ -49,23 +49,56 @@ export const V2_SNAPSHOT_FORMAT_VERSION = 'v2';
 export const SNAPSHOT_FORMAT_VERSION = V2_SNAPSHOT_FORMAT_VERSION;
 
 /**
+ * The largest element of the proof system's scalar field, the same in ledger-v8 and ledger-v9 (their `maxField()`).
+ * Held as a literal so that this module loads no ledger.
+ */
+const MAX_FIELD = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000n;
+
+/**
+ * A field element: what the ledger takes for nullifiers, nonces and Dust public keys, and throws on outside
+ * `0..MAX_FIELD`.
+ */
+export const FieldElementSchema = Schema.BigInt.pipe(Schema.betweenBigInt(0n, MAX_FIELD));
+
+/** An unsigned 64-bit integer, as the ledger reads Merkle tree indices and the wallet's sync offsets. */
+export const U64Schema = Schema.BigInt.pipe(Schema.betweenBigInt(0n, 2n ** 64n - 1n));
+
+/** An unsigned 128-bit integer, as the ledger reads Dust values. */
+const U128Schema = Schema.BigInt.pipe(Schema.betweenBigInt(0n, 2n ** 128n - 1n));
+
+/** An unsigned 32-bit integer, as the ledger reads a Dust coin's `seq`. */
+const U32Schema = Schema.Number.pipe(Schema.int(), Schema.between(0, 2 ** 32 - 1));
+
+/** A Dust coin's backing Night nonce: 32 bytes in hex, the only length the ledger deserializes. */
+const BackingNightSchema = Schema.String.pipe(Schema.pattern(/^[0-9a-fA-F]{64}$/));
+
+/**
  * One booking of a Dust coin by a pending transaction, as both variants encode it in `pendingDust`: the coin, its
  * nullifier, and the time the spending transaction declared. Every field is a primitive, so one schema here serves both
  * ledgers; a date as an ISO string keeps its milliseconds.
+ *
+ * @remarks
+ *   Each field is held to the bounds the ledger accepts, because an entry outside them restores but then throws on every
+ *   sync that tries to settle it, and nothing else ever removes it.
  */
 export const PendingDustSchema = Schema.Struct({
   coin: Schema.Struct({
-    initialValue: Schema.BigInt,
-    owner: Schema.BigInt,
-    nonce: Schema.BigInt,
-    seq: Schema.Number,
+    initialValue: U128Schema,
+    owner: FieldElementSchema,
+    nonce: FieldElementSchema,
+    seq: U32Schema,
     ctime: Schema.Date,
-    backingNight: Schema.String,
-    mtIndex: Schema.BigInt,
+    backingNight: BackingNightSchema,
+    mtIndex: U64Schema,
   }),
-  nullifier: Schema.BigInt,
+  nullifier: FieldElementSchema,
   declaredTime: Schema.Date,
 });
+
+/** A snapshot's `protocolVersion`, held to the range a {@link ProtocolVersion.ProtocolVersion} may take. */
+export const ProtocolVersionFieldSchema = Schema.BigInt.pipe(
+  Schema.betweenBigInt(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion),
+);
 
 /**
  * Which synchronization moved a wallet's position, and so what a snapshot's `offset` holds.
