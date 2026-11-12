@@ -29,7 +29,7 @@ import type {
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryClient, SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Cause, Chunk, Effect, Either, Exit, Option, Stream } from 'effect';
+import { Cause, Chunk, Effect, Either, Exit, Logger, Option, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import {
@@ -372,9 +372,12 @@ describe('V2 projections sync of pending Dust', () => {
 
 describe('V2 projections sync of Dust behind the commitment frontier', () => {
   // The commitment tree's first free index is the wallet's record of how far it has applied the chain. A coin whose
-  // commitment sits behind it is one the wallet has already accounted for — still held, or since spent — so an update
-  // that hands such a coin back carries nothing new, and must change nothing.
+  // commitment sits behind it is taken to be one the wallet has already accounted for — still held, or since spent —
+  // so an update that hands such a coin back carries nothing new, and must change nothing. That is an assumption: the
+  // wallet keeps no record of a coin it does not hold, so it cannot tell a spent coin from one it never knew. The pass
+  // that finds such a coin therefore says so in a warning, where one the wallet never held would otherwise go unseen.
   const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const ownAddress = new DustAddress(PublicKey.fromSecretKey(secretKey).publicKey).hexString;
 
   // An own coin at `index` in both trees, whose backing Night is never spent, so it keeps its value.
   const ownCoin = (backingNightByte: string, index: number): NewDustGeneration => {
@@ -400,40 +403,110 @@ describe('V2 projections sync of Dust behind the commitment frontier', () => {
 
   const first = ownCoin('ab', 0);
   const second = ownCoin('ba', 1);
+  // The coin the chain adds next, once both of those are applied.
+  const third = ownCoin('cc', 2);
+
+  // A wallet whose trees have applied `inTree`, and which holds `held` of them as its own coins.
+  const walletTracking = (held: NewDustGeneration[], inTree: NewDustGeneration[] = held): CoreWallet => {
+    const withHeld = CoreWallet.applyNewDustUtxos(
+      CoreWallet.initEmpty(dustParameters, secretKey, networkId),
+      DustUtxoMap.create(held),
+    );
+    const withCommitments = CoreWallet.applyDustCommitments(withHeld, DustUtxoMap.create(inTree), []);
+    return CoreWallet.applyDustGenerations(withCommitments, [], inTree, []);
+  };
 
   // A wallet that has applied both coins, so its commitment tree's first free index is 2.
-  const syncedWallet = (): CoreWallet => {
-    const coins = [first, second];
-    const utxos = DustUtxoMap.create(coins);
-    const withUtxos = CoreWallet.applyNewDustUtxos(CoreWallet.initEmpty(dustParameters, secretKey, networkId), utxos);
-    return CoreWallet.applyDustGenerations(CoreWallet.applyDustCommitments(withUtxos, utxos, []), [], coins, []);
-  };
+  const syncedWallet = (): CoreWallet => walletTracking([first, second]);
 
   const rootHex = (root: bigint | undefined): string => (root !== undefined ? leBigintToHex(root) : '');
 
-  // A projections update at the block the wallet is already level with, handing `coins` back as newly found.
-  const updateHandingBack = (wallet: CoreWallet, coins: NewDustGeneration[]) =>
+  // The block of a chain whose Dust trees stand where `chain`'s do.
+  const blockOf = (chain: CoreWallet): BlockData => ({
+    height: 2,
+    hash: '00'.repeat(32),
+    protocolVersion: V9_NATIVE,
+    ledgerParameters: LedgerParameters.initialParameters(),
+    timestamp: new Date(2_000_000),
+    zswapEndIndex: 0,
+    dustCommitmentEndIndex: Number(chain.state.commitmentTreeFirstFree),
+    dustGenerationEndIndex: Number(chain.state.generatingTreeFirstFree),
+    dustCommitmentMerkleTreeRoot: rootHex(chain.state.commitmentTreeRoot()),
+    dustGenerationMerkleTreeRoot: rootHex(chain.state.generatingTreeRoot()),
+  });
+
+  // A projections update at `chain`'s block, handing `coins` over as newly found and `generations` as new.
+  const updateAt = (chain: CoreWallet, coins: NewDustGeneration[], generations: NewDustGeneration[] = []) =>
     StateUpdate({
-      dustGenerations: { rawUpdates: [], newGenerations: [], generationDtimeUpdates: [] },
+      dustGenerations: { rawUpdates: [], newGenerations: generations, generationDtimeUpdates: [] },
       newUtxos: DustUtxoMap.create(coins),
       spentUtxos: DustUtxoMap.create([]),
       collapsedCommitments: [],
-      latestBlock: {
-        height: 2,
-        hash: '00'.repeat(32),
-        protocolVersion: V9_NATIVE,
-        ledgerParameters: LedgerParameters.initialParameters(),
-        timestamp: new Date(2_000_000),
-        zswapEndIndex: 0,
-        dustCommitmentEndIndex: 2,
-        dustGenerationEndIndex: 2,
-        dustCommitmentMerkleTreeRoot: rootHex(wallet.state.commitmentTreeRoot()),
-        dustGenerationMerkleTreeRoot: rootHex(wallet.state.generatingTreeRoot()),
-      },
+      latestBlock: blockOf(chain),
     });
+
+  // A projections update at the block the wallet is already level with, handing `coins` back as newly found.
+  const updateHandingBack = (wallet: CoreWallet, coins: NewDustGeneration[]) => updateAt(wallet, coins);
 
   const backingNightsOf = (wallet: CoreWallet): readonly string[] =>
     wallet.state.utxos.map((utxo) => utxo.backingNight).toSorted();
+
+  // What the indexer reports for `coin` when it lists it as a generation at `generationMtIndex`.
+  const registrationOf = (coin: NewDustGeneration, generationMtIndex: number): DustGenerationsSubscription => ({
+    __typename: 'DustGenerationsItem',
+    commitmentMtIndex: Number(coin.qdo.mtIndex),
+    generationMtIndex,
+    owner: ownAddress,
+    value: coin.genInfo.value.toString(),
+    initialValue: coin.qdo.initialValue.toString(),
+    backingNight: coin.qdo.backingNight,
+    ctime: coin.qdo.ctime,
+    transactionId: coin.transactionId,
+    transactionHash: coin.transactionHash,
+    collapsedMerkleTree: null,
+  });
+
+  const notCalled = (name: string) => (): never => {
+    throw new Error(`${name} must not be called in this scenario`);
+  };
+
+  /** Runs one projections pass on `wallet` against a chain at `block` listing `registrations`; returns its warnings. */
+  const warningsOfPass = async (
+    wallet: CoreWallet,
+    block: BlockData,
+    registrations: DustGenerationsSubscription[],
+  ): Promise<readonly string[]> => {
+    const logged: Array<{ readonly level: string; readonly message: string }> = [];
+    const recordingLogger = Logger.make(({ logLevel, message }) => {
+      logged.push({ level: logLevel.label, message: Array.isArray(message) ? message.join(' ') : String(message) });
+    });
+
+    const indexerSyncService: IndexerSyncService = {
+      blockData: () => Effect.succeed(block),
+      subscribeDustGenerations: () => Stream.fromIterable(registrations),
+      // No coin of this wallet has been spent.
+      subscribeDustNullifierTransactions: () => Stream.empty,
+      // Never reached: every commitment the wallet has yet to apply is one of the coins the pass finds.
+      dustCommitmentMerkleTreeUpdate: notCalled('dustCommitmentMerkleTreeUpdate'),
+      connectionLayer: notCalled('connectionLayer'),
+      subscribeWallet: notCalled('subscribeWallet'),
+      queryClient: notCalled('queryClient'),
+    };
+
+    await doEventlessSync(wallet, secretKey, 7, indexerSyncService).pipe(
+      Stream.runDrain,
+      Effect.provideService(QueryClient, { query: notCalled('QueryClient.query') }),
+      Effect.provideService(SubscriptionClient, {
+        subscribe: notCalled('SubscriptionClient.subscribe'),
+        subscribeWithBackpressure: notCalled('SubscriptionClient.subscribeWithBackpressure'),
+      }),
+      Effect.provide(Logger.replace(Logger.defaultLogger, recordingLogger)),
+      Effect.scoped,
+      Effect.runPromise,
+    );
+
+    return logged.filter(({ level }) => level === 'WARN').map(({ message }) => message);
+  };
 
   it('should change nothing when an update hands back coins the wallet already applied, so a pass that finds them again does not stop the wallet synchronizing', () => {
     const wallet = syncedWallet();
@@ -458,6 +531,49 @@ describe('V2 projections sync of Dust behind the commitment frontier', () => {
     const [synced] = makeEventLessSyncCapability().applyUpdate(wallet, updateHandingBack(wallet, [first]), fullSpan);
 
     expect(backingNightsOf(synced)).toEqual([second.qdo.backingNight]);
+  });
+
+  it('should apply a new coin at exactly the first free index and report it once, because that index is the next one the chain fills and not one the wallet has applied', () => {
+    const wallet = syncedWallet();
+    expect(wallet.state.commitmentTreeFirstFree).toBe(2n);
+
+    const [synced, { changes }] = makeEventLessSyncCapability().applyUpdate(
+      wallet,
+      updateAt(walletTracking([first, second, third]), [third], [third]),
+      fullSpan,
+    );
+
+    expect(synced.state.commitmentTreeFirstFree).toBe(3n);
+    expect(backingNightsOf(synced)).toEqual([first.qdo.backingNight, second.qdo.backingNight, third.qdo.backingNight]);
+    expect(changes.map(({ receivedUtxos }) => receivedUtxos.map((utxo) => utxo.backingNight))).toEqual([
+      [third.qdo.backingNight],
+    ]);
+  });
+
+  it('should warn which coins a pass found behind the first free index, and whether the wallet holds each, so a coin left out of the update that the wallet never held does not go unseen', async () => {
+    // The trees have applied both coins, but the wallet holds only `first`.
+    const wallet = walletTracking([first], [first, second]);
+    expect(wallet.state.commitmentTreeFirstFree).toBe(2n);
+
+    // The chain has added `third`, and lists `first` and `second` again as generations the wallet has yet to apply.
+    const block = { ...blockOf(walletTracking([first, second, third])), dustGenerationEndIndex: 5 };
+    const warnings = await warningsOfPass(wallet, block, [
+      registrationOf(first, 2),
+      registrationOf(second, 3),
+      registrationOf(third, 4),
+    ]);
+
+    expect(warnings).toEqual([
+      'Projections sync found Dust behind the first free commitment index 2, which is not applied again: held at [0], not held at [1]',
+    ]);
+  });
+
+  it('should not warn when every coin a pass finds is at or past the first free index, so the warning only appears when a coin was left out', async () => {
+    const warnings = await warningsOfPass(syncedWallet(), blockOf(walletTracking([first, second, third])), [
+      registrationOf(third, 2),
+    ]);
+
+    expect(warnings).toEqual([]);
   });
 });
 
