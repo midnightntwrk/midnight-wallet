@@ -40,6 +40,10 @@
     "effect": "^3.19.19",
     "rxjs": "^7.8.2"
   },
+  "devDependencies": {
+    "@midnightntwrk/wallet-sdk-node-client": "2.0.0",
+    "@polkadot/rpc-provider": "^16.5.4"
+  },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "vitest run",

@@ -1172,8 +1172,9 @@ export function CustomForkingDustWallet<
      * @remarks
      *   A transaction built on the other side of the boundary cannot have had its fee paid by the current variant, so
      *   there is no dust of it to release and this resolves having done nothing. That is the one place a version
-     *   mismatch is not an error: the facade reverts all three wallets together when a submission fails, and a refusal
-     *   here would strand that whole path over a transaction this wallet was never holding anything for.
+     *   mismatch is not an error: the facade reverts all three wallets together when a submission fails in a way that
+     *   proves no block holds the transaction, and a refusal here would strand that whole path over a transaction this
+     *   wallet was never holding anything for.
      * @param transaction The transaction to un-record.
      */
     revertTransaction(transaction: AnyTx): Promise<void> {

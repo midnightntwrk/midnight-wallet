@@ -60,7 +60,10 @@ const wrapEffectService = <TProven, TUnproven>(
  * @returns A backend that proves ledger-v9 transactions.
  */
 export const fromV9ProvingProviderEffect = (
-  provider: Effect.Effect<ledger.ProvingProvider, InvalidProtocolSchemeError>,
+  provider: Effect.Effect<
+    ledger.ProvingProvider,
+    InvalidProtocolSchemeError | HttpProverClient.InvalidMaxConcurrentRequestsError
+  >,
 ): V9ProvingServiceEffect => {
   return {
     prove(transaction: V9UnprovenTransaction): Effect.Effect<V9UnboundTransaction, ProvingFailure> {
@@ -101,6 +104,10 @@ export const fromV9ProvingProvider = (provider: ledger.ProvingProvider): V9Provi
 /**
  * Proves ledger-v9 transactions at a proof server.
  *
+ * @remarks
+ *   One client serves everything the backend proves, made at its first proof and kept. The client's cap on requests in
+ *   flight is a cap on what this backend has waiting at its proof server, and that only holds while every transaction
+ *   it proves goes through the same client.
  * @example
  *   ```typescript
  *   const proving = makeV9ServerProvingServiceEffect({ provingServerUrl: new URL('http://localhost:6300') });
@@ -114,8 +121,13 @@ export const makeV9ServerProvingServiceEffect = (configuration: ServerProvingCon
   return pipe(
     HttpProverClient.create({
       url: configuration.provingServerUrl,
+      ...(configuration.maxConcurrentRequests === undefined
+        ? {}
+        : { maxConcurrentRequests: configuration.maxConcurrentRequests }),
     }),
     Effect.map((client) => client.asProvingProvider()),
+    Effect.cached,
+    Effect.runSync,
     fromV9ProvingProviderEffect,
   );
 };

@@ -65,6 +65,21 @@ export interface SubmissionServiceEffect<TTransaction> {
   close(): Effect.Effect<void>;
 }
 
+/**
+ * Submits finalized transactions to a node and reports how far each got, as promises.
+ *
+ * @remarks
+ *   A rejection decides whether the facade releases the coins and Dust the transaction booked, as
+ *   `classifySubmissionFailure` reads it. They are released only when the rejection is a `SubmissionError` (recognised
+ *   by its `_tag`, so a copy from another installed version counts), bare or as the `FiberFailure` `Effect.runPromise`
+ *   rejects with, whose `cause` proves no block holds this send of the transaction: the node client's
+ *   `TransactionUsurpedError`, `TransactionInvalidError` or `ConnectionError` (never sent), a node-client
+ *   `SubmissionError` whose cause is a JSON-RPC answer with one of the author RPC's pool-refusal codes (polkadot-sdk
+ *   `substrate/client/rpc-api/src/author/error.rs`), or the simulator's `LedgerError` discard. Any other rejection,
+ *   `TransactionDroppedError` and an application's own error among them, keeps them booked until sync or the
+ *   transaction's TTL settles them. A node refuses a transaction a block already holds the same way it refuses one it
+ *   never saw, so even a proven exclusion releases only when no earlier send of the transaction may be in a block.
+ */
 export interface SubmissionService<TTransaction> {
   submitTransaction: SubmitTransactionMethod<TTransaction>;
   close(): Promise<void>;

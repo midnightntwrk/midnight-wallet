@@ -732,8 +732,9 @@ export function CustomForkingShieldedWallet<
      * @remarks
      *   A transaction built on the other side of the boundary is not one the current variant could have booked coins for,
      *   so there is nothing of it to release and this resolves having done nothing. That is the one place a version
-     *   mismatch is not an error: the facade reverts all three wallets together when a submission fails, and a refusal
-     *   here would strand that whole path over a transaction this wallet was never holding anything for.
+     *   mismatch is not an error: the facade reverts all three wallets together when a submission fails in a way that
+     *   proves no block holds the transaction, and a refusal here would strand that whole path over a transaction this
+     *   wallet was never holding anything for.
      *
      *   The coins a ledger-v8 transaction did book are not left behind by that no-op: they crossed the boundary as
      *   reservations, and the first sync update after the crossing releases every one of them, because no transaction

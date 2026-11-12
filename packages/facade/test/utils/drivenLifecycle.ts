@@ -98,6 +98,11 @@ export class DrivenLifecycle implements TransactionLifecycleService<LifecycleTx>
     this.#settleLive(() => Lifecycle.LifecycleState.Orphaned({ authoredFor, chainNow }));
   }
 
+  /** Ends every live record as expired: its TTL passed with no block reported holding it. */
+  expired(): void {
+    this.#settleLive(() => Lifecycle.LifecycleState.Expired());
+  }
+
   /** Publishes the current records again, unchanged, as every tick of the real service does. */
   republish(): void {
     this.states.next({ ...this.states.value });

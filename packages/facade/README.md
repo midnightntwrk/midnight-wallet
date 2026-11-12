@@ -81,6 +81,11 @@ history below the boundary wants `provers` with a server per side. The in-proces
 proves with that ledger version's own key material (ledger-v8's circuits are generation 9, ledger-v9's generation 10),
 read from `https://srs.midnight.network/` and checked against the hashes the ledger release declares.
 
+A `server` backend has at most 10 requests waiting at its proof server at once, the places a proof server has in its
+queue as released, and sends again a request the server could not take. A transaction with more proofs than that is
+proved a queue's worth at a time. For a proof server run with a larger `--job-capacity`, raise the cap on its backend:
+`{ kind: 'server', url, maxConcurrentRequests: 32 }`.
+
 ### Observing Combined State
 
 ```typescript

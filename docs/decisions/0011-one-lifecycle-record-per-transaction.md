@@ -65,7 +65,7 @@ site.
 | `Rejected`  | `Finalized`, `Submitted`                                                                       | the chain refused it, whoever submitted it, or its TTL passed while submitted                                                                                                                      | unchanged, with the verdict    |
 | `Orphaned`  | `Balanced`, `Finalized`, `Submitted`                                                           | the wallets crossed past the epoch it was built for                                                                                                                                                | unchanged, with the verdict    |
 | `Expired`   | `Balanced`, `Finalized`                                                                        | its TTL passed before it was submitted                                                                                                                                                             | unchanged                      |
-| `Reverted`  | `Balanced`, `Finalized`, `Submitted`                                                           | `revert`, `revertTransaction`, a builder that failed part-way, a submission that threw                                                                                                             | unchanged                      |
+| `Reverted`  | `Balanced`, `Finalized`, `Submitted`                                                           | `revert`, `revertTransaction`, a builder that failed part-way, a submission whose failure proves this send is in no block, when it was the only send of the transaction and its TTL has not passed | unchanged                      |
 
 ```mermaid
 stateDiagram-v2
@@ -87,7 +87,7 @@ stateDiagram-v2
   Finalized --> Expired: TTL passed
   Balanced --> Reverted: revert or build failed
   Finalized --> Reverted: revert or build failed
-  Submitted --> Reverted: revert or submit threw
+  Submitted --> Reverted: revert or submit proved not included
   Rejected --> Balanced: balanced again
   Orphaned --> Balanced: balanced again
   Expired --> Balanced: balanced again
@@ -107,19 +107,19 @@ stateDiagram-v2
 `Confirmed`, `Rejected`, `Orphaned`, `Expired` and `Reverted` are final: no other verdict moves them. Three ways out
 remain. Balancing the same spend again, whose coins were never spent on chain, replaces a `Rejected`, `Orphaned`,
 `Expired` or `Reverted` record with a new `Balanced` one, so a spend keeps one record. Sending a reverted transaction
-again, as a caller does after a submission that threw, moves it to `Submitted`: once sent it is in flight, whatever the
-wallet concluded before. And an inclusion reported after the wallet ended a record by its own inference (`Expired`,
-`Rejected` because its TTL passed, `Orphaned`, `Reverted`) moves it to `Confirmed`: a block's time is within the
-transaction's TTL, so the inclusion happened first and sync only saw it late. An inference gives way to a fact. A
-`Rejected` the chain reported is itself an inclusion and stays. Sync reports an inclusion through the history storage
-the wallets write into, which the facade wraps so that each write, once stored, moves the record. A partial success sync
-reports moves nothing: the history keeps no segments, and which segments failed decides what is released, so the poller
-settles it. Whatever was released at the inferred end is harmless, because sync settles the spent coins. `Confirmed` is
-final against every other verdict, which replaces the precedence rule a late rejection needed: once the record knows of
-the inclusion, nothing moves it. A finalized record takes the chain's refusal as a submitted one does, because another
-party may have submitted it, as in a swap; a balanced one cannot have reached a chain. The four status names
-`FacadeState.pending` published keep their meaning, except that a partial success, which `Rejected` covered, is now
-`PartialSuccess`; the other five are added. `FacadeState.lifecycle` is one entry per record, read off it.
+again, as a caller does after a submission that proved it was in no block, moves it to `Submitted`: once sent it is in
+flight, whatever the wallet concluded before. And an inclusion reported after the wallet ended a record by its own
+inference (`Expired`, `Rejected` because its TTL passed, `Orphaned`, `Reverted`) moves it to `Confirmed`: a block's time
+is within the transaction's TTL, so the inclusion happened first and sync only saw it late. An inference gives way to a
+fact. A `Rejected` the chain reported is itself an inclusion and stays. Sync reports an inclusion through the history
+storage the wallets write into, which the facade wraps so that each write, once stored, moves the record. A partial
+success sync reports moves nothing: the history keeps no segments, and which segments failed decides what is released,
+so the poller settles it. Whatever was released at the inferred end is harmless, because sync settles the spent coins.
+`Confirmed` is final against every other verdict, which replaces the precedence rule a late rejection needed: once the
+record knows of the inclusion, nothing moves it. A finalized record takes the chain's refusal as a submitted one does,
+because another party may have submitted it, as in a swap; a balanced one cannot have reached a chain. The four status
+names `FacadeState.pending` published keep their meaning, except that a partial success, which `Rejected` covered, is
+now `PartialSuccess`; the other five are added. `FacadeState.lifecycle` is one entry per record, read off it.
 `PartialSuccess` carries the segments the chain reported: the chain included the transaction and applied some of it, so
 it is not a transaction that never happened. `Rejected` says why: `Refused`, with the segments the chain reported, or
 `TTLPassed`, which has none. `Confirmed` carries no segments, because the record keeps none. An entry holds its
