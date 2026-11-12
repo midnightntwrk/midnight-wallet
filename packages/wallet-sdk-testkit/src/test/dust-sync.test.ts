@@ -10,7 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type DustGenerationRates } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type DefaultDustConfiguration,
+  type DustGenerationRates,
+  type ForkingDustConfiguration,
+} from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { TransactionHistory } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import { type CanAssign, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { describe, expect, it } from 'vitest';
 import {
@@ -110,4 +116,38 @@ describe('the ready-made options', () => {
     expect(projectionsDustSyncOptions).not.toHaveProperty('manualSync');
     expect(manualProjectionsDustSyncOptions.manualSync).toBe(true);
   });
+});
+
+describe('skipLedgerV8DustHistory', () => {
+  const configuration = (skipLedgerV8DustHistory: boolean | undefined): DefaultDustConfiguration => ({
+    networkId: NetworkId.NetworkId.Undeployed,
+    indexerClientConnection: { indexerHttpUrl: 'http://localhost:8088/api/v4/graphql' },
+    txHistoryStorage: new InMemoryTransactionHistoryStorage(TransactionHistory.DustTransactionHistoryEntrySchema),
+    costParameters: { feeBlocksMargin: 0 },
+    forks: { v9: ProtocolVersion.ProtocolVersion(7n) },
+    ...(skipLedgerV8DustHistory === undefined ? {} : { skipLedgerV8DustHistory }),
+  });
+
+  /** Whether a wallet built by the factory looks for where the dust timeline reaches the boundary before it starts. */
+  const searchesForTimelineStart = (factory: DustWalletFactory, skip: boolean | undefined): boolean =>
+    // Type cast required because: `DustWalletFactory` types only the start a facade calls, while the wallet class it
+    // returns also carries the configuration it was built with — the one place the timeline search is visible
+    // without an indexer to run it against.
+    (factory(configuration(skip)) as unknown as { configuration: ForkingDustConfiguration }).configuration
+      .dustTimelineStartProbe !== undefined;
+
+  it('should make the projections wallet search for the boundary when set, so a fresh start never replays the ledger-v8 dust history', () => {
+    // Without the search, the V1 variant replays every ledger-v8 dust event before the projections sync is reached —
+    // on a long-lived network that crossed the v9 fork, the whole of a cold sync.
+    expect(searchesForTimelineStart(eventLessDustWallet, true)).toBe(true);
+  });
+
+  it.each([true, false, undefined])(
+    'should search exactly when the event-based wallet does (skipLedgerV8DustHistory=%s), so the two models start from the same place',
+    (skip) => {
+      expect(searchesForTimelineStart(eventLessDustWallet, skip)).toBe(
+        searchesForTimelineStart(eventBasedDustWallet, skip),
+      );
+    },
+  );
 });

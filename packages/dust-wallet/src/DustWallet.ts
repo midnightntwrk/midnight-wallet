@@ -1252,6 +1252,40 @@ export type DustWallet = ForkingDustWallet<V1SyncUpdate, V2SyncUpdate>;
 export type DustWalletClass = ForkingDustWalletClass<V1SyncUpdate, V2SyncUpdate, DefaultDustConfiguration>;
 
 /**
+ * The probes `DustWallet` asks before it chooses where a fresh start begins: which protocol version the chain is on,
+ * and, with `skipLedgerV8DustHistory`, where the dust timeline reaches `forks.v9`.
+ *
+ * @remarks
+ *   Exported so that a composition with its own variants, such as one whose V2 variant syncs from projections, starts
+ *   from the same place `DustWallet` does without restating how the probes are made. A `chainVersionProbe` already in
+ *   the configuration is kept; otherwise the wallet's own indexer is asked. The timeline search is set only when
+ *   `skipLedgerV8DustHistory` is `true`, and is best-effort: when it finds nothing, the start is the one without it.
+ * @example
+ *   ```ts
+ *   const wallet = CustomForkingDustWallet(
+ *     { ...configuration, ...dustWalletProbes(configuration) },
+ *     { builder: new V1Builder().withDefaults(), configuration: v1 },
+ *     { builder: new V2Builder().withDefaults(), configuration: v2 },
+ *   );
+ *   ```;
+ *
+ * @param configuration The wallet's configuration: its indexer, its fork schedule and whether to skip the ledger-v8
+ *   dust history.
+ * @param findTimelineStart The search for where the timeline reaches a boundary. Defaults to the indexer search
+ *   `DustWallet` uses; a test can pass its own.
+ * @returns The probe fields to spread into a forking dust wallet's configuration.
+ */
+export const dustWalletProbes = (
+  configuration: DefaultDustConfiguration,
+  findTimelineStart: typeof findDustTimelineStart = findDustTimelineStart,
+): Pick<ForkingDustConfiguration, 'chainVersionProbe' | 'dustTimelineStartProbe'> => ({
+  chainVersionProbe: configuration.chainVersionProbe ?? makeIndexerChainVersionProbe(configuration),
+  ...(configuration.skipLedgerV8DustHistory === true
+    ? { dustTimelineStartProbe: () => Effect.runPromise(findTimelineStart(configuration, configuration.forks.v9)) }
+    : {}),
+});
+
+/**
  * Builds the dust wallet this package ships: the default variant either side of `configuration.forks.v9`.
  *
  * @remarks
@@ -1274,7 +1308,7 @@ export type DustWalletClass = ForkingDustWalletClass<V1SyncUpdate, V2SyncUpdate,
  *   best-effort and its absence is the behaviour this wallet had before.
  *
  *   **With `skipLedgerV8DustHistory`, a fresh start first searches for where the dust timeline reaches the boundary**,
- *   and on a chain that has crossed it starts the V2 variant there, never reading the ledger-v8 dust history. The
+ *   and on a chain that has crossed it starts the V2 variant there, without reading the ledger-v8 dust history. The
  *   search is best-effort too: when it finds nothing, the start is the one described above.
  * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
  * @returns The wallet class.
@@ -1283,12 +1317,7 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
   const { v1, v2, migration } = dustVariantConfigurations(configuration);
   const withProbes: DefaultDustConfiguration & ForkingDustConfiguration = {
     ...configuration,
-    chainVersionProbe: configuration.chainVersionProbe ?? makeIndexerChainVersionProbe(configuration),
-    ...(configuration.skipLedgerV8DustHistory === true
-      ? {
-          dustTimelineStartProbe: () => Effect.runPromise(findDustTimelineStart(configuration, configuration.forks.v9)),
-        }
-      : {}),
+    ...dustWalletProbes(configuration),
   };
 
   return CustomForkingDustWallet(

@@ -21,6 +21,7 @@ import { logger } from './logger.js';
 import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import { type DefaultV2Configuration as DefaultDustV2Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { type DefaultDustConfiguration } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { type DefaultProvingConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type DefaultSubmissionConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/submission';
@@ -167,7 +168,7 @@ export class TestContainersFixture {
         return 'wss://indexer.devnet.midnight.network/api/v4/graphql/ws';
       }
       case 'qanet': {
-        return 'wss://indexer-blue.qanet.midnight.network/api/v4/graphql/ws';
+        return 'wss://indexer.qanet.midnight.network/api/v4/graphql/ws';
       }
       case 'preview': {
         return 'wss://indexer.preview.midnight.network/api/v4/graphql/ws';
@@ -252,8 +253,14 @@ export class TestContainersFixture {
     };
   }
 
-  public getDustWalletConfig(): DefaultDustV2Configuration {
+  public getDustWalletConfig(): DefaultDustV2Configuration &
+    Required<Pick<DefaultDustConfiguration, 'skipLedgerV8DustHistory'>> {
     return {
+      // A fresh wallet on a remote network that crossed the v9 fork starts its Dust at the boundary, when the search
+      // finds it, instead of replaying the ledger-v8 history; on a chain that runs ledger-v9 from its first block there
+      // is nothing to skip.
+      // The fork lane's fixture turns this off, because the replay is what it checks.
+      skipLedgerV8DustHistory: true,
       networkId: this.getNetworkId(),
       costParameters: {
         feeBlocksMargin: 5,

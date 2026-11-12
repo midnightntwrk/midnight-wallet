@@ -17,6 +17,7 @@ import type * as ledger from '@midnightntwrk/ledger-v9';
 import { type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
 import { type UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import {
+  type FacadeState,
   type WalletFacade,
   type WalletEntry,
   type FinalizedWalletEntry,
@@ -70,6 +71,26 @@ export const waitForFacadePendingClear = (wallet: WalletFacade) =>
       state.dust.pendingCoins.length === 0,
     'waitForFacadePendingClear',
   );
+
+/** A deadline that says what was being waited for, rather than raising a bare `TimeoutError`. */
+export const failingAfter = <T>(label: string, milliseconds: number): rx.MonoTypeOperatorFunction<T> =>
+  rx.timeout({
+    first: milliseconds,
+    with: () => rx.throwError(() => new Error(`Timed out after ${milliseconds}ms waiting for ${label}`)),
+  });
+
+/** Caps a wait that would otherwise only be bounded by its test's timeout, naming it when it runs out. */
+export const within = <T>(label: string, milliseconds: number, work: Promise<T>): Promise<T> =>
+  rx.firstValueFrom(rx.from(work).pipe(failingAfter(label, milliseconds)));
+
+/** The first state satisfying `settled`, or a failure naming what never happened. */
+export const firstStateWhere = (
+  label: string,
+  wallet: WalletFacade,
+  settled: (state: FacadeState) => boolean,
+  milliseconds: number,
+): Promise<FacadeState> =>
+  rx.firstValueFrom(wallet.state().pipe(rx.filter(settled), failingAfter(label, milliseconds)));
 
 export const waitForDustBalance = (wallet: WalletFacade) =>
   rx.firstValueFrom(
