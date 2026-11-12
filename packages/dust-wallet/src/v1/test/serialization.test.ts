@@ -161,6 +161,8 @@ describe('V1 dust snapshot pending Dust', () => {
 
 describe('V1 dust snapshot field bounds', () => {
   const capability = makeDefaultV1SerializationCapability();
+  const keysCapability = makeDefaultKeysCapability();
+  const coinsAndBalances = makeDefaultCoinsAndBalancesCapability(undefined, () => ({ keysCapability }));
   const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
   const coin: Dust = {
     initialValue: 1_000_000n,
@@ -173,25 +175,20 @@ describe('V1 dust snapshot field bounds', () => {
   };
   const declaredTime = new Date('2026-01-01T00:02:30.000Z');
   const u64Max = 2n ** 64n - 1n;
+  const fieldMax = maxField();
   const u128Max = 2n ** 128n - 1n;
   const u32Max = 2 ** 32 - 1;
-  const fieldMax = maxField();
-  /** The largest offset the indexer takes: its GraphQL `Int` is a signed 32-bit integer. */
-  const offsetMax = 2n ** 31n - 1n;
-  /** The largest protocol version a variant range holds: every range ends, exclusively, at `MaxSupportedVersion`. */
-  const protocolVersionMax = ProtocolVersion.MaxSupportedVersion - 1n;
-
-  const keysCapability = makeDefaultKeysCapability();
-  const coinsAndBalances = makeDefaultCoinsAndBalancesCapability(undefined, () => ({ keysCapability }));
+  /** The largest value the indexer's GraphQL `Int` takes, as the dust event id or the dtime cutoff height. */
+  const graphQlIntMax = 2n ** 31n - 1n;
 
   const JsonObject = Schema.Record({ key: Schema.String, value: Schema.Unknown });
   type Json = typeof JsonObject.Type;
-  const decodeJsonObject = Schema.decodeUnknownSync(JsonObject);
-  const decodeJsonObjects = Schema.decodeUnknownSync(Schema.Array(JsonObject));
+  const asJsonObject = Schema.decodeUnknownSync(JsonObject);
+  const asJsonObjects = Schema.decodeUnknownSync(Schema.Array(JsonObject));
 
   /** The JSON of a snapshot the wallet can sync and value: one pending Dust coin, every field in range. */
   const validSnapshot = (): Json =>
-    decodeJsonObject(
+    asJsonObject(
       JSON.parse(
         capability.serialize(
           CoreWallet.restore(
@@ -207,13 +204,13 @@ describe('V1 dust snapshot field bounds', () => {
     );
 
   const withEntry = (snapshot: Json, fields: Json): Json => {
-    const [entry] = decodeJsonObjects(snapshot['pendingDust']);
+    const [entry] = asJsonObjects(snapshot['pendingDust']);
     return { ...snapshot, pendingDust: [{ ...entry, ...fields }] };
   };
 
   const withCoin = (snapshot: Json, fields: Json): Json => {
-    const [entry] = decodeJsonObjects(snapshot['pendingDust']);
-    return withEntry(snapshot, { coin: { ...decodeJsonObject(entry?.['coin']), ...fields } });
+    const [entry] = asJsonObjects(snapshot['pendingDust']);
+    return withEntry(snapshot, { coin: { ...asJsonObject(entry?.['coin']), ...fields } });
   };
 
   const expectRefused = (snapshot: Json): void => {
@@ -259,25 +256,21 @@ describe('V1 dust snapshot field bounds', () => {
       (s) => ({ ...s, protocolVersion: String(ProtocolVersion.MaxSupportedVersion + 1n) }),
     ],
     ['a negative offset', (s) => ({ ...s, offset: '-1' })],
-    ['an offset above the largest the indexer takes', (s) => ({ ...s, offset: String(2n ** 31n) })],
+    ['an offset above the largest the indexer takes', (s) => ({ ...s, offset: String(graphQlIntMax + 1n) })],
     ['an offset above u64', (s) => ({ ...s, offset: String(u64Max + 1n) })],
   ];
 
   it.each(pendingEntryOutOfRange)(
     'should refuse a snapshot holding %s, because the ledger cannot settle or value that pending entry',
-    (_case, corrupt) => {
-      expectRefused(corrupt(validSnapshot()));
-    },
+    (_case, corrupt) => expectRefused(corrupt(validSnapshot())),
   );
 
   it.each(topLevelOutOfRange)(
     'should refuse a snapshot holding %s, because the wallet could not run or sync from it',
-    (_case, corrupt) => {
-      expectRefused(corrupt(validSnapshot()));
-    },
+    (_case, corrupt) => expectRefused(corrupt(validSnapshot())),
   );
 
-  it('should restore a snapshot whose every bounded field sits at the largest value the wallet accepts, because the ledger settles and values them without throwing', () => {
+  it('should restore a snapshot whose every bounded field sits at the largest value the wallet accepts, because the ledger reads each of them without throwing', () => {
     const atBounds = {
       ...withCoin(withEntry(validSnapshot(), { nullifier: String(fieldMax) }), {
         initialValue: String(u128Max),
@@ -288,8 +281,8 @@ describe('V1 dust snapshot field bounds', () => {
         mtIndex: String(u64Max),
       }),
       publicKey: { publicKey: String(fieldMax) },
-      protocolVersion: String(protocolVersionMax),
-      offset: String(offsetMax),
+      protocolVersion: String(ProtocolVersion.MaxSupportedVersion - 1n),
+      offset: String(graphQlIntMax),
     };
 
     const restored = pipe(capability.deserialize(null, JSON.stringify(atBounds)), EitherOps.getOrThrowLeft);
@@ -310,11 +303,11 @@ describe('V1 dust snapshot field bounds', () => {
       },
     ]);
     expect(restored.publicKey).toEqual({ publicKey: fieldMax });
-    expect(restored.protocolVersion).toBe(protocolVersionMax);
-    expect(restored.progress.appliedIndex).toBe(offsetMax);
+    expect(restored.protocolVersion).toBe(ProtocolVersion.MaxSupportedVersion - 1n);
+    expect(restored.progress.appliedIndex).toBe(graphQlIntMax);
 
-    // The restored ledger state has never seen the pending coin, so it holds no generation info for it: a TTL pass
-    // settles the coin as worth nothing, and valuing finds no coin to report. Both hand every bounded value to the ledger.
+    // Settling and valuing hand every bounded value to the ledger. The restored state holds no generation backing the
+    // coin, so each read finds none: this proves the ledger reads the values, not that it values them.
     const syncTime = new Date('2026-01-01T00:05:00.000Z');
     const settled = CoreWallet.settlePendingDust(
       restored.pendingDust,
@@ -323,7 +316,6 @@ describe('V1 dust snapshot field bounds', () => {
       [],
       syncTime,
     );
-
     expect(settled).toEqual([]);
     expect(coinsAndBalances.getPendingCoins(restored, syncTime)).toEqual([]);
     expect(coinsAndBalances.getTotalCoins(restored, syncTime)).toEqual([]);
@@ -357,10 +349,9 @@ describe('V1 dust snapshot field bounds', () => {
   });
 
   it('should restore a snapshot on a custom network, because a network id is any string', () => {
-    const restored = pipe(
-      capability.deserialize(null, JSON.stringify({ ...validSnapshot(), networkId: 'my-custom-network' })),
-      EitherOps.getOrThrowLeft,
-    );
+    const onCustomNetwork = { ...validSnapshot(), networkId: 'my-custom-network' };
+
+    const restored = pipe(capability.deserialize(null, JSON.stringify(onCustomNetwork)), EitherOps.getOrThrowLeft);
 
     expect(restored.networkId).toBe('my-custom-network');
   });

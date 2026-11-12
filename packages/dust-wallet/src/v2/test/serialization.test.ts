@@ -282,7 +282,7 @@ describe('V2 dust snapshot field bounds', () => {
     (_case, corrupt) => expectRefused(corrupt(validSnapshot())),
   );
 
-  it('should restore a snapshot whose every bounded field sits at the largest value the wallet accepts, because the ledger settles and values them without throwing', () => {
+  it('should restore a snapshot whose every bounded field sits at the largest value the wallet accepts, because the ledger reads each of them without throwing', () => {
     const atBounds = {
       ...withCoin(withEntry(validSnapshot(), { nullifier: String(fieldMax) }), {
         initialValue: String(u128Max),
@@ -318,8 +318,8 @@ describe('V2 dust snapshot field bounds', () => {
     expect(restored.protocolVersion).toBe(ProtocolVersion.MaxSupportedVersion - 1n);
     expect(restored.progress.appliedIndex).toBe(graphQlIntMax);
 
-    // A sync settles the pending entry against the ledger state. The restored state holds no generation backing the
-    // coin, so the coin counts as decayed away and the sync drops it rather than throwing on it.
+    // Settling and valuing hand every bounded value to the ledger. The restored state holds no generation backing the
+    // coin, so each read finds none: this proves the ledger reads the values, not that it values them.
     const syncTime = new Date('2026-01-01T00:05:00.000Z');
     const settled = CoreWallet.settlePendingDust(
       restored.pendingDust,
@@ -329,8 +329,6 @@ describe('V2 dust snapshot field bounds', () => {
       syncTime,
     );
     expect(settled).toEqual([]);
-
-    // Valuing reads every pending coin through the ledger; with no generation backing it, the coin carries no value.
     expect(coinsAndBalances.getPendingCoins(restored, syncTime)).toEqual([]);
     expect(coinsAndBalances.getTotalCoins(restored, syncTime)).toEqual([]);
   });
@@ -358,6 +356,7 @@ describe('V2 dust snapshot field bounds', () => {
       },
     ]);
     expect(restored.publicKey).toEqual({ publicKey: 0n });
+    expect(restored.protocolVersion).toBe(ProtocolVersion.MinSupportedVersion);
     expect(restored.progress.appliedIndex).toBe(0n);
   });
 
