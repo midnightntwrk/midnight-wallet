@@ -72,7 +72,9 @@ export function registerDustHealthchecks({
       const own = createWalletLifecycle();
       lifecycle = own;
       const env = getEnv();
-      const filenameWallet = `${seed.substring(0, 7)}-${env.network}.state`;
+      // A name of its own, apart from the token-transfer scenario's snapshot of the same seed: a dust test that fails
+      // deletes the snapshot it started from, and must not take the token-transfer wallet's with it.
+      const filenameWallet = `dust-${seed.substring(0, 7)}-${env.network}.state`;
       wallet = await own.adopt(
         provideWallet(env, {
           ...withProjectionsDefault(walletOptions),
