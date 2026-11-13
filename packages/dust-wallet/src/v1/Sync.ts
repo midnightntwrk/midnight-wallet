@@ -677,7 +677,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     subscribeWallet(
       state: CoreWallet,
     ): Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient> {
-      const { appliedIndex } = state.progress;
+      const { appliedIndex, highestRelevantWalletIndex } = state.progress;
       const bufferSize = config.indexerClientConnection.bufferSize ?? 10000;
       const resumeThreshold = config.indexerClientConnection.resumeThreshold ?? 100;
 
@@ -706,6 +706,16 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
           // start, rather than relying on `id: 0` sorting below the first real event id.
           variables: (cursor) => ({ id: cursor < 0n ? null : Number(cursor) }),
           key: (r) => BigInt(r.dustLedgerEvents.id),
+          // An indexer that stops writing to this subscription while its socket stays open raises nothing, so the
+          // subscription is told how to recognise it: every event names the highest id the timeline holds, and a
+          // session behind that id that goes silent is given up on, which fails the stream into the retry that
+          // reconnects. `knownTip` is how far this wallet already knows the timeline to go, for a session that is
+          // silent from its first event. A wallet that has seen no event holds zero there, which is no tip: named
+          // as one it would count as an event owed, and a chain with no dust events would never let the wallet rest.
+          stall: {
+            tip: (r) => BigInt(r.dustLedgerEvents.maxId),
+            ...(highestRelevantWalletIndex > 0n ? { knownTip: highestRelevantWalletIndex } : {}),
+          },
         }),
         Stream.mapEffect((subscription) =>
           pipe(

@@ -71,9 +71,10 @@ export interface BackpressureOptions<Item, V> {
   readonly key: (result: Item) => bigint;
   /**
    * Fails the stream when an open session that is behind delivers nothing for {@link STALL_TIMEOUT}. A session is behind
-   * when the highest tip known, whether {@link StallDetection.knownTip} or one an item reported through
-   * {@link StallDetection.tip}, is above the last key delivered. A session at the tip, one with no tip known, and one
-   * paused for backpressure are left alone. Omitted, a silent session is waited on for as long as it stays open.
+   * when the tip is above the last key delivered, the tip being what the latest item reported through
+   * {@link StallDetection.tip}, or {@link StallDetection.knownTip} until an item has reported one. A session at the tip,
+   * one with no tip known, and one paused for backpressure are left alone. Omitted, a silent session is waited on for
+   * as long as it stays open.
    */
   readonly stall?: StallDetection<Item>;
 }
@@ -90,8 +91,8 @@ export interface StallDetection<Item> {
   readonly tip: (item: Item) => bigint;
   /**
    * The highest key already known to exist when the stream opens, as an earlier stream's items reported it. Without it
-   * a session that is dead from its first frame reports no tip of its own and is never given up on. Left out by a
-   * caller that has seen no tip.
+   * a session that is dead from its first frame reports no tip of its own and is never given up on. It stands only
+   * until an item reports a tip, which then replaces it. Left out by a caller that has seen no tip.
    */
   readonly knownTip?: bigint;
 }
@@ -108,7 +109,7 @@ export const STALL_TIMEOUT = Duration.seconds(30);
 export class SubscriptionStalledError extends Data.TaggedError('SubscriptionStalledError')<{
   /** The last key delivered, or the cursor the stream opened at when nothing was. */
   readonly lastKey: bigint;
-  /** The highest key known to exist. */
+  /** How far the source was known to go. */
   readonly tip: bigint;
 }> {}
 
@@ -161,7 +162,7 @@ export type BPState = {
   readonly lastKey: bigint;
   readonly generation: number;
   readonly terminal: boolean;
-  /** The highest key known to exist: seeded by the caller or reported by an item. None until one is known. */
+  /** How far the source is known to go: what the latest item reported, or the caller's seed until one has. */
   readonly tip: Option.Option<bigint>;
   /** When a session last showed life, by opening or delivering, and which session that was. None until one has. */
   readonly lastActivity: Option.Option<SessionActivity>;
@@ -239,8 +240,10 @@ export type StallDecision = Either.Either<number, SubscriptionStalledError>;
  * @internal Record that the open session showed life at `now`: it opened, or delivered an item reporting `tip`.
  *
  * Every item counts, including one the watermark goes on to drop: a boundary item re-delivered after a resume says
- * nothing new, but it proves the session is alive and carries the freshest tip. Callbacks from a session that is no
- * longer the open one are ignored, as everywhere else.
+ * nothing new, but it proves the session is alive and carries the freshest tip. A reported tip replaces the one held,
+ * even a higher one: the tip a caller seeded is what an earlier stream saw, and a source that now reports less, as one
+ * still rebuilding its history does, owes this session no more than it says it has. Callbacks from a session that is
+ * no longer the open one are ignored, as everywhere else.
  */
 export const noteActivity = (s: BPState, myGen: number, now: number, tip: Option.Option<bigint>): BPState =>
   s.terminal || s.generation !== myGen
@@ -248,20 +251,11 @@ export const noteActivity = (s: BPState, myGen: number, now: number, tip: Option
     : {
         ...s,
         lastActivity: Option.some({ generation: myGen, at: now }),
-        tip: Option.match(tip, {
-          onNone: () => s.tip,
-          onSome: (reported) =>
-            Option.some(
-              Option.getOrElse(
-                Option.filter(s.tip, (known) => known > reported),
-                () => reported,
-              ),
-            ),
-        }),
+        tip: Option.orElse(tip, () => s.tip),
       };
 
 /**
- * @internal Decide whether the open session has stalled: it is behind the highest key known to exist and has been
+ * @internal Decide whether the open session has stalled: it is behind how far the source is known to go and has been
  * silent for `timeoutMillis`.
  *
  * Three kinds of session cannot stall. A paused one is the wrapper's own silence. One with no tip above its last key has
