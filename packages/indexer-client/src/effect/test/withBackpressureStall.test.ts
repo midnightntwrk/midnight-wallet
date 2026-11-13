@@ -263,6 +263,33 @@ describe('withBackpressure stall detection', () => {
     expect(observation.disposals).toBe(0);
   });
 
+  it('should take the tip an event reports over the one it was told at the start, because what an earlier stream saw says less about the source than the source itself does', async () => {
+    const observation = await run(
+      Effect.gen(function* () {
+        const feed = makeFeed();
+        // Told the timeline reaches ten, by a caller who saw that earlier; the source now says it ends at three.
+        const { fiber, received } = yield* consume(
+          feed,
+          options({ stall: { tip: (item) => item.maxId, knownTip: 10n } }),
+        );
+
+        [1n, 2n, 3n].forEach((id) => feed.deliver(event(id, 3n)));
+        yield* settle;
+        yield* advance(Duration.minutes(10));
+
+        return {
+          settled: yield* Fiber.poll(fiber),
+          received: yield* Ref.get(received),
+          disposals: feed.observed.disposals,
+        };
+      }),
+    );
+
+    expect(observation.settled).toEqual(Option.none());
+    expect(observation.received).toEqual([1n, 2n, 3n]);
+    expect(observation.disposals).toBe(0);
+  });
+
   it('should keep a session that is behind open for as long as events keep arriving within 30 seconds of each other, because only silence is a stall', async () => {
     const observation = await run(
       Effect.gen(function* () {
