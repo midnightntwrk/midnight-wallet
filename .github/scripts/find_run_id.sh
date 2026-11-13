@@ -12,47 +12,53 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Prints the id of the run whose artifact named <artifact_name> the workflow <workflow_name> should restore.
+#
+# Usage: find_run_id.sh <owner/repo> <workflow_name> <artifact_name> [branch]
+#
+# Exits 0 with the run id, 1 when there is no such artifact, and 2 when the GitHub API could not be read, so that a
+# failed lookup is not reported as an empty cache.
 
-# Usage: ./script.sh <owner/repo> <workflow_name> <artifact_name>
-REPO="$1"
-WORKFLOW_NAME="$2"
-ARTIFACT_NAME="$3"
+set -o pipefail
 
-# Check if all arguments are provided
+REPO="${1:-}"
+WORKFLOW_NAME="${2:-}"
+ARTIFACT_NAME="${3:-}"
+BRANCH="${4:-}"
+
 if [[ -z "$REPO" || -z "$WORKFLOW_NAME" || -z "$ARTIFACT_NAME" ]]; then
-  echo "Usage: $0 <owner/repo> <workflow_name> <artifact_name>"
-  exit 1
+  echo "Usage: $0 <owner/repo> <workflow_name> <artifact_name> [branch]" >&2
+  exit 2
 fi
 
-# Fetch the workflow ID for the specified workflow
-workflow_id=$(gh api repos/$REPO/actions/workflows | jq -r --arg name "$WORKFLOW_NAME" '.workflows[] | select(.name == $name) | .id')
-
+if ! workflow_id=$(gh api "repos/$REPO/actions/workflows?per_page=100" --paginate --slurp \
+  | jq -r --arg name "$WORKFLOW_NAME" '.[].workflows[] | select(.name == $name) | .id'); then
+  echo "Could not list the workflows of '$REPO'." >&2
+  exit 2
+fi
+# A network with no healthcheck workflow has no cache to restore, which is not an error.
 if [[ -z "$workflow_id" ]]; then
-  echo "Workflow '$WORKFLOW_NAME' not found in repository '$REPO'."
+  echo "Workflow '$WORKFLOW_NAME' not found in repository '$REPO'." >&2
   exit 1
 fi
 
-# The runs that still hold a downloadable artifact of this name, newest first. An expired artifact is still listed but
-# can no longer be downloaded, so it is left out.
-#
-# A run's conclusion is deliberately not checked. The sync cache only ever holds snapshots that passing tests saved, so
-# a failed run's cache is as usable as a green run's. Requiring a green run deadlocks a lane that has been red for longer
-# than the artifact retention period: every run syncs from scratch, times out, fails, and so never publishes the cache
-# that would let the next run pass.
-#
-# Starting from the artifacts rather than from the workflow's runs keeps the number of API calls bounded by the few
-# artifacts that exist, instead of growing with the length of the workflow's history.
-if ! artifacts=$(gh api "repos/$REPO/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" --paginate); then
+# Runs holding an unexpired artifact of this name: those on <branch> first, then the rest, newest first within each.
+# The run's conclusion is not checked: the cache only holds snapshots that passing tests saved, and requiring a green
+# run deadlocks a lane that stays red for longer than the retention period. Listing artifacts rather than runs keeps the
+# API calls bounded by the unexpired artifacts of this name.
+if ! candidate_runs=$(gh api "repos/$REPO/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" --paginate --slurp \
+  | jq -r --arg branch "$BRANCH" '[.[].artifacts[] | select(.expired | not)]
+      | sort_by([(.workflow_run.head_branch == $branch), .created_at]) | reverse | .[].workflow_run.id'); then
   echo "Could not list the repository's artifacts named '$ARTIFACT_NAME'." >&2
-  exit 1
+  exit 2
 fi
-candidate_runs=$(jq -r '.artifacts[] | select(.expired == false) | "\(.created_at) \(.workflow_run.id)"' <<<"$artifacts" \
-  | sort -r | awk '{print $2}')
 
-# The newest of them that belongs to the specified workflow.
+# The first of them that belongs to the workflow.
 for run_id in $candidate_runs; do
-  run_workflow_id=$(gh api "repos/$REPO/actions/runs/$run_id" --jq '.workflow_id')
-
+  if ! run_workflow_id=$(gh api "repos/$REPO/actions/runs/$run_id" --jq '.workflow_id'); then
+    echo "Could not read run $run_id." >&2
+    exit 2
+  fi
   if [[ "$run_workflow_id" == "$workflow_id" ]]; then
     echo "$run_id"
     exit 0

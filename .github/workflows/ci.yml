@@ -42,13 +42,15 @@ jobs:
           fetch-depth: ${{ github.event_name != 'pull_request' && 1 || 0 }}
           filter: blob:none
 
-      # Pins the skip list from both sides, and the `Tests` gate's pass and fail cases: a must-run file the scope script
-      # would skip, or a job result the gate would wave through, fails here. These test the branch's copies, the ones
-      # that become the base's once the branch merges.
+      # Pins the skip list from both sides, the `Tests` gate's pass and fail cases, and the healthcheck sync cache lookup:
+      # a must-run file the scope script would skip, a job result the gate would wave through, or a cache the lookup
+      # would pass over or misreport, fails here. These test the branch's copies, the ones that become the base's once
+      # the branch merges.
       - name: Test the CI scripts
         run: |
           .github/scripts/ci-test-scope.test.sh
           .github/scripts/ci-tests-gate.test.sh
+          .github/scripts/find_run_id.test.sh
 
       # The copy that decides is the base's (`HEAD^1`, the base side of the merge commit), not the branch's, so an edit to
       # the skip list takes effect only once it is on the base and cannot skip the tests of the PR that makes it. This
