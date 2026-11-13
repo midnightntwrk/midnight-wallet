@@ -10,6 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { Either, Option } from 'effect';
 import { describe, it, expect } from 'vitest';
 import {
   initialBPState,
@@ -17,6 +18,8 @@ import {
   decideTerminate,
   decideComplete,
   decideResume,
+  decideStall,
+  noteActivity,
   type BPState,
 } from '../Backpressure.js';
 
@@ -169,6 +172,45 @@ describe('Backpressure state machine', () => {
     it('does not resume when not paused, even if drained', () => {
       const [shouldResume] = decideResume(state({ paused: false, inFlight: 0 }), 2);
       expect(shouldResume).toBe(false);
+    });
+  });
+
+  describe('decideStall', () => {
+    const timeoutMillis = 30_000;
+    const tenMinutes = 600_000;
+
+    // A session three events into a hundred that was alive at time zero, then paused, then drained ten minutes later.
+    // Resuming and reopening are two steps, and the stall watch can look in between them.
+    const resumedAfterLongPause = (): BPState => {
+      const alive = noteActivity(state({ lastKey: 3n, inFlight: 1 }), 0, 0, Option.some(100n));
+      const [, resumed] = decideResume({ ...alive, paused: true }, 0);
+      return resumed;
+    };
+
+    it("should not give up on a session that is resumed but not yet reopened, because the silence since before the pause is not the new session's", () => {
+      const resumed = resumedAfterLongPause();
+
+      const [decision, next] = decideStall(resumed, tenMinutes, timeoutMillis);
+
+      expect(resumed.paused).toBe(false);
+      expect(decision).toEqual(Either.right(timeoutMillis));
+      expect(next).toBe(resumed);
+    });
+
+    it('should give up on a reopened session a full timeout after it reopened, and not before', () => {
+      const resumed = resumedAfterLongPause();
+      const reopened = noteActivity(resumed, resumed.generation, tenMinutes, Option.none());
+
+      const [early] = decideStall(reopened, tenMinutes + timeoutMillis - 1, timeoutMillis);
+      const [late, next] = decideStall(reopened, tenMinutes + timeoutMillis, timeoutMillis);
+
+      expect(early).toEqual(Either.right(1));
+      expect(Either.isLeft(late) ? late.left : undefined).toMatchObject({
+        _tag: 'SubscriptionStalledError',
+        lastKey: 3n,
+        tip: 100n,
+      });
+      expect(next.terminal).toBe(true);
     });
   });
 });

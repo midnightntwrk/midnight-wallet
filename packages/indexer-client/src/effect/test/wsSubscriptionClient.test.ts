@@ -10,7 +10,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Cause, Chunk, Effect, Either, Exit, Stream } from 'effect';
+import {
+  Cause,
+  Chunk,
+  Deferred,
+  Duration,
+  Effect,
+  Either,
+  Exit,
+  Fiber,
+  Option,
+  Stream,
+  TestClock,
+  TestContext,
+} from 'effect';
 import { strToU8, zlibSync } from 'fflate';
 import { parse } from 'graphql';
 import { GRAPHQL_TRANSPORT_WS_PROTOCOL } from 'graphql-ws';
@@ -167,6 +180,55 @@ const makeDroppingDeflateFake = (payload: object): typeof WebSocket => {
   // the deflate wrapper and graphql-ws only ever touch the members implemented above.
   return DroppingDeflateFakeWebSocket as unknown as typeof WebSocket;
 };
+
+/**
+ * A `typeof WebSocket` stand-in for an indexer whose subscription goes quiet: it completes the handshake, answers a
+ * subscription with one `next` frame, and then sends nothing more while the connection stays open. Mutation confined to
+ * test setup, as with the fakes above.
+ */
+const makeSilentAfterFirstFake = (payload: object): typeof WebSocket => {
+  class SilentAfterFirstFakeWebSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSING = 2;
+    static readonly CLOSED = 3;
+
+    readyState = SilentAfterFirstFakeWebSocket.CONNECTING;
+    protocol = GRAPHQL_TRANSPORT_WS_PROTOCOL;
+    onopen: (() => void) | null = null;
+    onmessage: ((event: MessageEvent) => void) | null = null;
+    onclose: ((event: unknown) => void) | null = null;
+    onerror: ((event: unknown) => void) | null = null;
+
+    constructor() {
+      void Promise.resolve().then(() => {
+        this.readyState = SilentAfterFirstFakeWebSocket.OPEN;
+        this.onopen?.();
+      });
+    }
+
+    send(data: string): void {
+      const message = JSON.parse(data) as { readonly type: string; readonly id?: string };
+      const reply = (frame: object): void =>
+        void Promise.resolve().then(() =>
+          this.onmessage?.(new MessageEvent('message', { data: JSON.stringify(frame) })),
+        );
+      if (message.type === 'connection_init') reply({ type: 'connection_ack' });
+      if (message.type === 'subscribe') reply({ id: message.id, type: 'next', payload });
+    }
+
+    close(code?: number, reason?: string): void {
+      this.readyState = SilentAfterFirstFakeWebSocket.CLOSED;
+      this.onclose?.({ code: code ?? 1000, reason: reason ?? '', wasClean: true });
+    }
+  }
+
+  // Type cast required because: `typeof WebSocket` describes the full DOM constructor, while
+  // graphql-ws only ever touches the members implemented above.
+  return SilentAfterFirstFakeWebSocket as unknown as typeof WebSocket;
+};
+
+const nextMacrotask = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 /** Awaits `n` chained microtask ticks, letting promise-driven library internals settle. */
 const flushMicrotasks = (n: number): Promise<void> =>
@@ -334,6 +396,63 @@ describe('WsSubscriptionClient', () => {
       expect(delivered).toEqual(Either.right(payload.data));
       // The drop surfaced as a transport failure the sync's retry can act on, not a stall or a GraphQL error.
       expect(Either.isLeft(ended) ? ended.left : undefined).toBeInstanceOf(ServerError);
+    });
+  });
+
+  describe('subscribeWithBackpressure', () => {
+    // A subscription the indexer stops writing to while its socket stays open raises nothing: no close, no error, no
+    // completion. The only failures a sync retries on are the ones this client reports, so a session given up on has
+    // to come out of it as one of them.
+    it('should fail with a ServerError when a session that is behind delivers nothing for 30 seconds, because a transport failure is what the sync retries on', async () => {
+      // Type cast required because: the fake server ignores the query text entirely; the document only has to print
+      // and to type the one event the fake answers with.
+      const eventsSubscription = parse('subscription { events { id maxId } }') as Query.Document<
+        { readonly events: { readonly id: number; readonly maxId: number } },
+        Record<string, never>
+      >;
+
+      const failure = await Effect.gen(function* () {
+        const client = yield* SubscriptionClient.SubscriptionClient;
+        const firstEvent = yield* Deferred.make<void>();
+        const fiber = yield* client
+          .subscribeWithBackpressure(eventsSubscription, {
+            bufferSize: 100,
+            resumeThreshold: 10,
+            from: 0n,
+            variables: () => ({}),
+            key: (result) => BigInt(result.events.id),
+            stall: { tip: (result) => BigInt(result.events.maxId) },
+          })
+          .pipe(
+            Stream.runForEach(() => Deferred.succeed(firstEvent, undefined)),
+            Effect.fork,
+          );
+
+        // The first of ten events arrives, and then the open connection says nothing.
+        yield* Deferred.await(firstEvent);
+        yield* TestClock.adjust(Duration.seconds(30));
+        yield* Effect.promise(nextMacrotask).pipe(Effect.repeatN(4));
+
+        return Option.flatMap(yield* Fiber.poll(fiber), (exit) =>
+          Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none(),
+        );
+      }).pipe(
+        Effect.provide(
+          WsSubscriptionClient.layer(
+            { url: 'ws://indexer.test/graphql/ws' },
+            { webSocketImpl: makeSilentAfterFirstFake({ data: { events: { id: 1, maxId: 10 } } }), compression: false },
+          ),
+        ),
+        Effect.scoped,
+        Effect.provide(TestContext.TestContext),
+        Effect.runPromise,
+      );
+
+      expect(Option.getOrUndefined(failure)).toEqual(
+        new ServerError({
+          message: 'The subscription delivered nothing for 30 seconds while behind: last key 1, highest known 10',
+        }),
+      );
     });
   });
 });

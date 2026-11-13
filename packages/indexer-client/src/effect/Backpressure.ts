@@ -16,13 +16,14 @@
 // that don't support pull or pause signalling.
 //
 // Composition:
-//   - Pure state machine (decideItem/decideTerminate/decideComplete/decideResume)
-//     contains all transition rules and is unit-testable in isolation.
+//   - Pure state machine (decideItem/decideTerminate/decideComplete/decideResume,
+//     and noteActivity/decideStall for stall detection) contains all transition
+//     rules and is unit-testable in isolation.
 //   - `withBackpressure` wires the state machine to a {@link Source}, an
 //     internal Stream.asyncPush queue, and a Stream.tap drain detector.
 //   - Source authors translate their callbacks to the {@link Source} contract
 //     once; backpressure is independent of the underlying transport.
-import { Effect, Stream, type StreamEmit, Ref } from 'effect';
+import { Clock, Data, Duration, Effect, Either, Option, type Scope, Stream, type StreamEmit, Ref } from 'effect';
 
 // ============================================================================
 // Public types
@@ -69,8 +70,8 @@ export interface BackpressureOptions<Item, V> {
   /** Monotonic key extractor — items with a key not strictly greater than the running watermark are dropped. */
   readonly key: (result: Item) => bigint;
   /**
-   * Fails the stream when an open session that is behind delivers nothing for 30 seconds. A session is behind when the
-   * highest tip known, whether {@link StallDetection.knownTip} or one an item reported through
+   * Fails the stream when an open session that is behind delivers nothing for {@link STALL_TIMEOUT}. A session is behind
+   * when the highest tip known, whether {@link StallDetection.knownTip} or one an item reported through
    * {@link StallDetection.tip}, is above the last key delivered. A session at the tip, one with no tip known, and one
    * paused for backpressure are left alone. Omitted, a silent session is waited on for as long as it stays open.
    */
@@ -94,6 +95,22 @@ export interface StallDetection<Item> {
    */
   readonly knownTip?: bigint;
 }
+
+/** How long an open session that is behind may deliver nothing before it is given up on. */
+export const STALL_TIMEOUT = Duration.seconds(30);
+
+/**
+ * An open session that was behind delivered nothing for {@link STALL_TIMEOUT}.
+ *
+ * The source raised nothing itself: a session it stops writing to while the connection stays open neither ends nor
+ * fails. This is the failure the wrapper raises in its place, which gives whatever retries the stream its chance to.
+ */
+export class SubscriptionStalledError extends Data.TaggedError('SubscriptionStalledError')<{
+  /** The last key delivered, or the cursor the stream opened at when nothing was. */
+  readonly lastKey: bigint;
+  /** The highest key known to exist. */
+  readonly tip: bigint;
+}> {}
 
 /**
  * A push-based source. Each call opens a fresh session and returns a dispose handle. Items, errors and completion flow
@@ -127,6 +144,14 @@ export type Source<Item, V, E> = (params: {
 // cursor is inclusive (by assumption), so the boundary item gets re-delivered
 // after each resume; the dedup here filters it. It is also the sole input to
 // `variables(...)` when (re-)opening a session — no cached variables in state.
+//
+// `tip` and `lastActivity` are what stall detection reads. A session is behind
+// while `tip` is above `lastKey`, and silent since `lastActivity`, which moves
+// whenever the open session opens or delivers and names the session it is
+// about: a resume bumps the generation before the new session opens, and the
+// silence of the pause it ends must not be read as the new session's. Both
+// live in this one state so the decision to give up on a session is taken
+// against a consistent view.
 // ============================================================================
 
 /** @internal — exported only for unit tests; not part of the public API. */
@@ -136,18 +161,27 @@ export type BPState = {
   readonly lastKey: bigint;
   readonly generation: number;
   readonly terminal: boolean;
+  /** The highest key known to exist: seeded by the caller or reported by an item. None until one is known. */
+  readonly tip: Option.Option<bigint>;
+  /** When a session last showed life, by opening or delivering, and which session that was. None until one has. */
+  readonly lastActivity: Option.Option<SessionActivity>;
 };
+
+/** @internal A sign of life from the session of one generation, at a time in clock millis. */
+export type SessionActivity = { readonly generation: number; readonly at: number };
 
 /** @internal */
 export type ItemDecision = { readonly emit: boolean; readonly pause: boolean };
 
 /** @internal */
-export const initialBPState = (from: bigint): BPState => ({
+export const initialBPState = (from: bigint, knownTip?: bigint): BPState => ({
   paused: false,
   inFlight: 0,
   lastKey: from,
   generation: 0,
   terminal: false,
+  tip: Option.fromNullable(knownTip),
+  lastActivity: Option.none(),
 });
 
 /**
@@ -198,6 +232,65 @@ export const decideResume = (s: BPState, resumeThreshold: number): readonly [boo
   return [false, { ...s, inFlight }];
 };
 
+/** @internal What {@link decideStall} decides: the stall, or how many millis until it is worth looking again. */
+export type StallDecision = Either.Either<number, SubscriptionStalledError>;
+
+/**
+ * @internal Record that the open session showed life at `now`: it opened, or delivered an item reporting `tip`.
+ *
+ * Every item counts, including one the watermark goes on to drop: a boundary item re-delivered after a resume says
+ * nothing new, but it proves the session is alive and carries the freshest tip. Callbacks from a session that is no
+ * longer the open one are ignored, as everywhere else.
+ */
+export const noteActivity = (s: BPState, myGen: number, now: number, tip: Option.Option<bigint>): BPState =>
+  s.terminal || s.generation !== myGen
+    ? s
+    : {
+        ...s,
+        lastActivity: Option.some({ generation: myGen, at: now }),
+        tip: Option.match(tip, {
+          onNone: () => s.tip,
+          onSome: (reported) =>
+            Option.some(
+              Option.getOrElse(
+                Option.filter(s.tip, (known) => known > reported),
+                () => reported,
+              ),
+            ),
+        }),
+      };
+
+/**
+ * @internal Decide whether the open session has stalled: it is behind the highest key known to exist and has been
+ * silent for `timeoutMillis`.
+ *
+ * Three kinds of session cannot stall. A paused one is the wrapper's own silence. One with no tip above its last key has
+ * nothing owed to it. One that has not shown life yet, because a resume has named it and it is still to open, has no
+ * silence of its own to measure. Each is looked at again a full timeout later, which is never too late: a session only
+ * becomes one that can stall by opening or delivering, and either moves `lastActivity` to that moment.
+ */
+export const decideStall = (s: BPState, now: number, timeoutMillis: number): readonly [StallDecision, BPState] => {
+  const owed =
+    s.terminal || s.paused
+      ? Option.none()
+      : Option.all({
+          tip: Option.filter(s.tip, (tip) => tip > s.lastKey),
+          aliveAt: Option.map(
+            Option.filter(s.lastActivity, ({ generation }) => generation === s.generation),
+            ({ at }) => at,
+          ),
+        });
+  return Option.match(owed, {
+    onNone: (): readonly [StallDecision, BPState] => [Either.right(timeoutMillis), s],
+    onSome: ({ tip, aliveAt }): readonly [StallDecision, BPState] => {
+      const remaining = aliveAt + timeoutMillis - now;
+      return remaining > 0
+        ? [Either.right(remaining), s]
+        : [Either.left(new SubscriptionStalledError({ lastKey: s.lastKey, tip })), { ...s, terminal: true }];
+    },
+  });
+};
+
 // ============================================================================
 // Stream wrapper
 // ============================================================================
@@ -207,15 +300,20 @@ export const decideResume = (s: BPState, resumeThreshold: number): readonly [boo
  * reaches `bufferSize` and resumed (re-opened with `variables(lastKey)`) once the consumer drains back to
  * `resumeThreshold`.
  *
+ * With {@link BackpressureOptions.stall}, an open session that is behind and delivers nothing for {@link STALL_TIMEOUT}
+ * is closed and the stream fails with a {@link SubscriptionStalledError}, after everything the session did deliver.
+ *
  * See {@link BackpressureOptions} for the monotonic-key dedup invariant.
  */
 export const withBackpressure = <Item, V, E>(
   source: Source<Item, V, E>,
   options: BackpressureOptions<Item, V>,
-): Stream.Stream<Item, E> => {
-  type Emit = StreamEmit.EmitOpsPush<E, Item>;
+): Stream.Stream<Item, E | SubscriptionStalledError> => {
+  type Emit = StreamEmit.EmitOpsPush<E | SubscriptionStalledError, Item>;
 
-  const { bufferSize, resumeThreshold, key, from, variables } = options;
+  const { bufferSize, resumeThreshold, key, from, variables, stall } = options;
+  const stallTimeoutMillis = Duration.toMillis(STALL_TIMEOUT);
+  const tipOf = (item: Item): Option.Option<bigint> => Option.map(Option.fromNullable(stall), ({ tip }) => tip(item));
 
   // Stream.unwrap re-runs the factory per subscription, so each consumer of
   // the returned Stream gets its own Refs and its own source session.
@@ -225,7 +323,9 @@ export const withBackpressure = <Item, V, E>(
       // callbacks and Effect: the state machine, the current dispose handle,
       // and the asyncPush emit handle (only bound while a consumer is
       // attached).
-      const stateRef = yield* Ref.make<BPState>(initialBPState(from));
+      // Read by the source's sync callbacks, which run outside any fiber and so cannot ask for the time as an effect.
+      const clock = yield* Effect.clock;
+      const stateRef = yield* Ref.make<BPState>(initialBPState(from, stall?.knownTip));
       const disposerRef = yield* Ref.make<(() => void) | null>(null);
       const emitRef = yield* Ref.make<Emit | null>(null);
 
@@ -236,7 +336,10 @@ export const withBackpressure = <Item, V, E>(
 
       const openSession = (): Effect.Effect<void> =>
         Effect.gen(function* () {
-          const state = yield* Ref.get(stateRef);
+          const now = yield* Clock.currentTimeMillis;
+          // A session shows life by opening, so the silence that counts starts here and not at whatever preceded a
+          // pause.
+          const state = yield* Ref.updateAndGet(stateRef, (s) => noteActivity(s, s.generation, now, Option.none()));
           if (state.terminal) return;
           const emit = yield* Ref.get(emitRef);
           if (emit === null) return;
@@ -245,7 +348,10 @@ export const withBackpressure = <Item, V, E>(
           const dispose = source({
             variables: variables(state.lastKey),
             onItem: (item) => {
-              const action = modify((s) => decideItem(s, key(item), myGen, bufferSize));
+              const now = clock.unsafeCurrentTimeMillis();
+              const action = modify((s) =>
+                decideItem(noteActivity(s, myGen, now, tipOf(item)), key(item), myGen, bufferSize),
+              );
               if (!action.emit) return;
               emit.single(item);
               if (action.pause) takeDisposer()?.();
@@ -260,7 +366,35 @@ export const withBackpressure = <Item, V, E>(
           yield* Ref.set(disposerRef, dispose);
         });
 
-      return Stream.asyncPush<Item, E>(
+      // One look at whether the open session has stalled: either it has, and the session is closed and the stream
+      // failed, or the fiber sleeps until it is worth looking again. Answers whether it gave up.
+      const checkForStall = (emit: Emit): Effect.Effect<boolean> =>
+        Effect.gen(function* () {
+          const now = yield* Clock.currentTimeMillis;
+          const decision = yield* Ref.modify(stateRef, (s) => decideStall(s, now, stallTimeoutMillis));
+          return yield* Either.match(decision, {
+            onRight: (millis) => Effect.as(Effect.sleep(Duration.millis(millis)), false),
+            onLeft: (stalled) =>
+              Ref.getAndSet(disposerRef, null).pipe(
+                Effect.tap((dispose) =>
+                  Effect.sync(() => {
+                    dispose?.();
+                    emit.fail(stalled);
+                  }),
+                ),
+                Effect.as(true),
+              ),
+          });
+        });
+
+      // Scoped to the stream, so the watch ends with it however it ends. Not forked at all without stall detection:
+      // there is then no tip to be behind, and nothing to watch for.
+      const watchForStall = (emit: Emit): Effect.Effect<void, never, Scope.Scope> =>
+        stall === undefined
+          ? Effect.void
+          : Effect.asVoid(Effect.forkScoped(Effect.repeat(checkForStall(emit), { until: (gaveUp) => gaveUp })));
+
+      return Stream.asyncPush<Item, E | SubscriptionStalledError>(
         (emit) =>
           Effect.acquireRelease(
             Effect.gen(function* () {
@@ -274,7 +408,7 @@ export const withBackpressure = <Item, V, E>(
                 if (d !== null) yield* Effect.sync(() => d());
                 yield* Ref.set(emitRef, null);
               }),
-          ),
+          ).pipe(Effect.zipRight(watchForStall(emit))),
         { bufferSize: 'unbounded' },
       ).pipe(
         Stream.tap(() =>
