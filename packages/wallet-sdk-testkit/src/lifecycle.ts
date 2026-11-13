@@ -11,12 +11,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { logger } from './logger.js';
+import type { DustSnapshotModel } from './dust-sync.js';
 import { removeState, saveState, type SnapshotSource } from './snapshot.js';
 
 /** A started wallet the lifecycle can snapshot and stop. */
 export type LifecycleWallet = SnapshotSource & { readonly wallet: { stop(): Promise<void> } };
 
 type Adopted = { readonly wallet: LifecycleWallet; readonly filename: string | undefined };
+
+/** A wallet whose start is still being awaited, recorded by the name it would be saved under. */
+type Starting = { readonly filename: string };
+
+/**
+ * Every namespace a snapshot can be saved in. A wallet that has not finished starting has not said which sync model it
+ * runs, so its snapshot is deleted from all of them. Keyed by the type so that a new model cannot be left out.
+ */
+const snapshotModels: Record<DustSnapshotModel, null> = { events: null, projections: null, custom: null };
 
 /** Options for {@link WalletLifecycle.release}. */
 export type ReleaseOptions = {
@@ -28,6 +38,11 @@ export type ReleaseOptions = {
    * may be why this test failed.
    */
   readonly persist: boolean;
+  /**
+   * Whether vitest will run the test again; pass `willRetry(context)`. A test that did not pass but will be retried
+   * keeps its snapshots for the retry to restore.
+   */
+  readonly willRetry?: boolean;
 };
 
 /**
@@ -77,10 +92,20 @@ export type WalletLifecycle = {
 export const createWalletLifecycle = (): WalletLifecycle => {
   // Mutable by design: this is test teardown bookkeeping, filled in as `beforeEach` starts wallets and closed by
   // `afterEach`.
-  const state: { adopted: readonly Adopted[]; released: boolean } = { adopted: [], released: false };
+  const state: { adopted: readonly Adopted[]; starting: readonly Starting[]; released: boolean } = {
+    adopted: [],
+    starting: [],
+    released: false,
+  };
 
   const adopt = async <T extends LifecycleWallet>(started: Promise<T>, filename?: string): Promise<T> => {
-    const wallet = await started;
+    // Recorded before the wait, so a test torn down while this wallet is still restoring can delete its snapshot: a
+    // restore that never finishes is the likeliest reason the test failed.
+    const starting: readonly Starting[] = filename === undefined ? [] : [{ filename }];
+    state.starting = [...state.starting, ...starting];
+    const wallet = await started.finally(() => {
+      state.starting = state.starting.filter((entry) => !starting.includes(entry));
+    });
     if (state.released) {
       const tornDown = 'The wallet finished starting after its test was torn down';
       const stopError: unknown = await wallet.wallet.stop().then(
@@ -94,21 +119,28 @@ export const createWalletLifecycle = (): WalletLifecycle => {
     return wallet;
   };
 
-  const release = async ({ syncCacheDir, persist }: ReleaseOptions): Promise<void> => {
+  const release = async ({ syncCacheDir, persist, willRetry = false }: ReleaseOptions): Promise<void> => {
     // Only the first release saves and stops: a second would stop wallets that are already stopped.
     if (state.released) return;
     state.released = true;
-    const { adopted } = state;
+    const { adopted, starting } = state;
 
-    const snapshots = syncCacheDir
-      ? await Promise.allSettled(
-          adopted.flatMap(({ wallet, filename }) =>
-            filename === undefined
-              ? []
-              : [persist ? saveState(wallet, syncCacheDir, filename) : removeState(wallet, syncCacheDir, filename)],
-          ),
-        )
-      : [];
+    // Type cast required because: `Object.keys` returns `string[]`, and these are exactly the record's typed keys.
+    const models = Object.keys(snapshotModels) as DustSnapshotModel[];
+    const snapshotWork = (dir: string): Promise<void>[] =>
+      persist
+        ? adopted.flatMap(({ wallet, filename }) => (filename === undefined ? [] : [saveState(wallet, dir, filename)]))
+        : willRetry
+          ? []
+          : [
+              ...adopted.flatMap(({ wallet, filename }) =>
+                filename === undefined ? [] : [removeState(wallet, dir, filename)],
+              ),
+              ...starting.flatMap(({ filename }) =>
+                models.map((dustSyncModel) => removeState({ dustSyncModel }, dir, filename)),
+              ),
+            ];
+    const snapshots = syncCacheDir ? await Promise.allSettled(snapshotWork(syncCacheDir)) : [];
     const stops = await Promise.allSettled(adopted.map(({ wallet }) => wallet.wallet.stop()));
     logger.info('Wallets stopped');
 

@@ -18,6 +18,7 @@ import {
   parseMidnightNetwork,
   provideWallet,
   shouldPersistState,
+  willRetry,
   useWalletTestEnvironment,
   type WalletInit,
   type WalletLifecycle,
@@ -93,8 +94,13 @@ describe('Token transfer', () => {
   }, syncTimeout);
 
   afterEach(async (context) => {
-    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
-    await lifecycle.release({ syncCacheDir, persist: shouldPersistState(context) });
+    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`. A failed attempt that
+    // vitest will retry keeps their snapshots for the retry to restore.
+    await lifecycle.release({
+      syncCacheDir,
+      persist: shouldPersistState(context),
+      willRetry: willRetry(context),
+    });
   }, timeout);
 
   test(
