@@ -68,6 +68,31 @@ export interface BackpressureOptions<Item, V> {
   readonly variables: (cursor: bigint) => V;
   /** Monotonic key extractor — items with a key not strictly greater than the running watermark are dropped. */
   readonly key: (result: Item) => bigint;
+  /**
+   * Fails the stream when an open session that is behind delivers nothing for 30 seconds. A session is behind when the
+   * highest tip known, whether {@link StallDetection.knownTip} or one an item reported through
+   * {@link StallDetection.tip}, is above the last key delivered. A session at the tip, one with no tip known, and one
+   * paused for backpressure are left alone. Omitted, a silent session is waited on for as long as it stays open.
+   */
+  readonly stall?: StallDetection<Item>;
+}
+
+/**
+ * How a session that has stopped delivering is told apart from one with nothing left to deliver.
+ *
+ * A push-only source gives no sign of life between items, so a session that stays open and goes quiet looks the same
+ * whether the source has died or has reached its end. The tip tells them apart: a tip above the last key delivered
+ * proves there is more to deliver. Like {@link BackpressureOptions.key}, {@link tip} must be total.
+ */
+export interface StallDetection<Item> {
+  /** The highest key the source reports to exist, read off an item. */
+  readonly tip: (item: Item) => bigint;
+  /**
+   * The highest key already known to exist when the stream opens, as an earlier stream's items reported it. Without it
+   * a session that is dead from its first frame reports no tip of its own and is never given up on. Left out by a
+   * caller that has seen no tip.
+   */
+  readonly knownTip?: bigint;
 }
 
 /**
