@@ -14,8 +14,8 @@ to hold and nothing arrives for 30 seconds, the sync fails, and the retry that a
 reconnects and resubscribes from the last event applied. On both variants of each wallet.
 
 A wallet level with the timeline is left alone, because a quiet chain is silent too, and so is a wallet on a chain with
-no events of that kind. A wallet that has synced before expects the event at its cursor back within 30 seconds of
-subscribing, since that event is known to exist.
+no events of that kind. A wallet that has applied an event, a restored one included, expects the event at its cursor
+back within 30 seconds of subscribing, since that event is known to exist.
 
 In the indexer client, `BackpressureOptions` takes an optional `stall`: `tip` reads the highest key off an item, and
 `knownTip` names the highest key the caller already knows of. A subscription given up on fails with a `ServerError`.

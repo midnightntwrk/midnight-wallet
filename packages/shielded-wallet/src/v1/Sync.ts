@@ -575,6 +575,10 @@ export const makeEventsSyncService = (
       const indexerWsUrl = indexerWsUrlResult.right;
       const appliedIndex = state.progress?.appliedIndex ?? 0n;
       const highestRelevantWalletIndex = state.progress?.highestRelevantWalletIndex ?? 0n;
+      // How far this wallet knows the timeline to go: the highest id an event has told it of, and never less than its
+      // own cursor, because the event it last applied exists. The cursor is all a restored wallet has, since a
+      // snapshot saves the position and not the highest id.
+      const knownTip = highestRelevantWalletIndex > appliedIndex ? highestRelevantWalletIndex : appliedIndex;
 
       // The boundary is load-bearing, not waste: this subscription emits only events (no tip/progress
       // sentinel), and `isConnected`/the tip (`maxId`) are set only when an event is received — bar a
@@ -611,12 +615,12 @@ export const makeEventsSyncService = (
           // An indexer that stops writing to this subscription while its socket stays open raises nothing, so the
           // subscription is told how to recognise it: every event names the highest id the timeline holds, and a
           // session behind that id that goes silent is given up on, which fails the stream into the retry that
-          // reconnects. `knownTip` is how far this wallet already knows the timeline to go, for a session that is
-          // silent from its first event. A wallet that has seen no event holds zero there, which is no tip: named
-          // as one it would count as an event owed, and a chain with no zswap events would never let the wallet rest.
+          // reconnects. `knownTip` covers a session that is silent from its first event. A wallet that has applied
+          // no event holds zero for it, which is no tip: named as one it would count as an event owed, and a chain
+          // with no zswap events would never let the wallet rest.
           stall: {
             tip: (r) => BigInt(r.zswapLedgerEvents.maxId),
-            ...(highestRelevantWalletIndex > 0n ? { knownTip: highestRelevantWalletIndex } : {}),
+            ...(knownTip > 0n ? { knownTip } : {}),
           },
         }),
         Stream.provideLayer(
