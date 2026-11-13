@@ -25,5 +25,20 @@
     "@midnightntwrk/wallet-sdk": "2.0.0",
     "@midnightntwrk/wallet-sdk-testkit": "1.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "ci-skip-tests-without-code-changes",
+    "docs-2-0-0-release-notes",
+    "docs-pin-qa-evidence-link",
+    "dust-projections-applied-coins",
+    "dust-snapshot-field-bounds",
+    "e2e-dust-deregistration-waits-on-effects",
+    "fund-test-wallets-top-up",
+    "keep-bookings-after-inblock",
+    "ledger-9-1-0-2-rc-0-upgrade",
+    "network-presets-shielded-tools-hosts",
+    "prover-client-request-cap",
+    "qa-evidence-2-0-0",
+    "shielded-synced-on-empty-zswap-tree",
+    "wasm-prover-zkir-v3"
+  ]
 }
