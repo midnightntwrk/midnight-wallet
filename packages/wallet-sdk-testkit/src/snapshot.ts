@@ -128,8 +128,8 @@ export const saveState = async (walletInit: SnapshotSource, syncCacheDir: string
 };
 
 /**
- * How long a restored wallet may take to catch up before it is given up on. Well short of the quarter-hour the remote
- * suites allow a `beforeEach`, so a wedged restore still falls back to a from-scratch build inside that budget.
+ * How long a restored wallet may take to catch up before it is given up on. Well short of the time the remote suites
+ * allow a `beforeEach`, so a wedged restore still falls back to a from-scratch build inside that budget.
  */
 const RESTORED_SYNC_TIMEOUT_MS = 10 * 60 * 1000;
 

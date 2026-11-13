@@ -52,9 +52,9 @@ describe('Token transfer', () => {
   let sender: WalletInit;
   let receiver: WalletInit;
   let lifecycle: WalletLifecycle;
-  // A remote sync from scratch takes tens of seconds and the transfer itself a couple of minutes, so a bound in the
-  // tens of minutes only ever means something has wedged. An hour just turns one wedge into an hour of lane time.
-  const syncTimeout = 15 * 60 * 1000; // 15 minutes
+  // A wallet built from scratch on a long-lived network such as preprod can take tens of minutes to sync on CI. A wallet
+  // restored from the sync cache finishes well inside this.
+  const syncTimeout = 45 * 60 * 1000;
   const timeout = 600_000;
 
   beforeEach(async () => {

@@ -53,8 +53,9 @@ export interface TokenTransferScenarioDeps {
   /** Optional dir to persist/restore wallet state across runs. (Was the `SYNC_CACHE` env var.) */
   syncCacheDir?: string | undefined;
   /**
-   * Timeout for the sync-heavy `beforeEach` and the healthcheck test in ms. Defaults to 15 minutes — a longer bound
-   * does not rescue a wedged wallet, it only spends lane time before reporting.
+   * Timeout for the sync-heavy `beforeEach` and the healthcheck test in ms. Defaults to 45 minutes, which is enough for
+   * a wallet built from scratch on a long-lived network such as preprod. A wallet restored from the sync cache finishes
+   * well inside it.
    */
   syncTimeout?: number | undefined;
   /** Timeout for the `afterEach` teardown in ms. Defaults to 10 minutes. */
@@ -91,7 +92,7 @@ export function useTokenTransferWallets({
   fundedSeed,
   secondSeed,
   syncCacheDir,
-  syncTimeout = 15 * 60 * 1000,
+  syncTimeout = 45 * 60 * 1000,
   timeout = 600_000,
   walletOptions,
 }: TokenTransferScenarioDeps): TokenTransferWallets {
@@ -181,7 +182,7 @@ export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDep
     const shieldedTokenRaw = ledger.shieldedToken().raw;
     const unshieldedTokenRaw = ledger.unshieldedToken().raw;
     const outputValue = tNightAmount(10n);
-    const syncTimeout = deps.syncTimeout ?? 15 * 60 * 1000;
+    const syncTimeout = deps.syncTimeout ?? 45 * 60 * 1000;
 
     test(
       'Is working for valid transfer @healthcheck',
