@@ -178,10 +178,11 @@ jobs:
           yarn turbo dist
 
       # Stopped short of the job's own limit, so that a wallet that never finishes syncing fails this step instead of
-      # cancelling the job: the sync cache is still uploaded and the run reports as failed rather than cancelled. With its
-      # sync limits and one retry, a single healthcheck file can spend more than three hours on a network that stops
-      # answering, so the job would otherwise run into its limit. The output is streamed rather than grouped per task,
-      # so whatever the tests had logged by then, including the test that was still running, is in the log.
+      # cancelling the job: the sync cache is still uploaded and the run reports as failed rather than cancelled. A wallet
+      # that never finishes syncing costs a healthcheck file close to two hours, its 45-minute setup and its teardown run
+      # twice because of the retry, so a few such files would otherwise run the job into its limit. The output is
+      # streamed rather than grouped per task, so whatever the tests had logged by then, including the test that was
+      # still running, is in the log.
       - name: Run e2e tests
         timeout-minutes: 225
         env:
@@ -215,6 +216,8 @@ jobs:
         if: success() || failure()
         with:
           name: Wallet TS packages Junit Tests Report
+          # A test step stopped at its time limit leaves no report behind, and has already failed the run.
+          fail-on-empty: false
           reporter: java-junit
           path: |
             ./packages/e2e-tests/reports/test-report.xml
