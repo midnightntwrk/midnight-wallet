@@ -13,7 +13,7 @@
 
 /**
  * How long the remote healthchecks allow for syncing their wallets. A pair of wallets built from scratch on a
- * long-lived network such as preprod takes about 20 minutes on CI with the remote files run one at a time; a wallet
- * restored from the sync cache takes a few. The testkit's own defaults stay lower for its other consumers.
+ * long-lived network such as preprod took about 20 minutes on CI when no other wallet was syncing; a wallet restored
+ * from the sync cache takes a few. The testkit's own defaults stay lower for its other consumers.
  */
 export const REMOTE_SYNC_TIMEOUT_MS = 45 * 60 * 1000;
