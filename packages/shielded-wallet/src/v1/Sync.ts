@@ -50,6 +50,19 @@ export interface SyncService<TState, TStartAux, TUpdate> {
 export type ChangesResult = {
   readonly changes: ledger.ZswapStateChanges[];
   readonly protocolVersion: number;
+  /**
+   * The transaction of the first event this update applied, if it applied any. Nothing for a source that applies whole
+   * blocks, since no transaction it applies can continue into its next update.
+   *
+   * Optional, so a capability that leaves both sources out still works: its changes are each recorded as soon as they
+   * are applied, and a transaction its batches cut in two is recorded in two parts that merge.
+   */
+  readonly firstAppliedSource?: Option.Option<string>;
+  /**
+   * The transaction of the last event this update applied, if it applied any. Nothing for a source that applies whole
+   * blocks, since no transaction it applies can continue into its next update. Optional, as `firstAppliedSource` is.
+   */
+  readonly lastAppliedSource?: Option.Option<string>;
 };
 
 export interface SyncCapability<TState, TUpdate, TResult> {
@@ -647,6 +660,8 @@ export const makeEventsSyncService = (
 const noChanges = (state: CoreWallet): ChangesResult => ({
   changes: [],
   protocolVersion: Number(state.protocolVersion),
+  firstAppliedSource: Option.none(),
+  lastAppliedSource: Option.none(),
 });
 
 /**
@@ -760,10 +775,14 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
 
       // Read here and nowhere earlier: `applied` is exactly the slice this variant owns, so nothing outside its
       // activation range — nor anything below its cursor — is ever handed to this ledger version's deserializer.
+      const events = applied.map(readEvent);
+      // Read before the replay, which consumes the event objects it is handed.
+      const sourceOf = (event: ledger.Event | undefined): Option.Option<string> =>
+        Option.map(Option.fromNullable(event), (e) => e.source.transactionHash);
+      const firstAppliedSource = sourceOf(events.at(0));
+      const lastAppliedSource = sourceOf(events.at(-1));
       const [newState, newChanges]: [CoreWallet, ledger.ZswapStateChanges[]] =
-        applied.length === 0
-          ? [state, []]
-          : CoreWallet.replayEventsWithChanges(state, wrappedUpdate.secretKeys, applied.map(readEvent));
+        events.length === 0 ? [state, []] : CoreWallet.replayEventsWithChanges(state, wrappedUpdate.secretKeys, events);
 
       // `appliedIndex` stops at the last event this variant actually replayed. The next variant resumes one
       // below it on an inclusive cursor, so the deferred suffix is re-fetched rather than skipped.
@@ -780,6 +799,8 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
           // Tags the changes that were actually produced, so tx-history records the version they were applied
           // under rather than the one that is about to trigger the hand-over.
           protocolVersion: applied.at(-1)?.protocolVersion ?? Number(state.protocolVersion),
+          firstAppliedSource,
+          lastAppliedSource,
         },
       ];
     },
@@ -847,7 +868,7 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
       const { update: simulatorState, secretKeys } = update;
       const lastBlock = V8.getLastBlock(simulatorState);
       if (lastBlock === undefined) {
-        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
+        return [state, noChanges(state)];
       }
 
       // appliedIndex semantics: the first block number we haven't processed yet.
@@ -881,6 +902,9 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
           changes: newChanges,
           protocolVersion:
             lastAppliedBlock === undefined ? Number(state.protocolVersion) : Number(lastAppliedBlock.protocolVersion),
+          // Blocks are applied whole, so no transaction applied here can continue into the next update.
+          firstAppliedSource: Option.none(),
+          lastAppliedSource: Option.none(),
         },
       ];
     },

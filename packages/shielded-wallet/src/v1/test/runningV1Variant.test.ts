@@ -18,6 +18,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  Option,
   Ref,
   Scope,
   Stream,
@@ -25,14 +26,22 @@ import {
   TestClock,
   TestContext,
 } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { StateChange, VersionChangeType } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
 import { RunningV1Variant } from '../RunningV1Variant.js';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
-import { type ChangesResult, type SyncCapability, type SyncService } from '../Sync.js';
+import {
+  type ChangesResult,
+  type EventsSyncUpdate,
+  type SyncCapability,
+  type SyncService,
+  WalletSyncUpdate,
+  makeEventsSyncCapability,
+} from '../Sync.js';
 import { makeDefaultTransactingCapability } from '../Transacting.js';
 import { type TransactionHistoryService } from '../TransactionHistory.js';
 
@@ -56,7 +65,16 @@ const syncServiceOf = (batches: readonly FakeSyncUpdate[]): SyncService<CoreWall
 });
 
 const fakeSyncCapability: SyncCapability<CoreWallet, FakeSyncUpdate, ChangesResult> = {
-  applyUpdate: (state, sources) => [state, { changes: sources.map(changeOf), protocolVersion: 1 }],
+  // Each fake transaction arrives whole, so none is ever cut.
+  applyUpdate: (state, sources) => [
+    state,
+    {
+      changes: sources.map(changeOf),
+      protocolVersion: 1,
+      firstAppliedSource: Option.none(),
+      lastAppliedSource: Option.none(),
+    },
+  ],
 };
 
 type FanOutCounters = {
@@ -162,6 +180,126 @@ describe('RunningV1Variant.startSync tx-history fan-out', () => {
   });
 });
 
+describe('RunningV1Variant.startSync with a sync capability that does not name its applied transactions', () => {
+  it('should record every change at once, because nothing tells the variant a batch ended inside a transaction', async () => {
+    // A capability written before the applied-source fields existed returns only these two.
+    const twoFieldCapability: SyncCapability<CoreWallet, FakeSyncUpdate, ChangesResult> = {
+      applyUpdate: (state, sources) => [state, { changes: sources.map(changeOf), protocolVersion: 1 }],
+    };
+
+    const recorded = await Effect.gen(function* () {
+      const counters: FanOutCounters = {
+        inFlight: yield* Ref.make(0),
+        maxInFlight: yield* Ref.make(0),
+        recorded: yield* Ref.make(0),
+      };
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.init(new ledger.ZswapLocalState(), secretKeys, networkId),
+      );
+      const scope = yield* Scope.make();
+      const variant = new RunningV1Variant(
+        scope,
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+        },
+        {
+          ...variantContextOf([], trackingHistoryService(counters)),
+          // A live source: its timeline never ends, so only a release on the way can record a change.
+          syncService: {
+            updates: () => Stream.concat(Stream.fromIterable<FakeSyncUpdate>([['a1', 'a2'], ['b1']]), Stream.never),
+          },
+          syncCapability: twoFieldCapability,
+        },
+      );
+
+      yield* Effect.forkIn(
+        variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope)),
+        scope,
+      );
+      yield* TestClock.adjust(Duration.minutes(1));
+      const result = yield* Ref.get(counters.recorded);
+      yield* Scope.close(scope, Exit.void);
+      return result;
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(recorded).toBe(3);
+  });
+});
+
+describe('RunningV1Variant tx-history writes when the variant closes', () => {
+  /**
+   * Syncs one change whose lookup takes `lookup` to answer, closes the variant's scope while that lookup is in flight,
+   * then lets `afterClose` pass on the clock.
+   *
+   * @returns Whether the change was recorded, and whether closing the scope had finished by then.
+   */
+  const closeWhileLookupInFlight = (lookup: Duration.Duration, afterClose: Duration.Duration) =>
+    Effect.gen(function* () {
+      const recorded = yield* Ref.make(0);
+      const historyService: TransactionHistoryService = {
+        getTransactionDetails: (hash) =>
+          Effect.sleep(lookup).pipe(
+            Effect.as({
+              hash,
+              block: { hash: 'block-hash', height: 1, timestamp: 1_700_000_000 },
+              status: 'SUCCESS' as const,
+              identifiers: [],
+            }),
+          ),
+        put: () => Ref.update(recorded, (n) => n + 1),
+      };
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.init(new ledger.ZswapLocalState(), secretKeys, networkId),
+      );
+      const scope = yield* Scope.make();
+      const variant = new RunningV1Variant(
+        scope,
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+        },
+        variantContextOf([['a1']], historyService),
+      );
+
+      yield* variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope));
+      // The lookup starts and parks on the clock.
+      yield* TestClock.adjust(Duration.millis(1));
+
+      const closing = yield* Effect.fork(Scope.close(scope, Exit.void));
+      yield* TestClock.adjust(afterClose);
+      const closed = Option.isSome(yield* Fiber.poll(closing));
+      yield* Fiber.interrupt(closing);
+      return { recorded: yield* Ref.get(recorded), closed };
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+  it('should finish recording a change whose lookup is still in flight when the variant closes, because a hand-over closes the variant rather than waiting for its writes', async () => {
+    expect(await closeWhileLookupInFlight(Duration.seconds(2), Duration.seconds(3))).toEqual({
+      recorded: 1,
+      closed: true,
+    });
+  });
+
+  it('should give up on a write still in flight 5 s after the variant closes, so a lookup retrying through indexer lag holds up a hand-over or a stop for no longer than that', async () => {
+    expect(await closeWhileLookupInFlight(Duration.infinity, Duration.seconds(4))).toEqual({
+      recorded: 0,
+      closed: false,
+    });
+    expect(await closeWhileLookupInFlight(Duration.infinity, Duration.seconds(6))).toEqual({
+      recorded: 0,
+      closed: true,
+    });
+  });
+});
+
 describe('RunningV1Variant.state protocol version signalling', () => {
   /** The variant under test owns `[0, 7)`; 7 and above belong to whatever variant comes next. */
   const activationRange = ProtocolVersion.makeRange(
@@ -243,5 +381,271 @@ describe('RunningV1Variant.state protocol version signalling', () => {
     expect(versionChangesOf(collected)).toEqual([]);
     // The stream still reports the state itself, so an empty result would be a false pass.
     expect(Chunk.toArray(collected).filter(StateChange.isState).length).toBeGreaterThan(0);
+  });
+});
+
+describe('RunningV1Variant.startSync tx-history of a transfer split across sync batches', () => {
+  const keys = (): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 5));
+  const stranger = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 6));
+  const activationRange = ProtocolVersion.makeRange(
+    ProtocolVersion.ProtocolVersion(0n),
+    ProtocolVersion.ProtocolVersion(7n),
+  );
+  const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
+
+  type Chain = Readonly<{
+    /** The genesis mint paying this wallet the coin the transfer spends. */
+    mintHex: string;
+    /** The transfer's events in chain order: its input (the spend), then its two outputs (payment, change). */
+    transferHex: readonly string[];
+    transferHash: string;
+    /** The events of a later transaction that does not touch this wallet: the stranger sending its 100 to itself. */
+    strangerHex: readonly string[];
+  }>;
+
+  /**
+   * A real chain holding one coin of this wallet and one transfer spending it: 100 to a stranger, 400 back as change.
+   * Kept encoded, as the indexer serves it, because the ledger consumes the event objects it replays.
+   */
+  const buildChain = (): Promise<Chain> =>
+    Effect.gen(function* () {
+      const simulator = yield* V8.Simulator.init({
+        genesisMints: [
+          { type: 'shielded' as const, tokenType: ledger.shieldedToken().raw, amount: 500n, recipient: keys() },
+        ],
+      });
+      const genesis = Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
+      const [mint] = V8.getLastBlockEvents(genesis);
+      const funded = new ledger.ZswapLocalState().replayEvents(keys(), [ledger.Event.deserialize(mint.serialize())]);
+      const coin = [...funded.coins][0];
+      const [, input] = funded.spend(keys(), coin, 0);
+      const output = (value: bigint, to: ledger.ZswapSecretKeys) => {
+        const info = ledger.createShieldedCoinInfo(coin.type, value);
+        return ledger.ZswapOffer.fromOutput(
+          ledger.ZswapOutput.new(info, 0, to.coinPublicKey, to.encryptionPublicKey),
+          info.type,
+          info.value,
+        );
+      };
+      const offer = ledger.ZswapOffer.fromInput(input, coin.type, coin.value)
+        .merge(output(100n, stranger))
+        .merge(output(400n, keys()));
+      yield* simulator.submitTransaction(ledger.Transaction.fromParts(networkId, offer).eraseProofs(), {
+        strictness: {},
+      });
+      const after = Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
+      const transfer = V8.getLastBlockEvents(after);
+      const strangers = new ledger.ZswapLocalState().replayEvents(
+        stranger,
+        [mint, ...transfer].map((event) => ledger.Event.deserialize(event.serialize())),
+      );
+      const strangersCoin = [...strangers.coins][0];
+      const [, strangersInput] = strangers.spend(stranger, strangersCoin, 0);
+      const toItself = ledger.createShieldedCoinInfo(strangersCoin.type, strangersCoin.value);
+      const strangersOffer = ledger.ZswapOffer.fromInput(strangersInput, strangersCoin.type, strangersCoin.value).merge(
+        ledger.ZswapOffer.fromOutput(
+          ledger.ZswapOutput.new(toItself, 0, stranger.coinPublicKey, stranger.encryptionPublicKey),
+          toItself.type,
+          toItself.value,
+        ),
+      );
+      yield* simulator.submitTransaction(ledger.Transaction.fromParts(networkId, strangersOffer).eraseProofs(), {
+        strictness: {},
+      });
+      const afterStranger = Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
+      return {
+        mintHex: hex(mint.serialize()),
+        transferHex: transfer.map((event) => hex(event.serialize())),
+        transferHash: transfer[0].source.transactionHash,
+        strangerHex: V8.getLastBlockEvents(afterStranger).map((event) => hex(event.serialize())),
+      };
+    }).pipe(Effect.scoped, Effect.runPromise);
+
+  let chain: Chain;
+  beforeAll(async () => {
+    chain = await buildChain();
+    expect(chain.transferHex.map((raw) => ledger.Event.deserialize(Buffer.from(raw, 'hex')).content.tag)).toEqual([
+      'zswapInput',
+      'zswapOutput',
+      'zswapOutput',
+    ]);
+  });
+
+  /** The wallet before the transfer: holding the minted coin, the mint applied as event 1. */
+  const fundedWallet = (): CoreWallet => {
+    const [wallet] = CoreWallet.replayEventsWithChanges(CoreWallet.initEmpty(keys(), networkId), keys(), [
+      ledger.Event.deserialize(Buffer.from(chain.mintHex, 'hex')),
+    ]);
+    return wallet;
+  };
+
+  /** The transfer's events as ids 2..4, cut into consecutive sync batches of the given sizes. */
+  const transferIn = (sizes: readonly number[]): readonly WalletSyncUpdate[] => {
+    const maxId = 1 + chain.transferHex.length;
+    const items = chain.transferHex.map((raw, i): EventsSyncUpdate => ({
+      _tag: 'EventsSyncUpdate',
+      id: i + 2,
+      protocolVersion: 3,
+      maxId,
+      raw,
+    }));
+    return sizes.map((size, i) => {
+      const start = sizes.slice(0, i).reduce((sum, n) => sum + n, 0);
+      return WalletSyncUpdate.create(items.slice(start, start + size), keys(), new Date('2026-11-04T12:00:00Z'));
+    });
+  };
+
+  type Written = Readonly<{ received: number; spent: number }>;
+
+  /**
+   * Syncs the funded wallet through `updates`, and returns every tx-history write made for the transfer.
+   *
+   * @param timeline `'ends'` closes the sync timeline after the last update; `'stays open'` keeps it open, as a live
+   *   source does, so nothing can be recorded on the strength of the timeline having ended.
+   */
+  const writesOfTransfer = (
+    updates: readonly WalletSyncUpdate[],
+    timeline: 'ends' | 'stays open' = 'ends',
+  ): Promise<readonly Written[]> => writesOfTransferAcrossSessions([updates], timeline);
+
+  /**
+   * Like {@link writesOfTransfer}, but syncs the funded wallet through one variant per session, all on the same state:
+   * each variant is closed, as a stop closes it, before the next one starts with the next session's updates.
+   */
+  const writesOfTransferAcrossSessions = (
+    sessions: readonly (readonly WalletSyncUpdate[])[],
+    timeline: 'ends' | 'stays open',
+  ): Promise<readonly Written[]> =>
+    Effect.gen(function* () {
+      const writes = yield* Ref.make<readonly (Written & { source: string })[]>([]);
+      const historyService: TransactionHistoryService = {
+        getTransactionDetails: (hash) =>
+          Effect.succeed({
+            hash,
+            block: { hash: 'block-hash', height: 2, timestamp: 1_700_000_000 },
+            status: 'SUCCESS' as const,
+            identifiers: [],
+          }),
+        put: (change) =>
+          Ref.update(writes, (all) => [
+            ...all,
+            { source: change.source, received: change.receivedCoins.length, spent: change.spentCoins.length },
+          ]),
+      };
+      const coinsAndBalancesCapability = makeDefaultCoinsAndBalancesCapability();
+      const keysCapability = makeDefaultKeysCapability();
+      const coinSelection = () => undefined;
+      const contextOf = (
+        updates: readonly WalletSyncUpdate[],
+      ): RunningV1Variant.Context<string, WalletSyncUpdate, ledger.FinalizedTransaction, null> => ({
+        serializationCapability: makeDefaultV1SerializationCapability(),
+        syncService: {
+          updates: () =>
+            timeline === 'ends'
+              ? Stream.fromIterable(updates)
+              : Stream.concat(Stream.fromIterable(updates), Stream.never),
+        },
+        syncCapability: makeEventsSyncCapability(),
+        transactingCapability: makeDefaultTransactingCapability({ networkId }, () => ({
+          coinSelection,
+          coinsAndBalancesCapability,
+          keysCapability,
+        })),
+        coinsAndBalancesCapability,
+        keysCapability,
+        coinSelection,
+        transactionHistoryService: historyService,
+      });
+      const stateRef = yield* SubscriptionRef.make(fundedWallet());
+      yield* Effect.forEach(
+        sessions,
+        (updates) =>
+          Effect.gen(function* () {
+            const scope = yield* Scope.make();
+            const variant = new RunningV1Variant(scope, { stateRef, activationRange }, contextOf(updates));
+            yield* Effect.forkIn(
+              variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope)),
+              scope,
+            );
+            // Let sync and every write run before closing the variant, then let the close itself finish.
+            yield* TestClock.adjust(Duration.minutes(1));
+            const closing = yield* Effect.fork(Scope.close(scope, Exit.void));
+            yield* TestClock.adjust(Duration.minutes(1));
+            yield* Fiber.join(closing);
+          }),
+        { discard: true },
+      );
+      const written = yield* Ref.get(writes);
+      return written
+        .filter((write) => write.source === chain.transferHash)
+        .map(({ received, spent }) => ({ received, spent }));
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+  it('should record the spent coin and the change together when the transfer arrives in one batch', async () => {
+    expect(await writesOfTransfer(transferIn([3]))).toEqual([{ received: 1, spent: 1 }]);
+  });
+
+  it('should record the spent coin and the change together when the batch boundary falls inside the transfer, so no reader ever sees the spend without its coins', async () => {
+    expect(await writesOfTransfer(transferIn([1, 2]))).toEqual([{ received: 1, spent: 1 }]);
+  });
+
+  it('should record a split transfer as soon as the wallet catches up, because a live timeline never ends to release it', async () => {
+    expect(await writesOfTransfer(transferIn([1, 2]), 'stays open')).toEqual([{ received: 1, spent: 1 }]);
+  });
+
+  it('should record the held part of a split transfer when the wallet is stopped mid catch-up, so the rest merges onto it on resume rather than standing alone without the spent coin', async () => {
+    const [spend, outputs] = transferIn([1, 2]);
+    expect(await writesOfTransferAcrossSessions([[spend], [outputs]], 'stays open')).toEqual([
+      { received: 0, spent: 1 },
+      { received: 1, spent: 0 },
+    ]);
+  });
+
+  /**
+   * The transfer's events as ids 2..4, followed by id 5 from the protocol version after this variant's range, cut into
+   * consecutive sync batches of the given sizes. Event 5 is deferred to the next variant, so its bytes are never read.
+   */
+  const transferThenNextVersionIn = (sizes: readonly number[]): readonly WalletSyncUpdate[] => {
+    const maxId = 2 + chain.transferHex.length;
+    const transfer = chain.transferHex.map((raw, i): EventsSyncUpdate => ({
+      _tag: 'EventsSyncUpdate',
+      id: i + 2,
+      protocolVersion: 3,
+      maxId,
+      raw,
+    }));
+    const nextVersion: EventsSyncUpdate = { _tag: 'EventsSyncUpdate', id: maxId, protocolVersion: 7, maxId, raw: '' };
+    const items = [...transfer, nextVersion];
+    return sizes.map((size, i) => {
+      const start = sizes.slice(0, i).reduce((sum, n) => sum + n, 0);
+      return WalletSyncUpdate.create(items.slice(start, start + size), keys(), new Date('2026-11-04T12:00:00Z'));
+    });
+  };
+
+  it('should record a split transfer when the batch that completes it hands over to the next variant, because the runtime closes this variant rather than ending its timeline', async () => {
+    expect(await writesOfTransfer(transferThenNextVersionIn([1, 3]), 'stays open')).toEqual([
+      { received: 1, spent: 1 },
+    ]);
+  });
+
+  /**
+   * One batch holding the whole transfer as ids 2..4 and then the stranger's transaction, while the source reports ten
+   * more events beyond them, so the wallet is still catching up when the batch is applied.
+   */
+  const transferThenStrangerInOneBatch = (): readonly WalletSyncUpdate[] => {
+    const raws = [...chain.transferHex, ...chain.strangerHex];
+    const maxId = 1 + raws.length + 10;
+    const items = raws.map((raw, i): EventsSyncUpdate => ({
+      _tag: 'EventsSyncUpdate',
+      id: i + 2,
+      protocolVersion: 3,
+      maxId,
+      raw,
+    }));
+    return [WalletSyncUpdate.create(items, keys(), new Date('2026-11-04T12:00:00Z'))];
+  };
+
+  it('should record a transfer while still catching up when a later transaction follows it in the same batch, because only a transaction the batch ends inside can have been cut', async () => {
+    expect(await writesOfTransfer(transferThenStrangerInOneBatch(), 'stays open')).toEqual([{ received: 1, spent: 1 }]);
   });
 });
