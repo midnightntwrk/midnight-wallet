@@ -692,6 +692,28 @@ const loadCollapsedCommitments = (
   );
 };
 
+// The commitment indexes, ascending, of the coins in `utxos` whose commitment sits behind the wallet's first free
+// index, split by whether the wallet holds the coin — as one it can spend, or as Dust a pending transaction has spent.
+const dustBehindFrontier = (
+  wallet: CoreWallet,
+  utxos: Readonly<DustUtxoMap>,
+): { held: ReadonlyArray<bigint>; notHeld: ReadonlyArray<bigint> } => {
+  const heldNullifiers = HashSet.fromIterable([
+    ...wallet.state.nullifiers.keys(),
+    ...wallet.pendingDust.map(({ nullifier }) => nullifier),
+  ]);
+  const [notHeld, held] = pipe(
+    [...utxos],
+    Arr.filter(([, { qdo }]) => qdo.mtIndex < wallet.state.commitmentTreeFirstFree),
+    (coins) => coins.toSorted(([, a], [, b]) => Number(a.qdo.mtIndex - b.qdo.mtIndex)),
+    Arr.partition(([nullifier]) => HashSet.has(heldNullifiers, nullifier)),
+  );
+  return {
+    held: held.map(([, { qdo }]) => qdo.mtIndex),
+    notHeld: notHeld.map(([, { qdo }]) => qdo.mtIndex),
+  };
+};
+
 const NULLIFIER_BYTE_LENGTH = 32;
 const NULLIFIER_LENGTH = NULLIFIER_BYTE_LENGTH * 2;
 
@@ -922,6 +944,18 @@ export const doEventlessSync = (
           { commitmentWork, creditedNullifierWork },
           emit,
         );
+
+        // A coin behind the first free commitment index is not applied again, on the assumption that the wallet has
+        // already accounted for it. The wallet keeps no record of a coin it does not hold, so that cannot be checked;
+        // naming each such coin here is what keeps one the wallet never held from being left out unseen.
+        const behindFrontier = dustBehindFrontier(state, finalUtxos);
+        if (behindFrontier.held.length + behindFrontier.notHeld.length > 0) {
+          yield* Effect.logWarning(
+            `Projections sync found Dust behind the first free commitment index` +
+              ` ${state.state.commitmentTreeFirstFree}, which is not applied again: held at` +
+              ` [${behindFrontier.held.join(', ')}], not held at [${behindFrontier.notHeld.join(', ')}]`,
+          );
+        }
 
         // Every nullifier has been resolved, so the nullifier term reaches its full width. The commitment phase has
         // not run yet, so its term is still what the wallet arrived holding.
@@ -1372,7 +1406,15 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         ];
       }
 
-      const { dustGenerations, spentUtxos, newUtxos, collapsedCommitments, latestBlock } = update;
+      const { dustGenerations, spentUtxos, collapsedCommitments, latestBlock } = update;
+
+      // The commitment tree's first free index is how far this wallet has applied the chain, so a coin whose commitment
+      // sits behind it is taken to be one already accounted for — still held, or since spent. That is an assumption:
+      // the wallet keeps no record of a coin it does not hold, so it cannot be checked here, and the pass that found
+      // the coin warns about it instead. Such a coin is left out of everything below: the tree refuses its commitment
+      // a second time, adding it again would bring back a coin the chain has spent, and reporting it again would
+      // record the same receipt twice.
+      const newUtxos = HashMap.filter(update.newUtxos, ({ qdo }) => qdo.mtIndex >= state.state.commitmentTreeFirstFree);
 
       const dustGenTreeUpdates = dustGenerations.rawUpdates
         .filter((u) => u.__typename === 'DustGenerationsItem' || u.__typename === 'DustGenerationsProgress')
