@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { logger } from './logger.js';
-import { saveState, type SnapshotSource } from './snapshot.js';
+import { removeState, saveState, type SnapshotSource } from './snapshot.js';
 
 /** A started wallet the lifecycle can snapshot and stop. */
 export type LifecycleWallet = SnapshotSource & { readonly wallet: { stop(): Promise<void> } };
@@ -22,7 +22,11 @@ type Adopted = { readonly wallet: LifecycleWallet; readonly filename: string | u
 export type ReleaseOptions = {
   /** Directory to snapshot the wallets to before stopping them. Nothing is saved when it is unset or empty. */
   readonly syncCacheDir?: string | undefined;
-  /** Whether the wallets are in a position worth saving; pass `shouldPersistState(context)`. */
+  /**
+   * Whether the wallets are in a position worth saving; pass `shouldPersistState(context)`. When it is false, the
+   * snapshot each wallet would have been saved to is deleted instead, so the next run does not restore a snapshot that
+   * may be why this test failed.
+   */
   readonly persist: boolean;
 };
 
@@ -50,7 +54,8 @@ export type WalletLifecycle = {
    */
   readonly adopt: <T extends LifecycleWallet>(started: Promise<T>, filename?: string) => Promise<T>;
   /**
-   * Saves every adopted wallet that has a filename, when asked to, then stops every adopted wallet.
+   * Saves every adopted wallet that has a filename when asked to, or deletes its snapshot when not, then stops every
+   * adopted wallet.
    *
    * @param options Where to save, and whether to.
    */
@@ -95,22 +100,24 @@ export const createWalletLifecycle = (): WalletLifecycle => {
     state.released = true;
     const { adopted } = state;
 
-    const saves =
-      syncCacheDir && persist
-        ? await Promise.allSettled(
-            adopted.flatMap(({ wallet, filename }) =>
-              filename === undefined ? [] : [saveState(wallet, syncCacheDir, filename)],
-            ),
-          )
-        : [];
+    const snapshots = syncCacheDir
+      ? await Promise.allSettled(
+          adopted.flatMap(({ wallet, filename }) =>
+            filename === undefined
+              ? []
+              : [persist ? saveState(wallet, syncCacheDir, filename) : removeState(wallet, syncCacheDir, filename)],
+          ),
+        )
+      : [];
     const stops = await Promise.allSettled(adopted.map(({ wallet }) => wallet.wallet.stop()));
     logger.info('Wallets stopped');
 
-    const failures = [...saves, ...stops].flatMap((result): unknown[] =>
+    const failures = [...snapshots, ...stops].flatMap((result): unknown[] =>
       result.status === 'rejected' ? [result.reason] : [],
     );
     if (failures.length === 1) throw failures[0];
-    if (failures.length > 1) throw new AggregateError(failures, `${failures.length} wallet saves or stops failed`);
+    if (failures.length > 1)
+      throw new AggregateError(failures, `${failures.length} wallet snapshot writes, deletions or stops failed`);
   };
 
   return { adopt, release };
