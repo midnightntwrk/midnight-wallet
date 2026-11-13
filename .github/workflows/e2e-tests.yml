@@ -217,7 +217,7 @@ jobs:
 
       # Uploaded even when tests failed or the run was stopped: a test saves its wallets' snapshots only when it passes,
       # and deletes them when it fails on its last attempt, so each run keeps the wallets whose tests passed and a lane
-      # that starts from scratch can climb out. A run uploads only when it passed every test, restored the previous
+      # with some wallets cold rebuilds only those. A run uploads only when it passed every test, restored the previous
       # cache, or had none to restore. A run that restored the cache and then failed uploads it less the snapshots its
       # failed tests deleted, which is deliberate. A run that skipped the cache or could not read it, and did not pass,
       # uploads nothing, so it cannot replace the cache with the few wallets it saved.
