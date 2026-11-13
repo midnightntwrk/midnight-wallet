@@ -2,8 +2,7 @@
 '@midnightntwrk/wallet-sdk-testkit': patch
 ---
 
-The dust and token-transfer healthcheck scenarios now allow 45 minutes to sync by default instead of 15, so a wallet
-built from scratch on a long-lived network such as preprod can finish. CI publishes the healthcheck sync cache from
-failed runs too and restores the newest unexpired one whatever the run's conclusion, so a lane that has been red longer
-than the artifact retention period no longer syncs every wallet from scratch forever. The qanet healthcheck is removed:
-its hosts resolve to private addresses that GitHub-hosted runners cannot reach.
+`registerDustHealthchecks` and `registerTokenTransferHealthchecks` now allow 45 minutes by default, up from 15, for a
+wallet to build and sync, so a wallet built from scratch on a long-lived network such as preprod can finish.
+`registerDustHealthchecks` now applies its `timeout` to the `beforeEach` that builds and syncs the wallet as well as to
+its tests; that hook previously ran under the test runner's own hook timeout, which is 10 seconds by default in Vitest.
