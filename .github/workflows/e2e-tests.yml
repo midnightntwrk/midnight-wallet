@@ -177,7 +177,13 @@ jobs:
           yarn install
           yarn turbo dist
 
+      # Stopped short of the job's own limit, so that a wallet that never finishes syncing fails this step instead of
+      # cancelling the job: the sync cache is still uploaded and the run reports as failed rather than cancelled. With its
+      # sync limits and one retry, a single healthcheck file can spend more than three hours on a network that stops
+      # answering, so the job would otherwise run into its limit. The output is streamed rather than grouped per task,
+      # so whatever the tests had logged by then, including the test that was still running, is in the log.
       - name: Run e2e tests
+        timeout-minutes: 225
         env:
           NETWORK: ${{ inputs.network }}
           SEED: ${{ inputs.seed || secrets.E2E_TESTS_SEED }}
@@ -189,13 +195,13 @@ jobs:
           APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
           TEST_MODIFIER: ${{ inputs.modifier }}
         run: |
-          yarn turbo test-remote -- $TEST_MODIFIER
+          yarn turbo test-remote --log-order=stream -- $TEST_MODIFIER
 
       # Uploaded whether or not the tests passed, and even when the job was cancelled. A snapshot is only ever saved by a
       # test that passed, so the cache of a failed or cancelled run is as good as a green run's. It is what lets a lane
       # that starts every run from scratch climb out: each run keeps the wallets that did finish syncing, and the next run
       # starts those from where they left off. The remote files run one at a time, so a later file that runs into the
-      # job's time limit must not discard the snapshots earlier files saved.
+      # test step's time limit must not discard the snapshots earlier files saved.
       - name: Upload sync cache
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

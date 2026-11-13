@@ -42,8 +42,11 @@ fi
 #
 # Starting from the artifacts rather than from the workflow's runs keeps the number of API calls bounded by the few
 # artifacts that exist, instead of growing with the length of the workflow's history.
-candidate_runs=$(gh api "repos/$REPO/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" --paginate \
-  | jq -r '.artifacts[] | select(.expired == false) | "\(.created_at) \(.workflow_run.id)"' \
+if ! artifacts=$(gh api "repos/$REPO/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" --paginate); then
+  echo "Could not list the repository's artifacts named '$ARTIFACT_NAME'." >&2
+  exit 1
+fi
+candidate_runs=$(jq -r '.artifacts[] | select(.expired == false) | "\(.created_at) \(.workflow_run.id)"' <<<"$artifacts" \
   | sort -r | awk '{print $2}')
 
 # The newest of them that belongs to the specified workflow.
