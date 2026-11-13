@@ -1,5 +1,44 @@
 # @midnightntwrk/wallet-sdk-facade
 
+## 5.0.1-rc.0
+
+### Patch Changes
+
+- 5932cd8: fix(facade): keep a submitted transaction's coins and Dust booked unless the failure proves no block holds it
+
+  `WalletFacade.submitTransaction` used to release every booking on any submission error, including errors raised after
+  the transaction was already in a block (finality timeout, unparseable block number, stream ending early), so the
+  wallets offered spent coins and Dust until sync caught up.
+
+  Now it releases only when the failure proves this send is in no block (usurped, invalid, a pool refusal code, never
+  sent, or a simulator discard) and it was the only send of the transaction: no other send in flight, no earlier send,
+  end or revert in its lifecycle record, and its TTL not passed. Everything else, `Dropped` included, keeps the bookings
+  until sync or the TTL settles them. The error still reaches the caller.
+
+  When the release itself fails, `submitTransaction` rejects with an `AggregateError` (the submission error first, then
+  each failed release or record update). An application `SubmissionService` that rejects with its own error keeps its
+  bookings until sync or the TTL settles them.
+
+  Capabilities exports `classifySubmissionFailure`, `SubmissionFailure` and `Lifecycle.isCoveredBy`.
+
+- 6bf13d8: chore: upgrade `@midnightntwrk/ledger-v9` to 1.0.2-rc.0 and `@midnightntwrk/zkir-v3` to 3.2.1, and run proof
+  server 9.0.2-rc.1, the build that carries both; ledger-v9's key material is unchanged (circuit generation 10). Test
+  stacks move to node 2.1.101 and indexer 4.4.101.
+- Updated dependencies [408947a]
+- Updated dependencies [8bb4e6b]
+- Updated dependencies [aaad829]
+- Updated dependencies [5932cd8]
+- Updated dependencies [6bf13d8]
+- Updated dependencies [a81da4c]
+- Updated dependencies [173e4d8]
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.1.0-rc.0
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-shielded@4.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-address-format@4.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.3.1-rc.0
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.1-rc.0
+
 ## 5.0.0
 
 ### Major Changes
