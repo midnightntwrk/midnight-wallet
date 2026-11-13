@@ -1,5 +1,12 @@
 # @midnightntwrk/wallet-sdk-indexer-client
 
+## 2.0.1-rc.0
+
+### Patch Changes
+
+- Updated dependencies [6bf13d8]
+  - @midnightntwrk/wallet-sdk-utilities@1.3.1-rc.0
+
 ## 2.0.0
 
 ### Major Changes

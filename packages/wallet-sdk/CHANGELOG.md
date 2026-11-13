@@ -1,5 +1,32 @@
 # @midnightntwrk/wallet-sdk
 
+## 2.0.1-rc.0
+
+### Patch Changes
+
+- 6bf13d8: chore: upgrade `@midnightntwrk/ledger-v9` to 1.0.2-rc.0 and `@midnightntwrk/zkir-v3` to 3.2.1, and run proof
+  server 9.0.2-rc.1, the build that carries both; ledger-v9's key material is unchanged (circuit generation 10). Test
+  stacks move to node 2.1.101 and indexer 4.4.101.
+- Updated dependencies [408947a]
+- Updated dependencies [8bb4e6b]
+- Updated dependencies [aaad829]
+- Updated dependencies [5932cd8]
+- Updated dependencies [6bf13d8]
+- Updated dependencies [a81da4c]
+- Updated dependencies [173e4d8]
+- Updated dependencies [6b9607d]
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.1.0-rc.0
+  - @midnightntwrk/wallet-sdk-facade@5.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-shielded@4.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-address-format@4.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-prover-client@2.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-node-client@2.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.3.1-rc.0
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-runtime@2.0.1-rc.0
+
 ## 2.0.0
 
 ### Major Changes

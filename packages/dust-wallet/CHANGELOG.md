@@ -1,5 +1,56 @@
 # @midnightntwrk/wallet-sdk-dust-wallet
 
+## 5.1.0-rc.0
+
+### Minor Changes
+
+- aaad829: `dustWalletProbes(configuration)` is now exported: the probes `DustWallet` asks before a fresh start,
+  including the search for where the dust timeline reaches `forks.v9` when `skipLedgerV8DustHistory` is set. A
+  composition with its own variants spreads it into its configuration to start where `DustWallet` would.
+
+  The testkit's `eventLessDustWallet` now takes its probes from `dustWalletProbes`, so it honours
+  `skipLedgerV8DustHistory` as `DustWallet` does. The remote network presets set that flag, so a new wallet on a network
+  that crossed the v9 fork starts its Dust at the boundary instead of replaying the ledger-v8 history: on qanet a cold
+  sync drops from tens of minutes to seconds. The undeployed environment leaves it off, because a local chain has no
+  ledger-v8 history to skip. The qanet preset's indexer subscription now uses the indexer host; the host it named does
+  not serve it, so a wallet restored from a snapshot never connected.
+
+### Patch Changes
+
+- 408947a: fix(dust-wallet): keep the projections sync going when a pass finds Dust it already applied
+
+  A Dust wallet on the projections sync no longer stops synchronizing when a pass hands back a coin it already applied.
+  Such a coin is now left out of the update, with a warning from the pass that found it, and the collapsed updates a
+  pass requests no longer reach back into applied indexes.
+
+- 8bb4e6b: fix(dust-wallet): refuse a dust snapshot holding values the wallet cannot use
+
+  A dust snapshot with an out-of-range or malformed value in a `pendingDust` entry used to restore, and then every sync
+  threw while settling the entry and retried forever, with nothing able to remove it. Restore now refuses such a
+  snapshot with `SnapshotRestoreError` (`invalid-shape`), on both variants.
+
+  A pending entry's `nullifier`, `owner` and `nonce` must be field elements, `initialValue` a u128, `mtIndex` a u64,
+  `seq` a whole u32, and `backingNight` 32 bytes of hex: the bounds the ledger reads them in. At the top level,
+  `publicKey.publicKey` must be a field element; `offset` must fit the signed 32-bit integer the indexer takes as the
+  position sync resumes from; and `protocolVersion` must lie from `MinSupportedVersion` up to, but not including,
+  `MaxSupportedVersion`, the range some variant runs. `networkId` stays any string, so snapshots of custom networks
+  still restore.
+
+  This is a patch: every snapshot refused now is one the wallet could never have synced from, and every snapshot the
+  wallet itself writes meets these bounds.
+
+- 6bf13d8: chore: upgrade `@midnightntwrk/ledger-v9` to 1.0.2-rc.0 and `@midnightntwrk/zkir-v3` to 3.2.1, and run proof
+  server 9.0.2-rc.1, the build that carries both; ledger-v9's key material is unchanged (circuit generation 10). Test
+  stacks move to node 2.1.101 and indexer 4.4.101.
+- Updated dependencies [5932cd8]
+- Updated dependencies [6bf13d8]
+- Updated dependencies [a81da4c]
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-address-format@4.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.3.1-rc.0
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-runtime@2.0.1-rc.0
+
 ## 5.0.0
 
 ### Major Changes
