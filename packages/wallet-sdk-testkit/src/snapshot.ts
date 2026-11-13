@@ -128,8 +128,10 @@ export const saveState = async (walletInit: SnapshotSource, syncCacheDir: string
 };
 
 /**
- * How long a restored wallet may take to catch up before it is given up on. Well short of the time the remote suites
- * allow a `beforeEach`, so a wedged restore still falls back to a from-scratch build inside that budget.
+ * How long a restored wallet may take to catch up before it is given up on. Wallets are restored one after another, so
+ * a `beforeEach` that restores two of them spends up to 20 minutes here before building from scratch: the 15 minutes
+ * the token-transfer scenario allows by default covers one wedged restore, and the 45 minutes the remote healthchecks
+ * pass covers two plus a sync from scratch.
  */
 const RESTORED_SYNC_TIMEOUT_MS = 10 * 60 * 1000;
 

@@ -51,9 +51,11 @@ describe('Balance constant', () => {
   const expectedTokenTwoBalance = utils.STABLE_WALLET.nativeToken2.amount;
   const expectedUnshieldedBalance = utils.STABLE_WALLET.unshielded.amount;
   const expectedDustBalance = expectedShieldedBalance;
-  // Both tests sync the stable wallet from scratch, which can take tens of minutes on CI for a long-lived network such
-  // as preprod.
-  const syncTimeout = 45 * 60 * 1000;
+  // Both tests sync the stable wallet from scratch, which took 10 to 12 minutes on CI for preprod; the bound leaves
+  // room above that without letting one wedged wallet use up the lane.
+  const syncTimeout = 25 * 60 * 1000;
+  // The teardown only stops the wallet.
+  const teardownTimeout = 10 * 60 * 1000;
 
   let wallet: WalletInit;
   let env: WalletTestEnvironment;
@@ -71,7 +73,7 @@ describe('Balance constant', () => {
   afterEach(async () => {
     // Nothing is carried between runs from here: the restore test saves to a directory of its own.
     await lifecycle.release({ persist: false });
-  }, syncTimeout);
+  }, teardownTimeout);
 
   test(
     'Balance is constant when syncing from 0 @healthcheck',

@@ -27,6 +27,7 @@ import { logger } from './logger.js';
 import { exit } from 'node:process';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { carried } from './helpers/transactions.js';
+import { REMOTE_SYNC_TIMEOUT_MS } from './helpers/remoteTimeouts.js';
 import { Buffer } from 'buffer';
 
 /** Tests performing a token transfer */
@@ -52,9 +53,7 @@ describe('Token transfer', () => {
   let sender: WalletInit;
   let receiver: WalletInit;
   let lifecycle: WalletLifecycle;
-  // A wallet built from scratch on a long-lived network such as preprod can take tens of minutes to sync on CI. A wallet
-  // restored from the sync cache finishes well inside this.
-  const syncTimeout = 45 * 60 * 1000;
+  const syncTimeout = REMOTE_SYNC_TIMEOUT_MS;
   const timeout = 600_000;
 
   beforeEach(async () => {

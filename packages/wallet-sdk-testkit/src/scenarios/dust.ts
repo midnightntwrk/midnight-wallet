@@ -38,11 +38,7 @@ export interface DustScenarioDeps {
   seed: string;
   /** Optional dir to persist/restore wallet state across runs. (Was the `SYNC_CACHE` env var.) */
   syncCacheDir?: string | undefined;
-  /**
-   * Timeout in ms for the `beforeEach` that builds and syncs the wallet, and for each test. Defaults to 45 minutes,
-   * which is enough for a wallet built from scratch on a long-lived network such as preprod. A wallet restored from the
-   * sync cache finishes well inside it.
-   */
+  /** Per-test timeout in ms. Defaults to 15 minutes; a longer bound only spends lane time on a wedged wallet. */
   timeout?: number | undefined;
   /**
    * Selects the dust sync model. Defaults to the projections sync with background synchronization, so the network being
@@ -62,7 +58,7 @@ export function registerDustHealthchecks({
   getEnv,
   seed,
   syncCacheDir,
-  timeout = 45 * 60 * 1000,
+  timeout = 900_000,
   walletOptions,
 }: DustScenarioDeps): void {
   describe('Dust tests', () => {
@@ -85,7 +81,7 @@ export function registerDustHealthchecks({
         }),
         filenameWallet,
       );
-    }, timeout);
+    });
 
     afterEach(async (context) => {
       // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.

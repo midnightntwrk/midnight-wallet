@@ -16,6 +16,7 @@
 import { parseMidnightNetwork, useWalletTestEnvironment } from '@midnightntwrk/wallet-sdk-testkit';
 import { createTestContainersEnvironment } from '@midnightntwrk/wallet-sdk-testkit/testcontainers';
 import { registerDustHealthchecks } from '@midnightntwrk/wallet-sdk-testkit/scenarios';
+import { REMOTE_SYNC_TIMEOUT_MS } from './helpers/remoteTimeouts.js';
 
 const getEnv = useWalletTestEnvironment(() =>
   createTestContainersEnvironment({ network: parseMidnightNetwork(process.env['NETWORK']) }),
@@ -25,4 +26,5 @@ registerDustHealthchecks({
   getEnv,
   seed: process.env['SEED']!,
   syncCacheDir: process.env['SYNC_CACHE'],
+  timeout: REMOTE_SYNC_TIMEOUT_MS,
 });
