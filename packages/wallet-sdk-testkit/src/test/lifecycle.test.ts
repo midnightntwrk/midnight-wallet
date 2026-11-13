@@ -15,6 +15,7 @@ import * as fsAsync from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createWalletLifecycle, type LifecycleWallet } from '../lifecycle.js';
+import { snapshotPath } from '../dust-sync.js';
 import { readSnapshot } from '../snapshot.js';
 
 /** A hand-written wallet that records what was done to it, in order, into a log shared across wallets. */
@@ -93,6 +94,79 @@ describe('createWalletLifecycle', () => {
     });
 
     expect(log).toEqual(['stop one']);
+  });
+
+  it('should remove the snapshot of each wallet it would have saved when the test did not pass, so a snapshot that may be why the test failed is not restored by the next run', async () => {
+    const log: string[] = [];
+    const earlier = createWalletLifecycle();
+    await earlier.adopt(Promise.resolve(fakeWallet('one', log)), 'one.state');
+    await earlier.adopt(Promise.resolve(fakeWallet('other', log)), 'other.state');
+    await earlier.release({ syncCacheDir: directory, persist: true });
+
+    const failing = createWalletLifecycle();
+    await failing.adopt(Promise.resolve(fakeWallet('one', log)), 'one.state');
+    await failing.adopt(Promise.resolve(fakeWallet('unsaved', log)));
+    await failing.release({ syncCacheDir: directory, persist: false });
+
+    await expect(readSnapshot(directory, 'one.state', 'events')).resolves.toBeUndefined();
+    await expect(readSnapshot(directory, 'other.state', 'events')).resolves.toBeDefined();
+  });
+
+  it('should keep the snapshots of a failed test that vitest will run again, so the retry restores them instead of syncing from scratch', async () => {
+    const log: string[] = [];
+    const earlier = createWalletLifecycle();
+    await earlier.adopt(Promise.resolve(fakeWallet('one', log)), 'one.state');
+    await earlier.release({ syncCacheDir: directory, persist: true });
+
+    const retried = createWalletLifecycle();
+    await retried.adopt(Promise.resolve(fakeWallet('one', log)), 'one.state');
+    await retried.release({ syncCacheDir: directory, persist: false, willRetry: true });
+
+    await expect(readSnapshot(directory, 'one.state', 'events')).resolves.toBeDefined();
+  });
+
+  it('should remove the snapshot of a wallet still starting when the test did not pass, so a restore that wedged the setup is not offered to the next run', async () => {
+    const log: string[] = [];
+    const earlier = createWalletLifecycle();
+    await earlier.adopt(Promise.resolve(fakeWallet('stuck', log)), 'stuck.state');
+    await earlier.release({ syncCacheDir: directory, persist: true });
+
+    const failing = createWalletLifecycle();
+    const { promise: starting, resolve: finishStarting } = Promise.withResolvers<LifecycleWallet>();
+    const adopted = failing.adopt(starting, 'stuck.state');
+    await failing.release({ syncCacheDir: directory, persist: false });
+    finishStarting(fakeWallet('stuck', log));
+
+    await expect(adopted).rejects.toThrow();
+    await expect(readSnapshot(directory, 'stuck.state', 'events')).resolves.toBeUndefined();
+  });
+
+  it('should report a snapshot it could not delete, so a snapshot a test failed on is not uploaded again unnoticed', async () => {
+    const log: string[] = [];
+    const undeletable = snapshotPath(directory, 'one.state', 'events');
+    await fsAsync.mkdir(undeletable, { recursive: true });
+    await fsAsync.writeFile(path.join(undeletable, 'content'), '');
+    const failing = createWalletLifecycle();
+    await failing.adopt(Promise.resolve(fakeWallet('one', log)), 'one.state');
+
+    const errors = await reportedErrors(failing.release({ syncCacheDir: directory, persist: false }));
+
+    expect(errors).toHaveLength(1);
+    expect(log).toContain('stop one');
+  });
+
+  it('should keep the previous snapshot when a passing test cannot save over it, so a failed save loses nothing', async () => {
+    const log: string[] = [];
+    const earlier = createWalletLifecycle();
+    await earlier.adopt(Promise.resolve(fakeWallet('one', log)), 'one.state');
+    await earlier.release({ syncCacheDir: directory, persist: true });
+
+    const failingSave = createWalletLifecycle();
+    await failingSave.adopt(Promise.resolve(fakeWallet('one', log, { serializeFails: true })), 'one.state');
+    const errors = await reportedErrors(failingSave.release({ syncCacheDir: directory, persist: true }));
+
+    expect(errors).toEqual(['one cannot serialize']);
+    await expect(readSnapshot(directory, 'one.state', 'events')).resolves.toBeDefined();
   });
 
   it('should still save and stop the other wallet when saving one fails, and report the failure', async () => {

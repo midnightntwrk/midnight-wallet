@@ -24,6 +24,7 @@ import {
   provideWallet,
   type ProvideWalletOptions,
   shouldPersistState,
+  willRetry,
   type WalletInit,
   withProjectionsDefault,
 } from '../wallet.js';
@@ -71,7 +72,9 @@ export function registerDustHealthchecks({
       const own = createWalletLifecycle();
       lifecycle = own;
       const env = getEnv();
-      const filenameWallet = `${seed.substring(0, 7)}-${env.network}.state`;
+      // A name of its own, apart from the token-transfer scenario's snapshot of the same seed: a dust test that fails
+      // deletes the snapshot it started from, and must not take the token-transfer wallet's with it.
+      const filenameWallet = `dust-${seed.substring(0, 7)}-${env.network}.state`;
       wallet = await own.adopt(
         provideWallet(env, {
           ...withProjectionsDefault(walletOptions),
@@ -84,8 +87,13 @@ export function registerDustHealthchecks({
     });
 
     afterEach(async (context) => {
-      // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
-      await lifecycle.release({ syncCacheDir, persist: shouldPersistState(context) });
+      // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`. A failed attempt that
+      // vitest will retry keeps their snapshots for the retry to restore.
+      await lifecycle.release({
+        syncCacheDir,
+        persist: shouldPersistState(context),
+        willRetry: willRetry(context),
+      });
     });
 
     test(

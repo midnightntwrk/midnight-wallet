@@ -19,7 +19,7 @@ import {
   eventBasedDustWallet,
   eventLessDustWallet,
 } from '../dust-sync.js';
-import { type ProvideWalletOptions, withProjectionsDefault } from '../wallet.js';
+import { type ProvideWalletOptions, willRetry, withProjectionsDefault } from '../wallet.js';
 
 /**
  * The model a wallet built from these options would actually run, resolved the way `provideWallet` and
@@ -75,4 +75,27 @@ describe('withProjectionsDefault', () => {
     withoutDustSync();
     expect(withProjectionsDefault({ manualSync: true }).manualSync).toBe(true);
   });
+});
+
+describe('willRetry', () => {
+  it.each([
+    ['a failed first attempt with one retry', { retry: 1, result: { state: 'fail', retryCount: 0 } }, true],
+    ['a failed last attempt', { retry: 1, result: { state: 'fail', retryCount: 1 } }, false],
+    ['a failed test with no retry', { result: { state: 'fail', retryCount: 0 } }, false],
+    [
+      'a failed second of three attempts, set as an object',
+      { retry: { count: 2 }, result: { state: 'fail', retryCount: 1 } },
+      true,
+    ],
+    [
+      'a passed attempt that could still have been retried',
+      { retry: 1, result: { state: 'pass', retryCount: 0 } },
+      false,
+    ],
+  ])(
+    'should tell whether vitest runs the test again after %s, so only a failed attempt with a retry left keeps its snapshots',
+    (_case, task, expected) => {
+      expect(willRetry({ task })).toBe(expected);
+    },
+  );
 });

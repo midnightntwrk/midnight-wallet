@@ -27,6 +27,7 @@ import {
   provideWallet,
   type ProvideWalletOptions,
   shouldPersistState,
+  willRetry,
   type WalletInit,
   withProjectionsDefault,
 } from '../wallet.js';
@@ -54,7 +55,9 @@ export interface TokenTransferScenarioDeps {
   syncCacheDir?: string | undefined;
   /**
    * Timeout for the sync-heavy `beforeEach` and the healthcheck test in ms. Defaults to 15 minutes — a longer bound
-   * does not rescue a wedged wallet, it only spends lane time before reporting.
+   * does not rescue a wedged wallet, it only spends lane time before reporting. The `beforeEach` restores the two
+   * wallets one after the other and gives each up to 10 minutes to catch up before building it from scratch, so a bound
+   * that is to replace two snapshots that never catch up needs about 20 minutes plus a sync from scratch.
    */
   syncTimeout?: number | undefined;
   /** Timeout for the `afterEach` teardown in ms. Defaults to 10 minutes. */
@@ -153,8 +156,13 @@ export function useTokenTransferWallets({
   }, syncTimeout);
 
   afterEach(async (context) => {
-    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
-    await lifecycle.release({ syncCacheDir, persist: shouldPersistState(context) });
+    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`. A failed attempt that
+    // vitest will retry keeps their snapshots for the retry to restore.
+    await lifecycle.release({
+      syncCacheDir,
+      persist: shouldPersistState(context),
+      willRetry: willRetry(context),
+    });
   }, timeout);
 
   const requireWallet = (w: WalletInit | undefined, label: string): WalletInit => {
