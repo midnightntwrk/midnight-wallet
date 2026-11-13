@@ -191,11 +191,13 @@ jobs:
         run: |
           yarn turbo test-remote -- $TEST_MODIFIER
 
-      # Uploaded whether or not the tests passed. A snapshot is only ever saved by a test that passed, so the cache of a
-      # failed run is as good as a green run's, and it is what lets a lane that starts every run from scratch climb out:
-      # each run keeps the wallets that did finish syncing, and the next run starts those from where they left off.
+      # Uploaded whether or not the tests passed, and even when the job was cancelled. A snapshot is only ever saved by a
+      # test that passed, so the cache of a failed or cancelled run is as good as a green run's. It is what lets a lane
+      # that starts every run from scratch climb out: each run keeps the wallets that did finish syncing, and the next run
+      # starts those from where they left off. The remote files run one at a time, so a later file that runs into the
+      # job's time limit must not discard the snapshots earlier files saved.
       - name: Upload sync cache
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: .sync_cache
