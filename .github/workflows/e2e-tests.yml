@@ -118,7 +118,7 @@ jobs:
           ref: ${{ inputs.branch || github.ref }}
           persist-credentials: false
 
-      - name: Determine the latest successful run ID with appropriate artifact
+      - name: Determine the latest run ID with a sync cache artifact
         if: inputs.skip_cache != true
         id: find_cache
         continue-on-error: true
@@ -191,8 +191,11 @@ jobs:
         run: |
           yarn turbo test-remote -- $TEST_MODIFIER
 
+      # Uploaded whether or not the tests passed. A snapshot is only ever saved by a test that passed, so the cache of a
+      # failed run is as good as a green run's, and it is what lets a lane that starts every run from scratch climb out:
+      # each run keeps the wallets that did finish syncing, and the next run starts those from where they left off.
       - name: Upload sync cache
-        if: success()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: .sync_cache

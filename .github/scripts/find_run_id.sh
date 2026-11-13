@@ -32,18 +32,29 @@ if [[ -z "$workflow_id" ]]; then
   exit 1
 fi
 
-# Fetch all successful workflow runs for the specified workflow, ordered by created_at (newest first)
-runs=$(gh api repos/$REPO/actions/workflows/$workflow_id/runs --paginate | jq -r '.workflow_runs[] | select(.status == "completed" and .conclusion == "success") | .id')
+# The runs that still hold a downloadable artifact of this name, newest first. An expired artifact is still listed but
+# can no longer be downloaded, so it is left out.
+#
+# A run's conclusion is deliberately not checked. The sync cache only ever holds snapshots that passing tests saved, so
+# a failed run's cache is as usable as a green run's. Requiring a green run deadlocks a lane that has been red for longer
+# than the artifact retention period: every run syncs from scratch, times out, fails, and so never publishes the cache
+# that would let the next run pass.
+#
+# Starting from the artifacts rather than from the workflow's runs keeps the number of API calls bounded by the few
+# artifacts that exist, instead of growing with the length of the workflow's history.
+candidate_runs=$(gh api "repos/$REPO/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" --paginate \
+  | jq -r '.artifacts[] | select(.expired == false) | "\(.created_at) \(.workflow_run.id)"' \
+  | sort -r | awk '{print $2}')
 
-# Iterate over each run to check for the specified artifact, starting from the newest
-for run_id in $runs; do
-  artifact_check=$(gh api repos/$REPO/actions/runs/$run_id/artifacts | jq -r --arg name "$ARTIFACT_NAME" '.artifacts[] | select(.name == $name)')
+# The newest of them that belongs to the specified workflow.
+for run_id in $candidate_runs; do
+  run_workflow_id=$(gh api "repos/$REPO/actions/runs/$run_id" --jq '.workflow_id')
 
- if [[ -n "$artifact_check" ]]; then
+  if [[ "$run_workflow_id" == "$workflow_id" ]]; then
     echo "$run_id"
     exit 0
   fi
 done
 
-echo "No completed runs with artifact named '$ARTIFACT_NAME' found." >&2
+echo "No runs of '$WORKFLOW_NAME' with an unexpired artifact named '$ARTIFACT_NAME' found." >&2
 exit 1
