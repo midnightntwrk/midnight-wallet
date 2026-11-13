@@ -677,7 +677,11 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     subscribeWallet(
       state: CoreWallet,
     ): Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient> {
-      const { appliedIndex } = state.progress;
+      const { appliedIndex, highestRelevantWalletIndex } = state.progress;
+      // How far this wallet knows the timeline to go: the highest id an event has told it of, and never less than its
+      // own cursor, because the event it last applied exists. The cursor is all a restored wallet has, since a
+      // snapshot saves the position and not the highest id.
+      const knownTip = highestRelevantWalletIndex > appliedIndex ? highestRelevantWalletIndex : appliedIndex;
       const bufferSize = config.indexerClientConnection.bufferSize ?? 10000;
       const resumeThreshold = config.indexerClientConnection.resumeThreshold ?? 100;
 
@@ -706,6 +710,16 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
           // start, rather than relying on `id: 0` sorting below the first real event id.
           variables: (cursor) => ({ id: cursor < 0n ? null : Number(cursor) }),
           key: (r) => BigInt(r.dustLedgerEvents.id),
+          // An indexer that stops writing to this subscription while its socket stays open raises nothing, so the
+          // subscription is told how to recognise it: every event names the highest id the timeline holds, and a
+          // session behind that id that goes silent is given up on, which fails the stream into the retry that
+          // reconnects. `knownTip` covers a session that is silent from its first event. A wallet that has applied
+          // no event holds zero for it, which is no tip: named as one it would count as an event owed, and a chain
+          // with no dust events would never let the wallet rest.
+          stall: {
+            tip: (r) => BigInt(r.dustLedgerEvents.maxId),
+            ...(knownTip > 0n ? { knownTip } : {}),
+          },
         }),
         Stream.mapEffect((subscription) =>
           pipe(

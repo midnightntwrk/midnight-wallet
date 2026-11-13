@@ -10,12 +10,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Stream, type Context, Layer, type Scope, Array as Arr } from 'effect';
+import { Duration, Effect, Stream, type Context, Layer, type Scope, Array as Arr } from 'effect';
 import { createClient, type Client, type SubscribePayload } from 'graphql-ws';
 import { type GraphQLError, print } from 'graphql';
 import { SubscriptionClient } from './SubscriptionClient.js';
 import { type Query } from './Query.js';
-import { withBackpressure, type Source } from './Backpressure.js';
+import { withBackpressure, type Source, STALL_TIMEOUT, type SubscriptionStalledError } from './Backpressure.js';
 import { makeDeflateWebSocket } from './DeflateWebSocket.js';
 import {
   type InvalidProtocolSchemeError,
@@ -41,6 +41,15 @@ const toClientOrServerError = (err: unknown): ClientError | ServerError =>
   isGraphQLErrorArray(err)
     ? new ClientError({ message: err.map((e) => e.message).join('; '), cause: err })
     : new ServerError({ message: String(err) });
+
+// A session given up on raised nothing of its own, but to a consumer it is what a dropped connection is: the transport
+// stopped serving it. Reported as one, it reaches the retry that already reconnects and resubscribes from the cursor.
+const stalledAsServerError = (stalled: SubscriptionStalledError): ServerError =>
+  new ServerError({
+    message:
+      `The subscription delivered nothing for ${Duration.toSeconds(STALL_TIMEOUT)} seconds while behind: ` +
+      `last key ${stalled.lastKey}, highest known ${stalled.tip}`,
+  });
 
 // ============================================================================
 // Layer / class
@@ -201,6 +210,8 @@ class WebSocketSubscriptionClientImpl implements Context.Tag.Service<Subscriptio
         },
       );
 
-    return withBackpressure(source, options);
+    return withBackpressure(source, options).pipe(
+      Stream.catchTag('SubscriptionStalledError', (stalled) => Stream.fail(stalledAsServerError(stalled))),
+    );
   }
 }
