@@ -814,7 +814,9 @@ describe('DustWallet', () => {
       const makeTransferTx = (sendToken: (typeof nightTokens)[0], segmentId: number) => {
         const intent = Intent.new(ttl);
         intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(
-          [{ ...sendToken, owner: nightVerifyingKey }],
+          // A different output number per transfer, so no two spend the same UTXO: the batch is priced as one merged
+          // transaction, and the ledger prices none that repeats a spend.
+          [{ ...sendToken, outputNo: segmentId, owner: nightVerifyingKey }],
           [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }],
           [],
         );
