@@ -91,6 +91,15 @@ describe('V1 dust wallet event subscription stall detection', () => {
     expect(requests.map((request) => request.knownTip)).toEqual([9n]);
   });
 
+  it('should name its cursor as the known tip when it remembers no higher one, because a snapshot restores the event last applied and nothing of how far the timeline went, and that event exists', async () => {
+    // What a restore leaves: the cursor the snapshot saved, and no highest id.
+    const restored = CoreWallet.updateProgress(newWallet(), { appliedIndex: 5n });
+
+    const requests = await stallRequests(restored);
+
+    expect(requests.map((request) => request.knownTip)).toEqual([5n]);
+  });
+
   it('should name no known tip while it has seen no event, because its zero would count as an event owed to it and a chain with no Dust events would never let it rest', async () => {
     const requests = await stallRequests(newWallet());
 
