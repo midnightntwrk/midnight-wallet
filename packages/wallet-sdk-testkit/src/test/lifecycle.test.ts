@@ -95,6 +95,22 @@ describe('createWalletLifecycle', () => {
     expect(log).toEqual(['stop one']);
   });
 
+  it('should remove the snapshot of each wallet it would have saved when the test did not pass, so a snapshot that may be why the test failed is not restored by the next run', async () => {
+    const log: string[] = [];
+    const earlier = createWalletLifecycle();
+    await earlier.adopt(Promise.resolve(fakeWallet('one', log)), 'one.state');
+    await earlier.adopt(Promise.resolve(fakeWallet('other', log)), 'other.state');
+    await earlier.release({ syncCacheDir: directory, persist: true });
+
+    const failing = createWalletLifecycle();
+    await failing.adopt(Promise.resolve(fakeWallet('one', log)), 'one.state');
+    await failing.adopt(Promise.resolve(fakeWallet('unsaved', log)));
+    await failing.release({ syncCacheDir: directory, persist: false });
+
+    await expect(readSnapshot(directory, 'one.state', 'events')).resolves.toBeUndefined();
+    await expect(readSnapshot(directory, 'other.state', 'events')).resolves.toBeDefined();
+  });
+
   it('should still save and stop the other wallet when saving one fails, and report the failure', async () => {
     const log: string[] = [];
     const lifecycle = createWalletLifecycle();
