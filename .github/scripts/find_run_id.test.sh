@@ -51,6 +51,10 @@ while [ $# -gt 0 ]; do
     *) shift ;;
   esac
 done
+if $slurp && ! $paginate; then
+  echo "\`--paginate\` required when passing \`--slurp\`" >&2
+  exit 1
+fi
 if [ -n "${FAIL:-}" ] && [[ "$path" == *"$FAIL"* ]]; then
   echo "HTTP 502: Bad Gateway (https://api.github.com/$path)" >&2
   exit 1
@@ -102,6 +106,9 @@ chmod +x "$stub_dir/gh"
 failures=0
 rows=0
 
+# The script's arguments for the next rows; the rows below the usual ones change them.
+args=(owner/repo "Healthcheck - preprod" .sync_cache main)
+
 # check <label> <exit> <run-id> <runs> <artifacts> [VAR=value...]
 check() {
   local label="$1" want_status="$2" want_id="$3" runs="$4" artifacts="$5"
@@ -110,7 +117,7 @@ check() {
 
   local stdout status=0
   stdout="$(env PATH="$stub_dir:$PATH" RUNS="$runs" ARTIFACTS="$artifacts" "$@" \
-    bash "$script" owner/repo "Healthcheck - preprod" .sync_cache main 2>/dev/null)" || status=$?
+    bash "$script" "${args[@]}" 2>/dev/null)" || status=$?
 
   if [ "$status" -ne "$want_status" ] || [ "$stdout" != "$want_id" ]; then
     failures=$((failures + 1))
@@ -157,6 +164,13 @@ check "the artifact listing fails" 2 "" "$runs" "[$(artifact 150 13)]" FAIL=acti
 check "the workflow listing fails" 2 "" "$runs" "[$(artifact 150 13)]" FAIL=actions/workflows
 check "reading the newest candidate's run fails" 2 "" "$runs" "[$(artifact 150 13), $(artifact 140 12)]" \
   FAIL=actions/runs/150
+
+# A network with no healthcheck workflow has nothing to restore, which is not an API failure; a call missing an argument
+# is a mistake, never an empty cache.
+args=(owner/repo "Healthcheck - devnet" .sync_cache main)
+check "the workflow does not exist" 1 "" "$runs" "[$(artifact 150 13)]"
+args=(owner/repo "Healthcheck - preprod")
+check "the artifact name is missing" 2 "" "$runs" "[$(artifact 150 13)]"
 
 echo
 if [ "$failures" -ne 0 ]; then
