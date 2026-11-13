@@ -16,7 +16,10 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 import {
+  FieldElementSchema,
+  OffsetSchema,
   PendingDustSchema,
+  ProtocolVersionFieldSchema,
   SNAPSHOT_FORMAT_VERSION,
   SNAPSHOT_FORMAT_VERSIONS,
   type SyncKind,
@@ -77,13 +80,13 @@ const SnapshotSchema = Schema.Struct({
   version: SnapshotFormat.versionField('dust', SNAPSHOT_FORMAT_VERSION),
   writtenBy: SnapshotFormat.writtenByField(),
   publicKey: Schema.Struct({
-    publicKey: Schema.BigInt,
+    publicKey: FieldElementSchema,
   }),
   state: HexedState,
-  protocolVersion: Schema.BigInt,
+  protocolVersion: ProtocolVersionFieldSchema,
   networkId: Schema.String,
   // The position the synchronization named by `syncKind` resumes from: see {@link offsetOf}.
-  offset: Schema.optional(Schema.BigInt),
+  offset: Schema.optional(OffsetSchema),
   // Which synchronization moved the position, because the two that this variant can run resume from different ones.
   syncKind: SyncKindSchema,
   pendingDust: Schema.Array(PendingDustSchema),
