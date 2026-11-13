@@ -105,6 +105,12 @@ jobs:
     name: E2E tests
     runs-on: ubuntu-latest-8-core-x64
     timeout-minutes: 240
+    # One run per network at a time, queued rather than cancelled: runs on a network share its funded wallets and its
+    # sync cache, whichever branch or workflow started them. Only here, not also in the calling healthcheck workflows,
+    # since a caller holding the same group would wait on its own job.
+    concurrency:
+      group: e2e-tests-${{ inputs.network }}
+      cancel-in-progress: false
     # checks: write and actions: read are what dorny/test-reporter documents for the junit check-run; actions: read
     # also lets the job's own token find and download the healthcheck sync cache from earlier runs.
     permissions:
@@ -209,11 +215,12 @@ jobs:
         run: |
           yarn turbo test-remote --log-order=stream -- $TEST_MODIFIER
 
-      # Uploaded even when tests failed or the run was stopped: a test saves its wallets' snapshots only when it passes
-      # and deletes the snapshots it started from when it fails, so each run keeps the wallets whose tests passed and a
-      # lane that starts from scratch can climb out. A run uploads only when it cannot replace a fuller cache with a
-      # smaller one: every test passed, it restored the previous cache, or there was none to restore. A run that skipped
-      # the cache or could not read it, and did not pass, uploads nothing.
+      # Uploaded even when tests failed or the run was stopped: a test saves its wallets' snapshots only when it passes,
+      # and deletes them when it fails on its last attempt, so each run keeps the wallets whose tests passed and a lane
+      # that starts from scratch can climb out. A run uploads only when it passed every test, restored the previous
+      # cache, or had none to restore. A run that restored the cache and then failed uploads it less the snapshots its
+      # failed tests deleted, which is deliberate. A run that skipped the cache or could not read it, and did not pass,
+      # uploads nothing, so it cannot replace the cache with the few wallets it saved.
       #
       # Kept for a week: the lanes run twice a day, and every run that restores the cache uploads it again. `overwrite`
       # lets a re-run of a failed job upload under the name its first attempt used. A `.tmp` file is a save that was
