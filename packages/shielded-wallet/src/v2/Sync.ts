@@ -436,34 +436,22 @@ const extendTransaction = (
  * The timeline's events gathered into whole transactions, in order.
  *
  * @remarks
- *   A transaction stays open until it is known to be whole, so a stop or a failure part-way through one delivers none of
- *   it: the cursor stays in front of it and the next run fetches it again. Only a timeline that ends releases the open
- *   transaction as it stands, because nothing more can follow it.
+ *   A transaction stays open until it is known to be whole, so a timeline that stops, fails or ends part-way through one
+ *   delivers none of it: the cursor stays in front of it and the next run fetches it again, whole.
  */
 const wholeTransactions = <E, R>(
   events: Stream.Stream<EventsSyncUpdate, E, R>,
 ): Stream.Stream<readonly EventsSyncUpdate[], E, R> =>
-  pipe(
-    events,
-    Stream.map(Option.some),
-    Stream.concat(Stream.make(Option.none<EventsSyncUpdate>())),
-    Stream.mapAccum(noOpenTransaction, (open, next) =>
-      Option.match(next, {
-        onSome: (update) => extendTransaction(open, update),
-        onNone: () => [noOpenTransaction, open.events.length === 0 ? [] : [open.events]] as const,
-      }),
-    ),
-    Stream.mapConcat(identity),
-  );
+  pipe(events, Stream.mapAccum(noOpenTransaction, extendTransaction), Stream.mapConcat(identity));
 
 /**
- * The timeline's events in batches of whole transactions, each of at most `size` events unless one transaction alone
- * has more.
+ * The timeline's events in batches of whole transactions, each delivered as soon as it holds `size` events or more.
  *
  * @remarks
  *   The capability writes tx history per batch, so a transaction cut across two batches would be written in two parts. A
- *   transaction of more than `size` events is therefore never cut: it goes in a batch of its own. The timeout closes a
- *   batch early, as before, but only between transactions.
+ *   transaction is therefore never cut: the one that fills a batch goes in whole, so a batch can exceed `size` by the
+ *   rest of that transaction. The timeout closes a batch that is not yet full, and since a batch only ever holds whole
+ *   transactions, it closes one only between transactions.
  */
 const batchedByTransaction =
   (size: number, timeout: Duration.Duration) =>
@@ -471,14 +459,11 @@ const batchedByTransaction =
     pipe(
       wholeTransactions(events),
       Stream.aggregateWithin(
-        // `foldWeighted` closes a batch before a transaction that would take it past `size`, and lets a transaction
-        // larger than `size` fill a batch on its own.
-        Sink.foldWeighted({
-          initial: [] as readonly EventsSyncUpdate[],
-          maxCost: size,
-          cost: (_batch, transaction: readonly EventsSyncUpdate[]) => transaction.length,
-          body: (batch, transaction) => [...batch, ...transaction],
-        }),
+        Sink.fold(
+          Arr.empty<EventsSyncUpdate>(),
+          (batch) => batch.length < size,
+          (batch, transaction: readonly EventsSyncUpdate[]) => [...batch, ...transaction],
+        ),
         Schedule.spaced(timeout),
       ),
     );
