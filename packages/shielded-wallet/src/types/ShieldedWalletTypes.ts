@@ -96,16 +96,17 @@ export type IndexerClientConnection = {
 
 export type BatchUpdatesConfig = {
   /**
-   * Maximum number of events to collect into a single batch before emitting. A batch holds only whole transactions, so
-   * one transaction with more events than this is emitted alone, in a batch larger than `size`.
+   * Number of events at which a batch is emitted. A batch is emitted as soon as it holds `size` events or more, and
+   * holds only whole transactions, so it can exceed `size` by the rest of the transaction that filled it.
    *
    * @default 10
    */
   readonly size?: number;
   /**
    * Time in milliseconds to wait for a full batch before emitting a partial one — lower values mean more responsive
-   * (but smaller) batches when events arrive slowly. A batch ends only between transactions, so one still arriving is
-   * held past the timeout until its last event has come.
+   * (but smaller) batches when events arrive slowly. A batch ends only between transactions, so a transaction is held
+   * past the timeout until it is known whole: once the next transaction's first event has arrived, or once it reaches
+   * the last event the indexer holds.
    *
    * @default 1
    */
