@@ -118,9 +118,18 @@ const runSnippet = async (
   });
 };
 
+// Each networked snippet starts on a fresh chain, once the indexer has seen block 1, and the chain keeps producing
+// blocks while the snippet runs, so the height a snippet observes depends on timing. The height is masked, but only
+// when the indexer and finalized heights agree: an indexer lagging the finalized head still changes the output.
+const maskChainHeight = (output: string | null): string | null =>
+  output?.replace(
+    /indexerHeight: (\d+)n, finalizedHeight: \1n/g,
+    'indexerHeight: <height>, finalizedHeight: <height>',
+  ) ?? null;
+
 const testSnippet = async (snippet: Snippet, envExtension: Record<string, string> = {}) => {
   const result = await runSnippet(snippet, envExtension);
-  expect(result).toMatchSnapshot();
+  expect(result.map(maskChainHeight)).toMatchSnapshot();
 };
 
 describe('Snippet outputs', () => {
