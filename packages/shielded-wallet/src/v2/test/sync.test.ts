@@ -35,9 +35,14 @@ import type {
   ZswapEventsSubscription,
   ZswapEventsSubscriptionVariables,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
-import { type EventsSyncUpdate, type WalletSyncUpdate, makeEventsSyncService } from '../Sync.js';
+import {
+  type EventsSyncUpdate,
+  type WalletSyncUpdate,
+  makeEventsSyncCapability,
+  makeEventsSyncService,
+} from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 
 vi.setConfig({
@@ -645,6 +650,74 @@ describe('Wallet subscription', () => {
     it('should cut only a transaction larger than the batch size, into pieces of that size, so the size stays a hard maximum', async () => {
       // Ids 2..4 are the transfer: three events against a size of two.
       expect(await batchesOf(2)).toEqual([[1], [2, 3], [4], [5, 6]]);
+    });
+
+    it('should write a transaction once, whole, after a restart, when the wallet stopped while only part of it had arrived', async () => {
+      const activeRange = ProtocolVersion.makeRange(
+        ProtocolVersion.ProtocolVersion(0n),
+        ProtocolVersion.ProtocolVersion(7n),
+      );
+      const capability = makeEventsSyncCapability();
+      const eventOf = (raw: string, i: number) => ({
+        zswapLedgerEvents: { id: i + 1, raw, protocolVersion: 3, maxId: chain.raws.length },
+      });
+
+      /**
+       * Syncs from `wallet` through the capability until the stream has gone quiet, then stops the wallet. Returns the
+       * state it stopped at and every change handed to tx history on the way.
+       */
+      const runUntilStopped = (
+        wallet: CoreWallet,
+        subscription: (
+          variables: ZswapEventsSubscriptionVariables,
+        ) => Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>,
+      ) =>
+        Effect.gen(function* () {
+          const state = yield* Ref.make(wallet);
+          const written = yield* Ref.make<readonly ledger.ZswapStateChanges[]>([]);
+          const syncService = makeEventsSyncService({
+            indexerClientConnection: {
+              indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+              indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+            },
+            versionWatch: noVersionWatch,
+            batchUpdates: { size: 3, timeout: 100, spacing: 0 },
+          });
+          const fiber = yield* syncService.updates(wallet, owner).pipe(
+            Stream.runForEach((update) =>
+              Effect.gen(function* () {
+                const [next, { changes }] = capability.applyUpdate(yield* Ref.get(state), update, activeRange);
+                yield* Ref.set(state, next);
+                yield* Ref.update(written, (all) => [...all, ...changes]);
+              }),
+            ),
+            Effect.provideService(ZswapEvents.tag, subscription),
+            Effect.fork,
+          );
+          yield* TestClock.adjust(Duration.seconds(1));
+          yield* Fiber.interrupt(fiber);
+          return [yield* Ref.get(state), yield* Ref.get(written)] as const;
+        }).pipe(Effect.provide(TestContext.TestContext), Effect.scoped, Effect.runPromise);
+
+      // The indexer has served the mint and the transfer's input, and the transfer's outputs are still on their way
+      // when the wallet stops.
+      const [stopped, writtenBeforeStop] = await runUntilStopped(CoreWallet.initEmpty(owner, networkId), () =>
+        Stream.fromIterable(chain.raws.slice(0, 2).map(eventOf)).pipe(Stream.concat(Stream.never)),
+      );
+      // The restarted wallet resumes from the state it stopped at, and the indexer serves from its cursor on.
+      const [, writtenAfterRestart] = await runUntilStopped(stopped, (variables) =>
+        Stream.fromIterable(
+          chain.raws.map(eventOf).filter((event) => event.zswapLedgerEvents.id >= (variables.id ?? 1)),
+        ),
+      );
+
+      const transferWrites = [...writtenBeforeStop, ...writtenAfterRestart]
+        .filter((changes) => changes.source === chain.transferHash)
+        .map((changes) => ({
+          spent: changes.spentCoins.map((coin) => coin.value),
+          received: changes.receivedCoins.map((coin) => coin.value),
+        }));
+      expect(transferWrites).toEqual([{ spent: [500n], received: [400n] }]);
     });
   });
 });
