@@ -730,6 +730,18 @@ describe('Wallet subscription', () => {
       expect(batches).toEqual([[1, 2, 3]]);
     });
 
+    it('should deliver an event this ledger version cannot read as soon as it arrives, as a transaction of its own', async () => {
+      // The mint, then bytes that are no event of this ledger version, while the indexer holds more after them. A batch
+      // of two fills only if the unreadable event is complete the moment it arrives.
+      const batches = await batchesBeforeStop(
+        openSubscriptionOf([chain.raws[0], 'deadbeef'], chain.raws.length),
+        { size: 2, timeout: 60_000 },
+        Duration.seconds(1),
+      );
+
+      expect(batches).toEqual([[1, 2]]);
+    });
+
     it('should deliver every event of a transaction in one batch, so the transaction is applied, and written to tx history, whole', async () => {
       // A batch of three cut by count would split the transfer (ids 2..4) after its first two events; the transfer
       // that fills the batch goes in whole instead, and the stranger's transaction (ids 5..6) starts the next.
