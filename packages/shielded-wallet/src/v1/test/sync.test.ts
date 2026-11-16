@@ -751,6 +751,50 @@ describe('Wallet subscription', () => {
       ]);
     });
 
+    it('should write a transaction the batch that hands over completes once, whole, because the batch splits at the version boundary and never inside the transaction', async () => {
+      const activeRange = ProtocolVersion.makeRange(
+        ProtocolVersion.ProtocolVersion(0n),
+        ProtocolVersion.ProtocolVersion(7n),
+      );
+      // The mint and the transfer under this ledger version, then the first event of a version past the active range:
+      // the batch that completes the transfer is also the one that hands over.
+      const subscription = () =>
+        Stream.fromIterable([
+          ...chain.raws.slice(0, 4).map((raw, index) => eventOf(raw, index, 5)),
+          { zswapLedgerEvents: { id: 5, raw: 'deadbeef', protocolVersion: 9, maxId: 5 } },
+        ]);
+
+      const updates = await syncServiceWith({ size: 10, timeout: 60_000 })
+        .updates(CoreWallet.initEmpty(owner, networkId), owner)
+        .pipe(
+          Stream.runCollect,
+          Effect.map(Chunk.toArray),
+          Effect.provideService(ZswapEvents.tag, subscription),
+          Effect.scoped,
+          Effect.runPromise,
+        );
+      // The premise: one batch, carrying both the transfer and the hand-over.
+      expect(updates.map((update) => eventsOf(update).map((event) => event.id))).toEqual([[1, 2, 3, 4, 5]]);
+
+      const capability = makeEventsSyncCapability();
+      const [, written] = updates.reduce<readonly [CoreWallet, readonly ledger.ZswapStateChanges[]]>(
+        ([wallet, changesSoFar], update) => {
+          const [next, { changes }] = capability.applyUpdate(wallet, update, activeRange);
+          return [next, [...changesSoFar, ...changes]];
+        },
+        [CoreWallet.initEmpty(owner, networkId), []],
+      );
+
+      expect(
+        written
+          .filter((changes) => changes.source === chain.transferHash)
+          .map((changes) => ({
+            spent: changes.spentCoins.map((coin) => coin.value),
+            received: changes.receivedCoins.map((coin) => coin.value),
+          })),
+      ).toEqual([{ spent: [500n], received: [400n] }]);
+    });
+
     it('should write a transaction once, whole, after a restart, when the wallet stopped while only part of it had arrived', async () => {
       const activeRange = ProtocolVersion.makeRange(
         ProtocolVersion.ProtocolVersion(0n),
