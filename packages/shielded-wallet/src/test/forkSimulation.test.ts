@@ -51,7 +51,7 @@ import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Deferred, Duration, Effect, Option, Ref, Schedule, Stream, SubscriptionRef, pipe, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { type TransactionHistory as V1TransactionHistory, V1Tag } from '../v1/index.js';
-import { CoreWallet, PublicKeys, Sync, V2Tag, WalletError } from '../v2/index.js';
+import { CoreWallet, PublicKeys, Sync, type TransactionHistory, V2Tag, WalletError } from '../v2/index.js';
 import { type CapturedMigration, type ForkWallet, makeForkWallet } from './forkHarness.js';
 import {
   type MintedCoin,
@@ -569,6 +569,62 @@ describe('a shielded wallet crossing a hard fork', () => {
       expect(Option.isSome(stopped)).toBe(true);
       expect(yield* Ref.get(interrupted)).toBe(walletValues.length);
     }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should write the history of a payment the V2 variant syncs after the hand-over, because the variant a hand-over starts records its own transactions too', async () =>
+    Effect.gen(function* () {
+      const coins = chainCoins();
+      const fork = yield* forkingChain(coins);
+      const written = yield* Ref.make<readonly WrittenSection[]>([]);
+
+      const wallet = yield* makeForkWallet({
+        v8: fork.v8,
+        v9: fork.awaitV9(),
+        networkId,
+        forkVersion,
+        seed,
+        v2History: v2HistoryRecordedIn(written),
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+
+      yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
+        discard: true,
+      });
+      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+      const v9 = yield* fork.advanceToFork();
+      yield* wallet.awaitMigration;
+      yield* settled(wallet);
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+
+      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
+      yield* v9.submitTransaction(v9Payment(networkId, late));
+      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+
+      const sections = yield* writtenAtLeast(written, 1);
+      expect(sections.map(({ received, spent }) => ({ received, spent }))).toEqual([{ received: [900n], spent: [] }]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/** V2 transaction history whose every write lands in `written` at once. */
+const v2HistoryRecordedIn = (
+  written: Ref.Ref<readonly WrittenSection[]>,
+): TransactionHistory.TransactionHistoryService => ({
+  getTransactionDetails: (hash) =>
+    Effect.succeed({
+      hash,
+      block: { hash: '', height: 0, timestamp: 0 },
+      status: 'SUCCESS' as const,
+      identifiers: [],
+    }),
+  put: (changes) =>
+    Ref.update(written, (sections) => [
+      ...sections,
+      {
+        source: changes.source,
+        received: changes.receivedCoins.map((coin) => coin.value),
+        spent: changes.spentCoins.map((coin) => coin.value),
+      },
+    ]),
 });
 
 describe('a hand-over while history writes are still running', () => {
