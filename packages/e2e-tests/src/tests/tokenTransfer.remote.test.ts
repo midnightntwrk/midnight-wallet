@@ -35,6 +35,7 @@ import {
   useTokenTransferWallets,
 } from '@midnightntwrk/wallet-sdk-testkit/scenarios';
 import { carried, sealed } from './helpers/transactions.js';
+import { REMOTE_SYNC_TIMEOUT_MS } from './helpers/remoteTimeouts.js';
 
 const getEnv = useWalletTestEnvironment(() =>
   createTestContainersEnvironment({ network: parseMidnightNetwork(process.env['NETWORK']) }),
@@ -45,6 +46,7 @@ const deps = {
   fundedSeed: process.env['SEED']!,
   secondSeed: process.env['SEED2']!,
   syncCacheDir: process.env['SYNC_CACHE'],
+  syncTimeout: REMOTE_SYNC_TIMEOUT_MS,
 };
 
 // The single @healthcheck test, sourced from the testkit.

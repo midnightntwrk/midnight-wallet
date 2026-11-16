@@ -128,8 +128,29 @@ export const saveState = async (walletInit: SnapshotSource, syncCacheDir: string
 };
 
 /**
- * How long a restored wallet may take to catch up before it is given up on. Well short of the quarter-hour the remote
- * suites allow a `beforeEach`, so a wedged restore still falls back to a from-scratch build inside that budget.
+ * Deletes the snapshot {@link saveState} would write for this wallet, if there is one.
+ *
+ * @param walletInit The wallet whose snapshot to delete; only its dust sync model is read, to find the namespace.
+ * @param syncCacheDir The directory the snapshot is in.
+ * @param filename The name it was saved under.
+ * @throws When the file exists but cannot be deleted.
+ */
+export const removeState = async (
+  walletInit: Pick<SnapshotSource, 'dustSyncModel'>,
+  syncCacheDir: string,
+  filename: string,
+): Promise<void> => {
+  const target = snapshotPath(syncCacheDir, filename, walletInit.dustSyncModel);
+  if (!existsSync(target)) return;
+  await fsAsync.rm(target, { force: true });
+  logger.info(`Removed ${target}`);
+};
+
+/**
+ * How long a restored wallet may take to catch up before it is given up on. Wallets are restored one after another, so
+ * a `beforeEach` that restores two of them spends up to 20 minutes here before building from scratch: the 15 minutes
+ * the token-transfer scenario allows by default covers one wedged restore, and the 45 minutes the remote healthchecks
+ * pass covers two plus a sync from scratch.
  */
 const RESTORED_SYNC_TIMEOUT_MS = 10 * 60 * 1000;
 
