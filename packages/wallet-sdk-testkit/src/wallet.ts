@@ -26,6 +26,7 @@ import {
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { type DefaultDustConfiguration } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type TestError } from 'vitest';
 import { type WalletTestEnvironment } from './types.js';
 import { logger } from './logger.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed } from './seeds.js';
@@ -268,18 +269,43 @@ export const shouldPersistState = (context: {
  * willRetry(ctx) })`.
  *
  * @param context The `afterEach` context.
- * @returns `true` when the attempt failed and the test's `retry` count is not used up.
+ * @returns `true` when the attempt failed, the test's `retry` count is not used up, and the test's retry `condition`,
+ *   if it sets one, accepts the attempt's last error.
  */
 export const willRetry = (context: {
   readonly task: {
-    readonly retry?: number | { readonly count?: number };
-    readonly result?: { readonly state?: string; readonly retryCount?: number };
+    readonly retry?:
+      | number
+      | {
+          readonly count?: number;
+          readonly condition?: RegExp | ((error: TestError) => boolean);
+        };
+    readonly result?: {
+      readonly state?: string;
+      readonly retryCount?: number;
+      readonly errors?: readonly TestError[];
+    };
   };
 }): boolean => {
   const { retry, result } = context.task;
   const retries = typeof retry === 'number' ? retry : (retry?.count ?? 0);
   // vitest counts the attempt now finishing in `retryCount` and raises it only after `afterEach` has run.
-  return result?.state === 'fail' && (result.retryCount ?? 0) < retries;
+  return (
+    result?.state === 'fail' &&
+    (result.retryCount ?? 0) < retries &&
+    passesRetryCondition(typeof retry === 'number' ? undefined : retry?.condition, result.errors)
+  );
+};
+
+// vitest tests only the attempt's last error against the condition; a test with no condition retries any failure.
+const passesRetryCondition = (
+  condition: RegExp | ((error: TestError) => boolean) | undefined,
+  errors: readonly TestError[] | undefined,
+): boolean => {
+  const last = errors?.at(-1);
+  if (condition === undefined) return true;
+  if (last === undefined) return false;
+  return condition instanceof RegExp ? condition.test(last.message) : condition(last);
 };
 
 export { saveState, type SnapshotSource } from './snapshot.js';
