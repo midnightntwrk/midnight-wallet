@@ -118,9 +118,27 @@ const runSnippet = async (
   });
 };
 
+// Each networked snippet starts on a fresh chain, once the indexer has seen block 1, and the chain keeps producing
+// blocks while the snippet runs, so the heights a snippet observes depend on timing. Both heights are masked while the
+// liveness reads `InSync`, which already tolerates the two drifting a few blocks apart; any other liveness tag is left
+// whole, so an indexer that has fallen out of sync still changes the output.
+const maskChainHeight = (output: string): string =>
+  output.replace(
+    /indexerHeight: \d+n, finalizedHeight: \d+n, _tag: 'InSync'/g,
+    "indexerHeight: <height>, finalizedHeight: <height>, _tag: 'InSync'",
+  );
+
+// The protocol version a settled chain reports is whatever the node image runs, and moves with every node bump. The
+// phase is what the snippet demonstrates, so the phase stays and the number is masked.
+const maskProtocolVersion = (output: string): string =>
+  output.replace(/(Protocol phase: settled at version )\d+/g, '$1<version>');
+
+const maskVolatile = (output: string | null): string | null =>
+  output === null ? null : maskProtocolVersion(maskChainHeight(output));
+
 const testSnippet = async (snippet: Snippet, envExtension: Record<string, string> = {}) => {
   const result = await runSnippet(snippet, envExtension);
-  expect(result).toMatchSnapshot();
+  expect(result.map(maskVolatile)).toMatchSnapshot();
 };
 
 describe('Snippet outputs', () => {
