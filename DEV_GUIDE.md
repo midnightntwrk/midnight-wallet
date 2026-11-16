@@ -592,6 +592,12 @@ during the creation of the automated `chore: release` PR. It will:
 
 - (In a monorepo) bump any dependent packages automatically.
 
+- (`changeset:version` only) Re-resolve every `@midnightntwrk/wallet-sdk-*` entry in `yarn.lock` with `yarn up -R`. A
+  published release that `serialization-tests` installs can ask for a range of an SDK package, such as
+  `@midnightntwrk/wallet-sdk-utilities@^1.2.0`, that the workspace satisfies only once its version leaves pre-release.
+  `yarn install --mode=update-lockfile` keeps the old npm resolution for that range, and CI's hardened install then
+  fails on it with `YN0078 Invalid resolution`.
+
 This allows you to review exactly what will happen once the release PR is created — without pushing or triggering any
 automated workflows.
 
