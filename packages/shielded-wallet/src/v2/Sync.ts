@@ -457,25 +457,27 @@ const wholeTransactions = <E, R>(
   );
 
 /**
- * The timeline's events in batches of at most `size`, each holding only whole transactions.
+ * The timeline's events in batches of whole transactions, each of at most `size` events unless one transaction alone
+ * has more.
  *
  * @remarks
- *   The capability writes tx history per batch, so a transaction cut across two batches would be written in two parts.
- *   `size` stays a hard maximum: a transaction of more than `size` events is the one case cut, into pieces of `size`.
- *   The timeout closes a batch early, as before, but only between transactions.
+ *   The capability writes tx history per batch, so a transaction cut across two batches would be written in two parts. A
+ *   transaction of more than `size` events is therefore never cut: it goes in a batch of its own. The timeout closes a
+ *   batch early, as before, but only between transactions.
  */
 const batchedByTransaction =
   (size: number, timeout: Duration.Duration) =>
   <E, R>(events: Stream.Stream<EventsSyncUpdate, E, R>): Stream.Stream<readonly EventsSyncUpdate[], E, R> =>
     pipe(
       wholeTransactions(events),
-      Stream.mapConcat((transaction) => Arr.chunksOf(transaction, size)),
       Stream.aggregateWithin(
+        // `foldWeighted` closes a batch before a transaction that would take it past `size`, and lets a transaction
+        // larger than `size` fill a batch on its own.
         Sink.foldWeighted({
           initial: [] as readonly EventsSyncUpdate[],
           maxCost: size,
-          cost: (_batch, piece: readonly EventsSyncUpdate[]) => piece.length,
-          body: (batch, piece) => [...batch, ...piece],
+          cost: (_batch, transaction: readonly EventsSyncUpdate[]) => transaction.length,
+          body: (batch, transaction) => [...batch, ...transaction],
         }),
         Schedule.spaced(timeout),
       ),
