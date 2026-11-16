@@ -1,5 +1,52 @@
 # @midnightntwrk/wallet-sdk-testkit
 
+## 1.0.1
+
+### Patch Changes
+
+- f16bb2e: A wallet lifecycle released with `persist: false` now deletes the sync cache snapshot of each wallet it would
+  have saved, including a wallet that was still starting, so a test that failed does not leave behind a snapshot that
+  the next run restores and fails on again. Pass the new `willRetry(context)` as `willRetry` to keep the snapshots of a
+  failed attempt that vitest will run again (it honours the test's retry `condition`); the dust and token-transfer
+  healthchecks do. The dust healthcheck now saves its wallet as `dust-<seed>-<network>.state`, apart from the
+  token-transfer healthcheck's snapshot of the same seed, so its first run after upgrading builds that wallet from
+  scratch.
+- aaad829: `dustWalletProbes(configuration)` is now exported: the probes `DustWallet` asks before a fresh start,
+  including the search for where the dust timeline reaches `forks.v9` when `skipLedgerV8DustHistory` is set. A
+  composition with its own variants spreads it into its configuration to start where `DustWallet` would.
+
+  The testkit's `eventLessDustWallet` now takes its probes from `dustWalletProbes`, so it honours
+  `skipLedgerV8DustHistory` as `DustWallet` does. The remote network presets set that flag, so a new wallet on a network
+  that crossed the v9 fork starts its Dust at the boundary instead of replaying the ledger-v8 history: on qanet a cold
+  sync drops from tens of minutes to seconds. The undeployed environment leaves it off, because a local chain has no
+  ledger-v8 history to skip. The qanet preset's indexer subscription now uses the indexer host; the host it named does
+  not serve it, so a wallet restored from a snapshot never connected.
+
+- 970bc1d: chore: upgrade `@midnightntwrk/ledger-v9` from `^1.0.0` to `1.0.2` and run proof server 9.0.2; ledger-v9's
+  key material is unchanged (circuit generation 10). Test stacks move to node 2.1.101 and indexer 4.4.101.
+- 388ebca: fix(testkit): point the network presets at their shielded.tools hosts
+
+  The `devnet` and `qanet` presets use `*.<network>.shielded.tools`. These hosts resolve to private addresses, so
+  reaching them needs the VPN. The `preprod` preset moves to `indexer.preprod.shielded.tools`, replacing the
+  decommissioned `indexer.preprod.midnight.network`, and to `rpc.preprod.shielded.tools` for its node. The `preview`
+  preset is unchanged. Any preset host can be replaced through `createRemoteEnvironment`'s `endpoints` option.
+
+- Updated dependencies [408947a]
+- Updated dependencies [8bb4e6b]
+- Updated dependencies [aaad829]
+- Updated dependencies [5932cd8]
+- Updated dependencies [970bc1d]
+- Updated dependencies [a81da4c]
+- Updated dependencies [173e4d8]
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.1.0
+  - @midnightntwrk/wallet-sdk-facade@5.0.1
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.1
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.1
+  - @midnightntwrk/wallet-sdk-shielded@4.0.1
+  - @midnightntwrk/wallet-sdk-address-format@4.0.1
+  - @midnightntwrk/wallet-sdk-utilities@1.3.1
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.1
+
 ## 1.0.1-rc.0
 
 ### Patch Changes

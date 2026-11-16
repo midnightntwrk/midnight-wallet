@@ -1,5 +1,17 @@
 # @midnightntwrk/wallet-sdk-node-client
 
+## 2.0.1
+
+### Patch Changes
+
+- 970bc1d: chore: upgrade `@midnightntwrk/ledger-v9` from `^1.0.0` to `1.0.2` and run proof server 9.0.2; ledger-v9's
+  key material is unchanged (circuit generation 10). Test stacks move to node 2.1.101 and indexer 4.4.101.
+- Updated dependencies [970bc1d]
+- Updated dependencies [a81da4c]
+- Updated dependencies [6b9607d]
+  - @midnightntwrk/wallet-sdk-prover-client@2.0.1
+  - @midnightntwrk/wallet-sdk-utilities@1.3.1
+
 ## 2.0.1-rc.0
 
 ### Patch Changes
