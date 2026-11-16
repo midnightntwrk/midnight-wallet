@@ -143,12 +143,12 @@ const transactionDetails = (hash: string) => ({
  *   fork. Written out once per variant because the two `TransactionHistoryService` types name their own ledger's
  *   `ZswapStateChanges`.
  */
-const noOpV1History: V1.TransactionHistory.TransactionHistoryService = {
+export const noOpV1History: V1.TransactionHistory.TransactionHistoryService = {
   put: () => Effect.void,
   getTransactionDetails: (hash) => Effect.succeed(transactionDetails(hash)),
 };
 
-const noOpV2History: V2.TransactionHistory.TransactionHistoryService = {
+export const noOpV2History: V2.TransactionHistory.TransactionHistoryService = {
   put: () => Effect.void,
   getTransactionDetails: (hash) => Effect.succeed(transactionDetails(hash)),
 };
