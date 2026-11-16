@@ -92,6 +92,30 @@ describe('willRetry', () => {
       { retry: 1, result: { state: 'pass', retryCount: 0 } },
       false,
     ],
+    [
+      'a failed attempt whose error matches the retry condition',
+      {
+        retry: { count: 1, condition: /ECONNRESET/ },
+        result: { state: 'fail', retryCount: 0, errors: [{ message: 'read ECONNRESET' }] },
+      },
+      true,
+    ],
+    [
+      'a failed attempt whose error the retry condition rejects',
+      {
+        retry: { count: 1, condition: /ECONNRESET/ },
+        result: { state: 'fail', retryCount: 0, errors: [{ message: 'expected 1 to be 2' }] },
+      },
+      false,
+    ],
+    [
+      'a failed attempt whose last error a condition function rejects',
+      {
+        retry: { count: 1, condition: (error: { message?: string }) => error.message === 'flaky' },
+        result: { state: 'fail', retryCount: 0, errors: [{ message: 'flaky' }, { message: 'broken' }] },
+      },
+      false,
+    ],
   ])(
     'should tell whether vitest runs the test again after %s, so only a failed attempt with a retry left keeps its snapshots',
     (_case, task, expected) => {
