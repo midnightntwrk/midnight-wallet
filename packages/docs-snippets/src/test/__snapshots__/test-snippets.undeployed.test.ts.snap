@@ -254,7 +254,7 @@ Synced state:
       appliedId: 0n,
       highestTransactionId: 0n,
       isConnected: true,
-      indexerLiveness: { indexerHeight: 1n, finalizedHeight: 1n, _tag: 'InSync' },
+      indexerLiveness: { indexerHeight: <height>, finalizedHeight: <height>, _tag: 'InSync' },
       isStrictlyComplete: [Function: isStrictlyComplete],
       isCompleteWithin: [Function: isCompleteWithin]
     },
@@ -279,7 +279,7 @@ Synced state:
 
 exports[`Snippet outputs > with network > should output the correct result for 'hard-fork-support' 1`] = `
 [
-  "Protocol phase: settled at version 2001000
+  "Protocol phase: settled at version <version>
 Transactions awaiting an answer: 0; orphaned by the fork: 0
 Restored the snapshot this wallet just wrote? true
 ",
@@ -633,7 +633,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedId: 9n,
       highestTransactionId: 9n,
       isConnected: true,
-      indexerLiveness: { indexerHeight: 1n, finalizedHeight: 1n, _tag: 'InSync' },
+      indexerLiveness: { indexerHeight: <height>, finalizedHeight: <height>, _tag: 'InSync' },
       isStrictlyComplete: [Function: isStrictlyComplete],
       isCompleteWithin: [Function: isCompleteWithin]
     },
@@ -1230,7 +1230,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedId: 9n,
       highestTransactionId: 9n,
       isConnected: true,
-      indexerLiveness: { indexerHeight: 1n, finalizedHeight: 1n, _tag: 'InSync' },
+      indexerLiveness: { indexerHeight: <height>, finalizedHeight: <height>, _tag: 'InSync' },
       isStrictlyComplete: [Function: isStrictlyComplete],
       isCompleteWithin: [Function: isCompleteWithin]
     },
