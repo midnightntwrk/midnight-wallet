@@ -37,6 +37,16 @@ export interface VariantContext<TState> {
    *   cannot drift apart.
    */
   activationRange: ProtocolVersion.ProtocolVersion.Range;
+  /**
+   * The scope the runtime lives in: open from the wallet's start until it stops, across every hand-over.
+   *
+   * @remarks
+   *   The variant's own scope closes the moment the runtime hands over to the next variant. Work that must finish even
+   *   so, but must not outlive the wallet, is forked here instead — such as recording what a sync update the variant
+   *   has already applied changed, which nothing will apply again. Absent only in a context built outside the runtime,
+   *   where the variant's own scope is all there is.
+   */
+  runtimeScope?: Scope.Scope;
 }
 
 /**

@@ -249,10 +249,12 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                     // indexer queries is the variant-wide semaphore acquired around each lookup above.
                     { discard: true, concurrency: 8 },
                   ),
-                  Effect.forkScoped,
+                  // Into the runtime's scope, not this variant's: these changes are applied, so nothing will record
+                  // them again, and the update that hands over to the next variant closes this variant's scope while
+                  // its own writes are still running. Stopping the wallet still interrupts them.
+                  Effect.forkIn(this.#context.runtimeScope ?? this.#scope),
                 ),
           ),
-          Effect.provideService(Scope.Scope, this.#scope),
         ),
       ),
       Stream.tapError((error) => Console.error(error)),
