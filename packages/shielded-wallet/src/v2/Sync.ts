@@ -14,7 +14,6 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   Array as Arr,
-  Chunk,
   Clock,
   Duration,
   Effect,
@@ -26,6 +25,7 @@ import {
   Schedule,
   Schema,
   type Scope,
+  Sink,
   Stream,
 } from 'effect';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
@@ -392,6 +392,96 @@ const stamped = (
   Effect.map(Clock.currentTimeMillis, (millis) => WalletSyncUpdate.create(updates, secretKeys, new Date(millis)));
 
 /**
+ * The transaction an event came from, or nothing for an event this ledger version cannot read.
+ *
+ * @remarks
+ *   An event that does not decode belongs to another ledger version, and no transaction spans two versions, so it stands
+ *   as a transaction of its own. Decoding it here only names its transaction; the capability still decides what to
+ *   apply.
+ */
+const transactionOf = (update: EventsSyncUpdate): Option.Option<string> =>
+  Option.map(
+    Either.getRight(Schema.decodeEither(HexedLedgerEvent)(update.raw)),
+    (event) => event.source.transactionHash,
+  );
+
+/** The events of the transaction the timeline is in the middle of, and that transaction's hash. */
+type OpenTransaction = Readonly<{ events: readonly EventsSyncUpdate[]; hash: Option.Option<string> }>;
+
+const noOpenTransaction: OpenTransaction = { events: [], hash: Option.none() };
+
+/**
+ * Adds the next event of the timeline to the open transaction, and returns the transactions now known to be whole.
+ *
+ * @remarks
+ *   A transaction is whole once an event of another transaction follows it, or once its last event is the last the source
+ *   holds (`maxId`). The indexer stores a block's events in one commit and reads `maxId` as the highest stored id, so
+ *   `maxId` always ends a block, never a transaction part-way.
+ */
+const extendTransaction = (
+  open: OpenTransaction,
+  update: EventsSyncUpdate,
+): readonly [OpenTransaction, readonly (readonly EventsSyncUpdate[])[]] => {
+  const hash = transactionOf(update);
+  const continues =
+    open.events.length > 0 && Option.isSome(hash) && Option.isSome(open.hash) && hash.value === open.hash.value;
+  const completed = continues || open.events.length === 0 ? [] : [open.events];
+  const events = continues ? [...open.events, update] : [update];
+  const ends = Option.isNone(hash) || update.id >= update.maxId;
+
+  return ends ? [noOpenTransaction, [...completed, events]] : [{ events, hash }, completed];
+};
+
+/**
+ * The timeline's events gathered into whole transactions, in order.
+ *
+ * @remarks
+ *   A transaction stays open until it is known to be whole, so a stop or a failure part-way through one delivers none of
+ *   it: the cursor stays in front of it and the next run fetches it again. Only a timeline that ends releases the open
+ *   transaction as it stands, because nothing more can follow it.
+ */
+const wholeTransactions = <E, R>(
+  events: Stream.Stream<EventsSyncUpdate, E, R>,
+): Stream.Stream<readonly EventsSyncUpdate[], E, R> =>
+  pipe(
+    events,
+    Stream.map(Option.some),
+    Stream.concat(Stream.make(Option.none<EventsSyncUpdate>())),
+    Stream.mapAccum(noOpenTransaction, (open, next) =>
+      Option.match(next, {
+        onSome: (update) => extendTransaction(open, update),
+        onNone: () => [noOpenTransaction, open.events.length === 0 ? [] : [open.events]] as const,
+      }),
+    ),
+    Stream.mapConcat(identity),
+  );
+
+/**
+ * The timeline's events in batches of at most `size`, each holding only whole transactions.
+ *
+ * @remarks
+ *   The capability writes tx history per batch, so a transaction cut across two batches would be written in two parts.
+ *   `size` stays a hard maximum: a transaction of more than `size` events is the one case cut, into pieces of `size`.
+ *   The timeout closes a batch early, as before, but only between transactions.
+ */
+const batchedByTransaction =
+  (size: number, timeout: Duration.Duration) =>
+  <E, R>(events: Stream.Stream<EventsSyncUpdate, E, R>): Stream.Stream<readonly EventsSyncUpdate[], E, R> =>
+    pipe(
+      wholeTransactions(events),
+      Stream.mapConcat((transaction) => Arr.chunksOf(transaction, size)),
+      Stream.aggregateWithin(
+        Sink.foldWeighted({
+          initial: [] as readonly EventsSyncUpdate[],
+          maxCost: size,
+          cost: (_batch, piece: readonly EventsSyncUpdate[]) => piece.length,
+          body: (batch, piece) => [...batch, ...piece],
+        }),
+        Schedule.spaced(timeout),
+      ),
+    );
+
+/**
  * How long one event-id probe is given to produce its single answer.
  *
  * @remarks
@@ -617,9 +707,8 @@ export const makeEventsSyncService = (
             EitherOps.toEffect,
           ),
         ),
-        Stream.groupedWithin(batchSize, batchTimeout),
-        Stream.map(Chunk.toArray),
-        Stream.mapEffect((data) => stamped(data, secretKeys)),
+        batchedByTransaction(batchSize, batchTimeout),
+        Stream.mapEffect((data) => stamped([...data], secretKeys)),
       );
 
       const timeline =

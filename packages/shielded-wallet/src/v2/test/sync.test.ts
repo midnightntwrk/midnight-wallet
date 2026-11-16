@@ -116,7 +116,9 @@ const createMockSubscriptionFn = (
           id,
           raw: mockEventHex,
           protocolVersion: protocolVersionOf(id),
-          maxId: totalRecords,
+          // Events served at once are a backlog the source already holds in full; events that trickle in are a live
+          // chain, where each new event is the newest the source holds.
+          maxId: delayEvents ? id : totalRecords,
         },
       })),
     );
