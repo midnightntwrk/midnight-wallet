@@ -48,9 +48,9 @@ import {
 } from '@midnightntwrk/wallet-sdk-address-format';
 import { ForkSimulator, V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Duration, Effect, Option, Stream, SubscriptionRef, pipe, type Scope } from 'effect';
+import { Deferred, Duration, Effect, Option, Ref, Schedule, Stream, SubscriptionRef, pipe, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { V1Tag } from '../v1/index.js';
+import { type TransactionHistory as V1TransactionHistory, V1Tag } from '../v1/index.js';
 import { CoreWallet, PublicKeys, Sync, V2Tag, WalletError } from '../v2/index.js';
 import { type CapturedMigration, type ForkWallet, makeForkWallet } from './forkHarness.js';
 import {
@@ -463,7 +463,91 @@ describe('a shielded wallet crossing a hard fork', () => {
       expect(awaitingCoinHashes(crossed.state)).toBe(false);
       expect(crossed.state.progress.appliedIndex).toBe(forkBlock + 1n);
     }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should write each transaction of the batch that hands over once, whole, because the hand-over must not cut its history write short', async () =>
+    Effect.gen(function* () {
+      // The whole ledger-v8 history and the fork arrive in one batch, so the batch that pays the wallet is the one
+      // that hands over. Each history write is held until the V2 variant is running: it is still in flight when the
+      // V1 variant closes, which is the moment a write tied to that variant's lifetime is lost.
+      const coins = chainCoins();
+      const fork = yield* forkingChain(coins);
+      yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
+        discard: true,
+      });
+      const v9 = yield* fork.advanceToFork();
+
+      const handedOver = yield* Deferred.make<void>();
+      const written = yield* Ref.make<readonly WrittenSection[]>([]);
+      const history: V1TransactionHistory.TransactionHistoryService = {
+        getTransactionDetails: (hash) =>
+          Effect.succeed({
+            hash,
+            block: { hash: '', height: 0, timestamp: 0 },
+            status: 'SUCCESS' as const,
+            identifiers: [],
+          }),
+        put: (changes) =>
+          Deferred.await(handedOver).pipe(
+            Effect.zipRight(
+              Ref.update(written, (sections) => [
+                ...sections,
+                {
+                  source: changes.source,
+                  received: changes.receivedCoins.map((coin) => coin.value),
+                  spent: changes.spentCoins.map((coin) => coin.value),
+                },
+              ]),
+            ),
+          ),
+      };
+
+      const wallet = yield* makeForkWallet({
+        v8: fork.v8,
+        v9: Effect.succeed(v9),
+        networkId,
+        forkVersion,
+        seed,
+        v1History: history,
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+
+      yield* wallet.awaitMigration;
+      yield* settled(wallet);
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+      yield* Deferred.succeed(handedOver, undefined);
+
+      const sections = yield* writtenAtLeast(written, walletValues.length);
+      // One section per transaction that paid the wallet, each holding its coin: nothing lost, nothing written twice.
+      expect(new Set(sections.map((section) => section.source)).size).toBe(sections.length);
+      expect(sections.map(({ received, spent }) => ({ received, spent })).toSorted(byFirstReceived)).toEqual(
+        walletValues.map((value) => ({ received: [value], spent: [] })),
+      );
+    }).pipe(Effect.scoped, Effect.runPromise));
 });
+
+/** One tx-history section as the V1 variant handed it to storage. */
+type WrittenSection = Readonly<{ source: string; received: readonly bigint[]; spent: readonly bigint[] }>;
+
+const byFirstReceived = (a: { received: readonly bigint[] }, b: { received: readonly bigint[] }): number =>
+  ascending(a.received[0] ?? 0n, b.received[0] ?? 0n);
+
+/**
+ * The sections written, once there are at least `count` of them or two seconds have passed.
+ *
+ * @remarks
+ *   Bounded rather than awaited, so a write that never lands fails the assertion that follows with what was written,
+ *   instead of hanging the test.
+ */
+const writtenAtLeast = (
+  written: Ref.Ref<readonly WrittenSection[]>,
+  count: number,
+): Effect.Effect<readonly WrittenSection[]> =>
+  Ref.get(written).pipe(
+    Effect.filterOrFail((sections) => sections.length >= count),
+    Effect.retry(Schedule.spaced(Duration.millis(10)).pipe(Schedule.upTo(Duration.seconds(2)))),
+    Effect.orElse(() => Ref.get(written)),
+  );
 
 describe('a migration that leaves the wallet’s state behind', () => {
   /** What a sync failure was really caused by — the ledger's throw, which the variant wraps as it comes past. */

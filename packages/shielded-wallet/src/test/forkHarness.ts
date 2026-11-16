@@ -221,6 +221,12 @@ export type ForkWalletConfig = Readonly<{
    * variant and learns the version from the first event it sees.
    */
   chainVersionProbe?: ChainVersionProbe;
+  /**
+   * Where the V1 variant records transaction history.
+   *
+   * Absent means nowhere: history says nothing about crossing a fork unless a proof is about the history itself.
+   */
+  v1History?: V1.TransactionHistory.TransactionHistoryService;
 }>;
 
 /** A state emission, whichever variant produced it. */
@@ -272,7 +278,7 @@ export type ForkWallet = Readonly<{
  * @returns The running wallet and its observation channels.
  */
 export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWallet> => {
-  const { v8, v9, networkId, forkVersion, seed, startFrom, chainVersionProbe } = config;
+  const { v8, v9, networkId, forkVersion, seed, startFrom, chainVersionProbe, v1History = noOpV1History } = config;
 
   const v8Keys = ledgerV8.ZswapSecretKeys.fromSeed(seed);
   const v9Keys = ledgerV9.ZswapSecretKeys.fromSeed(seed);
@@ -285,7 +291,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     .withSerializationDefaults()
     .withTransactingDefaults()
     .withCoinsAndBalancesDefaults()
-    .withTransactionHistory(() => noOpV1History)
+    .withTransactionHistory(() => v1History)
     .withKeysDefaults()
     .withStartAuxDefaults()
     .withCoinSelectionDefaults();
