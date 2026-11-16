@@ -647,9 +647,9 @@ describe('Wallet subscription', () => {
       expect(batches.every((batch) => batch.length <= 3)).toBe(true);
     });
 
-    it('should cut only a transaction larger than the batch size, into pieces of that size, so the size stays a hard maximum', async () => {
+    it('should deliver a transaction larger than the batch size whole, in a batch of its own, so it too is written to tx history once', async () => {
       // Ids 2..4 are the transfer: three events against a size of two.
-      expect(await batchesOf(2)).toEqual([[1], [2, 3], [4], [5, 6]]);
+      expect(await batchesOf(2)).toEqual([[1], [2, 3, 4], [5, 6]]);
     });
 
     it('should write a transaction once, whole, after a restart, when the wallet stopped while only part of it had arrived', async () => {
