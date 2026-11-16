@@ -279,7 +279,7 @@ Synced state:
 
 exports[`Snippet outputs > with network > should output the correct result for 'hard-fork-support' 1`] = `
 [
-  "Protocol phase: settled at version 2001100
+  "Protocol phase: settled at version <version>
 Transactions awaiting an answer: 0; orphaned by the fork: 0
 Restored the snapshot this wallet just wrote? true
 ",

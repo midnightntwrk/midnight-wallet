@@ -57,6 +57,5 @@ jobs:
         with:
           name: Wallet TS packages Junit Tests Report
           reporter: java-junit
-          path: |
-            ./packages/e2e-tests/reports/test-report.xml
-            ./packages/docs-snippets/reports/all/test-report.xml
+          # Comma-separated: the reporter splits this input on commas only, never on newlines.
+          path: ./packages/e2e-tests/reports/test-report.xml,./packages/docs-snippets/reports/all/test-report.xml
