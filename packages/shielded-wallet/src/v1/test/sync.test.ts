@@ -29,7 +29,7 @@ import {
 } from 'effect';
 import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { ZswapEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import type {
   ZswapEventsSubscription,
@@ -497,6 +497,147 @@ describe('Wallet subscription', () => {
         [3, 9],
         [9, 11],
       ]);
+    });
+  });
+
+  describe('transaction boundaries', () => {
+    const owner = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 5));
+    const stranger = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 6));
+    const networkId = NetworkId.NetworkId.Undeployed;
+    const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
+
+    type Chain = Readonly<{
+      /** Every event of the chain in timeline order, encoded as the indexer serves it. */
+      raws: readonly string[];
+      mintHash: string;
+      transferHash: string;
+      strangerHash: string;
+    }>;
+
+    /**
+     * A real chain of three transactions: a genesis mint paying the owner 500 (one event), a transfer spending it, 100
+     * to a stranger and 400 back as change (an input then two outputs), and the stranger sending its 100 to itself (an
+     * input then one output).
+     */
+    const buildChain = (): Promise<Chain> =>
+      Effect.gen(function* () {
+        const simulator = yield* V8.Simulator.init({
+          genesisMints: [
+            { type: 'shielded' as const, tokenType: ledger.shieldedToken().raw, amount: 500n, recipient: owner },
+          ],
+        });
+        const lastBlockEvents = () =>
+          simulator.state$.pipe(
+            Stream.take(1),
+            Stream.runHead,
+            Effect.map(Option.getOrThrow),
+            Effect.map(V8.getLastBlockEvents),
+          );
+        const send = (
+          keys: ledger.ZswapSecretKeys,
+          spentFrom: readonly ledger.Event[],
+          outputs: readonly (readonly [bigint, ledger.ZswapSecretKeys])[],
+        ) => {
+          const local = new ledger.ZswapLocalState().replayEvents(
+            keys,
+            spentFrom.map((event) => ledger.Event.deserialize(event.serialize())),
+          );
+          const coin = [...local.coins][0];
+          const [, input] = local.spend(keys, coin, 0);
+          const offer = outputs.reduce(
+            (acc, [value, to]) => {
+              const info = ledger.createShieldedCoinInfo(coin.type, value);
+              return acc.merge(
+                ledger.ZswapOffer.fromOutput(
+                  ledger.ZswapOutput.new(info, 0, to.coinPublicKey, to.encryptionPublicKey),
+                  info.type,
+                  info.value,
+                ),
+              );
+            },
+            ledger.ZswapOffer.fromInput(input, coin.type, coin.value),
+          );
+          return simulator.submitTransaction(ledger.Transaction.fromParts(networkId, offer).eraseProofs(), {
+            strictness: {},
+          });
+        };
+
+        const mint = yield* lastBlockEvents();
+        yield* send(owner, mint, [
+          [100n, stranger],
+          [400n, owner],
+        ]);
+        const transfer = yield* lastBlockEvents();
+        yield* send(stranger, [...mint, ...transfer], [[100n, stranger]]);
+        const strangers = yield* lastBlockEvents();
+
+        return {
+          raws: [...mint, ...transfer, ...strangers].map((event) => hex(event.serialize())),
+          mintHash: mint[0].source.transactionHash,
+          transferHash: transfer[0].source.transactionHash,
+          strangerHash: strangers[0].source.transactionHash,
+        };
+      }).pipe(Effect.scoped, Effect.runPromise);
+
+    let chain: Chain;
+    beforeAll(async () => {
+      chain = await buildChain();
+      // The test's premise: the size-3 batches the source would form by count alone cut the transfer after its input.
+      expect(chain.raws.map((raw) => ledger.Event.deserialize(Buffer.from(raw, 'hex')).source.transactionHash)).toEqual(
+        [
+          chain.mintHash,
+          chain.transferHash,
+          chain.transferHash,
+          chain.transferHash,
+          chain.strangerHash,
+          chain.strangerHash,
+        ],
+      );
+    });
+
+    /** Serves the chain's events with ids from 1, all at once, as an indexer serves a backlog. */
+    const subscriptionOf =
+      (raws: readonly string[]) =>
+      (
+        _variables: ZswapEventsSubscriptionVariables,
+      ): Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient> =>
+        Stream.fromIterable(
+          raws.map((raw, i) => ({ zswapLedgerEvents: { id: i + 1, raw, protocolVersion: 3, maxId: raws.length } })),
+        );
+
+    /** Syncs a fresh wallet through the chain with the given batch size, and returns each batch's event ids. */
+    const batchesOf = (size: number): Promise<readonly (readonly number[])[]> =>
+      Effect.gen(function* () {
+        const syncService = makeEventsSyncService({
+          indexerClientConnection: {
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+          },
+          versionWatch: noVersionWatch,
+          // A timeout no test reaches, so only the size and the transaction boundaries decide where a batch ends.
+          batchUpdates: { size, timeout: 60_000, spacing: 0 },
+        });
+        const updates = yield* syncService
+          .updates(CoreWallet.initEmpty(owner, networkId), owner)
+          .pipe(Stream.runCollect);
+        return Chunk.toArray(updates).map((update) => eventsOf(update).map((event) => event.id));
+      }).pipe(Effect.provideService(ZswapEvents.tag, subscriptionOf(chain.raws)), Effect.scoped, Effect.runPromise);
+
+    it('should deliver every event of a transaction in one batch, so the transaction is applied, and written to tx history, whole', async () => {
+      const batches = await batchesOf(3);
+
+      const hashOf = (id: number): string =>
+        ledger.Event.deserialize(Buffer.from(chain.raws[id - 1], 'hex')).source.transactionHash;
+      const batchesHolding = (hash: string): number =>
+        batches.filter((batch) => batch.some((id) => hashOf(id) === hash)).length;
+
+      expect(batches.flat()).toEqual([1, 2, 3, 4, 5, 6]);
+      expect({
+        mint: batchesHolding(chain.mintHash),
+        transfer: batchesHolding(chain.transferHash),
+        stranger: batchesHolding(chain.strangerHash),
+      }).toEqual({ mint: 1, transfer: 1, stranger: 1 });
+      expect(batches.every((batch) => batch.length <= 3)).toBe(true);
     });
   });
 });
