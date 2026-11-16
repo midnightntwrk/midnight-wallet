@@ -571,6 +571,55 @@ describe('a shielded wallet crossing a hard fork', () => {
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
+describe('a hand-over while history writes are still running', () => {
+  it('should serve wallet calls from the V2 variant before those writes finish, because waiting on them would leave calls reaching the closed V1 variant', async () =>
+    Effect.gen(function* () {
+      // The V1 variant's writes are held until the test has made its call, so the hand-over can only complete while
+      // they are running.
+      const coins = chainCoins();
+      const fork = yield* forkingChain(coins);
+      const release = yield* Deferred.make<void>();
+      const written = yield* Ref.make<readonly WrittenSection[]>([]);
+
+      const wallet = yield* makeForkWallet({
+        v8: fork.v8,
+        v9: fork.awaitV9(),
+        networkId,
+        forkVersion,
+        seed,
+        v1History: historyHeldUntil(release, written),
+      });
+      yield* Effect.addFinalizer(() => Deferred.succeed(release, undefined).pipe(Effect.zipRight(wallet.stop)));
+      yield* wallet.start;
+
+      yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
+        discard: true,
+      });
+      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+      yield* fork.advanceToFork();
+
+      const served = yield* pipe(
+        Effect.gen(function* () {
+          yield* wallet.awaitMigration;
+          yield* settled(wallet);
+          const tag = yield* wallet.activeTag;
+          const transfer = yield* Effect.promise(() =>
+            wallet.shielded.transferTransaction([
+              { amount: 150n, type: ledgerV9.shieldedToken().raw, receiverAddress: recipientAddress() },
+            ]),
+          );
+          // Built by the V2 variant: a transaction carries the version of the ledger that built it.
+          return { tag, builtFromFork: transfer.protocolVersion >= forkVersion };
+        }),
+        Effect.timeoutOption(Duration.seconds(5)),
+      );
+
+      // The premise: no write had finished while the call was served.
+      expect(yield* Ref.get(written)).toEqual([]);
+      expect(served).toStrictEqual(Option.some({ tag: V2Tag, builtFromFork: true }));
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
 /** V1 transaction history whose every write runs forever, counting the ones interrupted. */
 const historyThatNeverLands = (interrupted: Ref.Ref<number>): V1TransactionHistory.TransactionHistoryService => ({
   getTransactionDetails: (hash) =>
