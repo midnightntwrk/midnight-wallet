@@ -535,6 +535,52 @@ describe('a shielded wallet crossing a hard fork', () => {
 
       expectEachPaymentOnce(yield* writtenAtLeast(written, walletValues.length));
     }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should stop promptly, interrupting history writes still running from before the hand-over, because a write must neither hold up nor outlive the wallet', async () =>
+    Effect.gen(function* () {
+      // Writes that never finish, carried past the hand-over: the V1 variant is gone, so nothing but the wallet's own
+      // lifetime bounds them.
+      const coins = chainCoins();
+      const fork = yield* forkingChain(coins);
+      const interrupted = yield* Ref.make(0);
+
+      const wallet = yield* makeForkWallet({
+        v8: fork.v8,
+        v9: fork.awaitV9(),
+        networkId,
+        forkVersion,
+        seed,
+        v1History: historyThatNeverLands(interrupted),
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+
+      yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
+        discard: true,
+      });
+      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+      yield* fork.advanceToFork();
+      yield* wallet.awaitMigration;
+      yield* settled(wallet);
+      // The premise: the writes are still running after the hand-over.
+      expect(yield* Ref.get(interrupted)).toBe(0);
+
+      const stopped = yield* wallet.stop.pipe(Effect.timeoutOption(Duration.seconds(2)));
+      expect(Option.isSome(stopped)).toBe(true);
+      expect(yield* Ref.get(interrupted)).toBe(walletValues.length);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/** V1 transaction history whose every write runs forever, counting the ones interrupted. */
+const historyThatNeverLands = (interrupted: Ref.Ref<number>): V1TransactionHistory.TransactionHistoryService => ({
+  getTransactionDetails: (hash) =>
+    Effect.succeed({
+      hash,
+      block: { hash: '', height: 0, timestamp: 0 },
+      status: 'SUCCESS' as const,
+      identifiers: [],
+    }),
+  put: () => Effect.never.pipe(Effect.onInterrupt(() => Ref.update(interrupted, (count) => count + 1))),
 });
 
 /** One tx-history section as the V1 variant handed it to storage. */
