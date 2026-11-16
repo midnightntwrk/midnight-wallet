@@ -478,28 +478,6 @@ describe('a shielded wallet crossing a hard fork', () => {
 
       const handedOver = yield* Deferred.make<void>();
       const written = yield* Ref.make<readonly WrittenSection[]>([]);
-      const history: V1TransactionHistory.TransactionHistoryService = {
-        getTransactionDetails: (hash) =>
-          Effect.succeed({
-            hash,
-            block: { hash: '', height: 0, timestamp: 0 },
-            status: 'SUCCESS' as const,
-            identifiers: [],
-          }),
-        put: (changes) =>
-          Deferred.await(handedOver).pipe(
-            Effect.zipRight(
-              Ref.update(written, (sections) => [
-                ...sections,
-                {
-                  source: changes.source,
-                  received: changes.receivedCoins.map((coin) => coin.value),
-                  spent: changes.spentCoins.map((coin) => coin.value),
-                },
-              ]),
-            ),
-          ),
-      };
 
       const wallet = yield* makeForkWallet({
         v8: fork.v8,
@@ -507,7 +485,7 @@ describe('a shielded wallet crossing a hard fork', () => {
         networkId,
         forkVersion,
         seed,
-        v1History: history,
+        v1History: historyHeldUntil(handedOver, written),
       });
       yield* Effect.addFinalizer(() => wallet.stop);
       yield* wallet.start;
@@ -517,17 +495,85 @@ describe('a shielded wallet crossing a hard fork', () => {
       expect(yield* wallet.activeTag).toBe(V2Tag);
       yield* Deferred.succeed(handedOver, undefined);
 
-      const sections = yield* writtenAtLeast(written, walletValues.length);
-      // One section per transaction that paid the wallet, each holding its coin: nothing lost, nothing written twice.
-      expect(new Set(sections.map((section) => section.source)).size).toBe(sections.length);
-      expect(sections.map(({ received, spent }) => ({ received, spent })).toSorted(byFirstReceived)).toEqual(
-        walletValues.map((value) => ({ received: [value], spent: [] })),
-      );
+      expectEachPaymentOnce(yield* writtenAtLeast(written, walletValues.length));
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should finish a history write already running when the wallet hands over, because its batch is applied and nothing will record it again', async () =>
+    Effect.gen(function* () {
+      // The wallet is paid and syncs the payments well before the boundary, in batches of their own. Their history
+      // writes are held until the V2 variant is running, so they are still in flight when a later batch hands over.
+      const coins = chainCoins();
+      const fork = yield* forkingChain(coins);
+
+      const handedOver = yield* Deferred.make<void>();
+      const written = yield* Ref.make<readonly WrittenSection[]>([]);
+
+      const wallet = yield* makeForkWallet({
+        v8: fork.v8,
+        v9: fork.awaitV9(),
+        networkId,
+        forkVersion,
+        seed,
+        v1History: historyHeldUntil(handedOver, written),
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+
+      yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
+        discard: true,
+      });
+      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+      // The premise: the payments are applied, and their writes are running but not done.
+      expect(yield* Ref.get(written)).toEqual([]);
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+
+      yield* fork.advanceToFork();
+      yield* wallet.awaitMigration;
+      yield* settled(wallet);
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+      yield* Deferred.succeed(handedOver, undefined);
+
+      expectEachPaymentOnce(yield* writtenAtLeast(written, walletValues.length));
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
 /** One tx-history section as the V1 variant handed it to storage. */
 type WrittenSection = Readonly<{ source: string; received: readonly bigint[]; spent: readonly bigint[] }>;
+
+/** V1 transaction history whose every write waits for `release`, then lands in `written`. */
+const historyHeldUntil = (
+  release: Deferred.Deferred<void>,
+  written: Ref.Ref<readonly WrittenSection[]>,
+): V1TransactionHistory.TransactionHistoryService => ({
+  getTransactionDetails: (hash) =>
+    Effect.succeed({
+      hash,
+      block: { hash: '', height: 0, timestamp: 0 },
+      status: 'SUCCESS' as const,
+      identifiers: [],
+    }),
+  put: (changes) =>
+    Deferred.await(release).pipe(
+      Effect.zipRight(
+        Ref.update(written, (sections) => [
+          ...sections,
+          {
+            source: changes.source,
+            received: changes.receivedCoins.map((coin) => coin.value),
+            spent: changes.spentCoins.map((coin) => coin.value),
+          },
+        ]),
+      ),
+    ),
+});
+
+/** One section per transaction that paid the wallet, each holding its coin: nothing lost, nothing written twice. */
+const expectEachPaymentOnce = (sections: readonly WrittenSection[]): void => {
+  expect(new Set(sections.map((section) => section.source)).size).toBe(sections.length);
+  expect(sections.map(({ received, spent }) => ({ received, spent })).toSorted(byFirstReceived)).toEqual(
+    walletValues.map((value) => ({ received: [value], spent: [] })),
+  );
+};
 
 const byFirstReceived = (a: { received: readonly bigint[] }, b: { received: readonly bigint[] }): number =>
   ascending(a.received[0] ?? 0n, b.received[0] ?? 0n);
