@@ -50,7 +50,7 @@ on:
         type: string
         description: proof-server image (ledger-v9)
         required: false
-        default: '9.0.2-rc.1'
+        default: '9.0.2'
       proof_server_v8_tag:
         type: string
         description: proof-server image the ledger-v8 half proves at
@@ -101,7 +101,7 @@ jobs:
       NODE_TAG: ${{ inputs.node_tag || '2.1.101' }}
       TOOLKIT_TAG: ${{ inputs.toolkit_tag || '2.1.101' }}
       INDEXER_TAG: ${{ inputs.indexer_tag || '4.4.101' }}
-      PROOF_SERVER_TAG: ${{ inputs.proof_server_tag || '9.0.2-rc.1' }}
+      PROOF_SERVER_TAG: ${{ inputs.proof_server_tag || '9.0.2' }}
       PROOF_SERVER_V8_TAG: ${{ inputs.proof_server_v8_tag || '8.1.0' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
