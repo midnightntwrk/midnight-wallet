@@ -105,9 +105,10 @@ jobs:
     name: E2E tests
     runs-on: ubuntu-latest-8-core-x64
     timeout-minutes: 240
-    # One run per network at a time, queued rather than cancelled: runs on a network share its funded wallets and its
-    # sync cache, whichever branch or workflow started them. Only here, not also in the calling healthcheck workflows,
-    # since a caller holding the same group would wait on its own job.
+    # One run per network at a time: runs on a network share its funded wallets and its sync cache, whichever branch or
+    # workflow started them. A run in progress is never cancelled; one arriving behind it waits, but only one can wait,
+    # so a third arrival cancels the one already waiting and takes its place. Only here, not also in the calling
+    # healthcheck workflows, since a caller holding the same group would wait on its own job.
     concurrency:
       group: e2e-tests-${{ inputs.network }}
       cancel-in-progress: false
