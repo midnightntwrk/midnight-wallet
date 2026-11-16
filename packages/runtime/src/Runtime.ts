@@ -109,9 +109,10 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
 ): Effect.Effect<Runtime<Variants>, WalletRuntimeError, Scope.Scope> => {
   //Rewritten from generators to better track type issues reported
   return Effect.Do.pipe(
-    // The scope the whole runtime lives in: activation watchers registered later are forked into it, and every
-    // variant is handed it, so both are torn down exactly when the runtime is. Captured once, here, and passed down
-    // explicitly, because the scope in the environment of a hand-over is the closing variant's, not this one.
+    // The scope the whole runtime lives in: activation watchers registered later, and the work every variant forks into
+    // it, are torn down with the runtime, while each variant's own scope closes at its hand-over. Captured once, here,
+    // and passed down explicitly, because the scope in the environment of a hand-over is the closing variant's, not
+    // this one.
     Effect.bind('runtimeScope', () => Effect.scope),
     Effect.bind('initiatedFirstVariant', ({ runtimeScope }) => initVariant({ ...initArgs, runtimeScope })),
     Effect.bind('currentStateRef', ({ initiatedFirstVariant }) =>

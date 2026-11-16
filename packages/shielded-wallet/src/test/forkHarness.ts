@@ -224,7 +224,7 @@ export type ForkWalletConfig = Readonly<{
   /**
    * Where the V1 variant records transaction history.
    *
-   * Absent means nowhere: history says nothing about crossing a fork unless a proof is about the history itself.
+   * Absent means a no-op history: only tests about tx history need one.
    */
   v1History?: V1.TransactionHistory.TransactionHistoryService;
   /**
