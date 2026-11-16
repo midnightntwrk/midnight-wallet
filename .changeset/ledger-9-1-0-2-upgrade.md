@@ -12,5 +12,5 @@
 '@midnightntwrk/wallet-sdk': patch
 ---
 
-chore: upgrade `@midnightntwrk/ledger-v9` from 1.0.2-rc.0 to its final 1.0.2 release and run proof server 9.0.2;
-ledger-v9's key material is unchanged (circuit generation 10).
+chore: upgrade `@midnightntwrk/ledger-v9` from `^1.0.0` to `1.0.2` and run proof server 9.0.2; ledger-v9's key
+material is unchanged (circuit generation 10). Test stacks move to node 2.1.101 and indexer 4.4.101.
