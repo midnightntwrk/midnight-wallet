@@ -50,7 +50,7 @@ vi.setConfig({
 });
 
 // Helper to create a valid hex-encoded ledger event
-const createMockEventHex = async (): Promise<string> => {
+const createMockEventHex = async (amount: bigint): Promise<string> => {
   // Use Simulator to generate a real event, then serialize it
   return await Effect.gen(function* () {
     const scope = yield* Scope.make();
@@ -59,7 +59,7 @@ const createMockEventHex = async (): Promise<string> => {
         {
           type: 'shielded',
           tokenType: ledger.shieldedToken().raw,
-          amount: 1000n,
+          amount,
           recipient: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
         },
       ],
@@ -92,6 +92,19 @@ const createMockEventHex = async (): Promise<string> => {
   }).pipe(Effect.scoped, Effect.runPromise);
 };
 
+/**
+ * Two real events from two different transactions.
+ *
+ * @remarks
+ *   The sync never cuts a transaction across batches, so a timeline that repeated one event would be a single transaction
+ *   of every event. Served alternately, these make each event a transaction of its own, which is what the suites
+ *   counting events per batch assume.
+ */
+const createMockEventHexes = async (): Promise<readonly [string, string]> => [
+  await createMockEventHex(1000n),
+  await createMockEventHex(2000n),
+];
+
 type TimingOptions = {
   delayEvents?: boolean;
   minDelay?: Duration.Duration;
@@ -101,7 +114,7 @@ type TimingOptions = {
 
 const createMockSubscriptionFn = (
   totalRecords: number,
-  mockEventHex: string,
+  mockEventHexes: readonly [string, string],
   timingOptions?: TimingOptions,
   /**
    * The protocol version the indexer reports for each event id. Defaults to a constant 1. Per-item versions are what
@@ -119,7 +132,7 @@ const createMockSubscriptionFn = (
       Stream.map((id) => ({
         zswapLedgerEvents: {
           id,
-          raw: mockEventHex,
+          raw: mockEventHexes[id % 2],
           protocolVersion: protocolVersionOf(id),
           // Events served at once are a backlog the source already holds in full; events that trickle in are a live
           // chain, where each new event is the newest the source holds.
@@ -214,8 +227,8 @@ describe('Wallet subscription', () => {
 
   describe('should stream GraphQL subscription', () => {
     it('should handle batching events into multiples of batch size config with no delay', async () => {
-      const mockEventHex = await createMockEventHex();
-      const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHex);
+      const mockEventHexes = await createMockEventHexes();
+      const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHexes);
 
       const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
       const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
@@ -248,11 +261,11 @@ describe('Wallet subscription', () => {
     });
 
     it('should respect custom batchUpdates.timeout configuration', async () => {
-      const mockEventHex = await createMockEventHex();
+      const mockEventHexes = await createMockEventHexes();
       const eventCount = 20;
 
       // Events arrive one-by-one with a 5ms delay between each
-      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex, {
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHexes, {
         delayEvents: true,
         minDelay: Duration.millis(5),
         maxDelay: Duration.millis(5),
@@ -296,11 +309,11 @@ describe('Wallet subscription', () => {
     });
 
     it('should respect custom batchUpdates.spacing configuration', async () => {
-      const mockEventHex = await createMockEventHex();
+      const mockEventHexes = await createMockEventHexes();
       const eventCount = 30;
 
       // Events arrive instantly (no delay)
-      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex);
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHexes);
 
       const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
       const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
@@ -346,8 +359,8 @@ describe('Wallet subscription', () => {
       const minDelay = Duration.millis(500);
       const maxDelay = Duration.millis(1500);
 
-      const mockEventHex = await createMockEventHex();
-      const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHex, {
+      const mockEventHexes = await createMockEventHexes();
+      const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHexes, {
         delayEvents: true,
         minDelay,
         maxDelay,
@@ -467,8 +480,8 @@ describe('Wallet subscription', () => {
     const versionOf = (id: number): number => (id <= 3 ? 3 : id <= 5 ? 9 : 11);
 
     const collectUpdates = async (eventCount: number, batchSize: number) => {
-      const mockEventHex = await createMockEventHex();
-      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex, undefined, versionOf);
+      const mockEventHexes = await createMockEventHexes();
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHexes, undefined, versionOf);
       const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
       const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
 
