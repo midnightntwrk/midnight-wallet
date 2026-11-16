@@ -615,18 +615,24 @@ describe('Wallet subscription', () => {
       );
     });
 
-    /** Serves the chain's events with ids from 1, all at once, as an indexer serves a backlog. */
+    /**
+     * Serves `raws` with ids from 1, all at once, as an indexer serves a backlog whose last stored event is `maxId` (by
+     * default the last of `raws`).
+     */
     const subscriptionOf =
-      (raws: readonly string[]) =>
+      (raws: readonly string[], maxId: number = raws.length) =>
       (
         _variables: ZswapEventsSubscriptionVariables,
       ): Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient> =>
         Stream.fromIterable(
-          raws.map((raw, i) => ({ zswapLedgerEvents: { id: i + 1, raw, protocolVersion: 3, maxId: raws.length } })),
+          raws.map((raw, i) => ({ zswapLedgerEvents: { id: i + 1, raw, protocolVersion: 3, maxId } })),
         );
 
-    /** Syncs a fresh wallet through the chain with the given batch size, and returns each batch's event ids. */
-    const batchesOf = (size: number): Promise<readonly (readonly number[])[]> =>
+    /** Syncs a fresh wallet through `subscription` with the given batch size, and returns each batch's event ids. */
+    const batchesOf = (
+      size: number,
+      subscription: ReturnType<typeof subscriptionOf> = subscriptionOf(chain.raws),
+    ): Promise<readonly (readonly number[])[]> =>
       Effect.gen(function* () {
         const syncService = makeEventsSyncService({
           indexerClientConnection: {
@@ -641,7 +647,13 @@ describe('Wallet subscription', () => {
           .updates(CoreWallet.initEmpty(owner, networkId), owner)
           .pipe(Stream.runCollect);
         return Chunk.toArray(updates).map((update) => eventsOf(update).map((event) => event.id));
-      }).pipe(Effect.provideService(ZswapEvents.tag, subscriptionOf(chain.raws)), Effect.scoped, Effect.runPromise);
+      }).pipe(Effect.provideService(ZswapEvents.tag, subscription), Effect.scoped, Effect.runPromise);
+
+    it('should deliver none of a transaction the timeline ends part-way through, so the next sync fetches it whole rather than writing it in part', async () => {
+      // The timeline ends after the mint and the transfer's input, while the indexer holds the chain up to its sixth
+      // event: the transfer's outputs exist, and this run never received them.
+      expect(await batchesOf(3, subscriptionOf(chain.raws.slice(0, 2), chain.raws.length))).toEqual([[1]]);
+    });
 
     it('should deliver every event of a transaction in one batch, so the transaction is applied, and written to tx history, whole', async () => {
       const batches = await batchesOf(3);
