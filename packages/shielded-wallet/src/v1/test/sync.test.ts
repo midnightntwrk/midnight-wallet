@@ -655,26 +655,96 @@ describe('Wallet subscription', () => {
       expect(await batchesOf(3, subscriptionOf(chain.raws.slice(0, 2), chain.raws.length))).toEqual([[1]]);
     });
 
-    it('should deliver every event of a transaction in one batch, so the transaction is applied, and written to tx history, whole', async () => {
-      const batches = await batchesOf(3);
+    /**
+     * Serves `raws` as {@link subscriptionOf} does, then keeps the subscription open with nothing more to send, as an
+     * indexer does once it has served everything it holds.
+     */
+    const openSubscriptionOf =
+      (raws: readonly string[], maxId: number = raws.length) =>
+      (
+        variables: ZswapEventsSubscriptionVariables,
+      ): Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient> =>
+        subscriptionOf(raws, maxId)(variables).pipe(Stream.concat(Stream.never));
 
-      const hashOf = (id: number): string =>
-        ledger.Event.deserialize(Buffer.from(chain.raws[id - 1], 'hex')).source.transactionHash;
-      const batchesHolding = (hash: string): number =>
-        batches.filter((batch) => batch.some((id) => hashOf(id) === hash)).length;
+    /**
+     * Syncs a fresh wallet through `subscription` under the test clock, lets `elapsed` pass, then stops the wallet.
+     * Returns each batch delivered before the stop, as event ids.
+     */
+    const batchesBeforeStop = (
+      subscription: ReturnType<typeof openSubscriptionOf>,
+      batchUpdates: Readonly<{ size: number; timeout: number }>,
+      elapsed: Duration.Duration,
+    ): Promise<readonly (readonly number[])[]> =>
+      Effect.gen(function* () {
+        const batches = yield* Ref.make<readonly (readonly number[])[]>([]);
+        const syncService = makeEventsSyncService({
+          indexerClientConnection: {
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+          },
+          versionWatch: noVersionWatch,
+          batchUpdates: { ...batchUpdates, spacing: 0 },
+        });
+        const fiber = yield* syncService.updates(CoreWallet.initEmpty(owner, networkId), owner).pipe(
+          Stream.runForEach((update) =>
+            Ref.update(batches, (all) => [...all, eventsOf(update).map((event) => event.id)]),
+          ),
+          Effect.provideService(ZswapEvents.tag, subscription),
+          Effect.fork,
+        );
+        yield* TestClock.adjust(elapsed);
+        yield* Fiber.interrupt(fiber);
+        return yield* Ref.get(batches);
+      }).pipe(Effect.provide(TestContext.TestContext), Effect.scoped, Effect.runPromise);
 
-      expect(batches.flat()).toEqual([1, 2, 3, 4, 5, 6]);
-      expect({
-        mint: batchesHolding(chain.mintHash),
-        transfer: batchesHolding(chain.transferHash),
-        stranger: batchesHolding(chain.strangerHash),
-      }).toEqual({ mint: 1, transfer: 1, stranger: 1 });
-      expect(batches.every((batch) => batch.length <= 3)).toBe(true);
+    it('should deliver a transaction whose last event is the last the indexer holds without waiting for another, so a wallet at the tip applies it', async () => {
+      // The mint and the transfer, and nothing after them: the transfer's last event (id 4) is the indexer's `maxId`.
+      const batches = await batchesBeforeStop(
+        openSubscriptionOf(chain.raws.slice(0, 4)),
+        { size: 10, timeout: 100 },
+        Duration.seconds(1),
+      );
+
+      expect(batches).toEqual([[1, 2, 3, 4]]);
     });
 
-    it('should deliver a transaction larger than the batch size whole, in a batch of its own, so it too is written to tx history once', async () => {
+    it('should deliver a batch as soon as its whole transactions fill it, without waiting for the timeout', async () => {
+      // The mint and the transfer fill a batch of four exactly, and the timeout is far beyond the time allowed.
+      const batches = await batchesBeforeStop(
+        openSubscriptionOf(chain.raws.slice(0, 4)),
+        { size: 4, timeout: 60_000 },
+        Duration.seconds(1),
+      );
+
+      expect(batches).toEqual([[1, 2, 3, 4]]);
+    });
+
+    it('should deliver a transaction larger than the batch size as soon as it is whole, without waiting for the timeout', async () => {
+      // The transfer alone, served from id 1: three events against a size of two, and nothing after it.
+      const batches = await batchesBeforeStop(
+        openSubscriptionOf(chain.raws.slice(1, 4)),
+        { size: 2, timeout: 60_000 },
+        Duration.seconds(1),
+      );
+
+      expect(batches).toEqual([[1, 2, 3]]);
+    });
+
+    it('should deliver every event of a transaction in one batch, so the transaction is applied, and written to tx history, whole', async () => {
+      // A batch of three cut by count would split the transfer (ids 2..4) after its first two events; the transfer
+      // that fills the batch goes in whole instead, and the stranger's transaction (ids 5..6) starts the next.
+      expect(await batchesOf(3)).toEqual([
+        [1, 2, 3, 4],
+        [5, 6],
+      ]);
+    });
+
+    it('should deliver a transaction larger than the batch size whole, in the batch it fills, so it too is written to tx history once', async () => {
       // Ids 2..4 are the transfer: three events against a size of two.
-      expect(await batchesOf(2)).toEqual([[1], [2, 3, 4], [5, 6]]);
+      expect(await batchesOf(2)).toEqual([
+        [1, 2, 3, 4],
+        [5, 6],
+      ]);
     });
 
     it('should write a transaction once, whole, after a restart, when the wallet stopped while only part of it had arrived', async () => {
