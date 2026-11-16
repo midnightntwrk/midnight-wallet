@@ -94,7 +94,7 @@
     "schema:sync": "turbo run schema:sync",
     "watch": "turbo watch dist",
     "dist:publish": "turbo run dist:publish",
-    "changeset:version": "yarn changeset version && yarn install --mode=update-lockfile",
+    "changeset:version": "yarn changeset version && yarn up -R '@midnightntwrk/wallet-sdk-*' --mode=update-lockfile",
     "changeset:check": "yarn changeset status --verbose",
     "clean": "turbo run clean"
   }
