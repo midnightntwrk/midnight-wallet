@@ -92,19 +92,6 @@ const createMockEventHex = async (amount: bigint): Promise<string> => {
   }).pipe(Effect.scoped, Effect.runPromise);
 };
 
-/**
- * Two real events from two different transactions.
- *
- * @remarks
- *   The sync never cuts a transaction across batches, so a timeline that repeated one event would be a single transaction
- *   of every event. Served alternately, these make each event a transaction of its own, which is what the suites
- *   counting events per batch assume.
- */
-const createMockEventHexes = async (): Promise<readonly [string, string]> => [
-  await createMockEventHex(1000n),
-  await createMockEventHex(2000n),
-];
-
 type TimingOptions = {
   delayEvents?: boolean;
   minDelay?: Duration.Duration;
@@ -114,7 +101,7 @@ type TimingOptions = {
 
 const createMockSubscriptionFn = (
   totalRecords: number,
-  mockEventHexes: readonly [string, string],
+  mockEventHex: string,
   timingOptions?: TimingOptions,
   /**
    * The protocol version the indexer reports for each event id. Defaults to a constant 1. Per-item versions are what
@@ -132,11 +119,11 @@ const createMockSubscriptionFn = (
       Stream.map((id) => ({
         zswapLedgerEvents: {
           id,
-          raw: mockEventHexes[id % 2],
+          raw: mockEventHex,
           protocolVersion: protocolVersionOf(id),
-          // Events served at once are a backlog the source already holds in full; events that trickle in are a live
-          // chain, where each new event is the newest the source holds.
-          maxId: delayEvents ? id : totalRecords,
+          // Each event is the newest the source holds, so each completes its transaction the moment it arrives: the
+          // sync never cuts a transaction across batches, and these suites count events per batch.
+          maxId: id,
         },
       })),
     );
@@ -177,7 +164,14 @@ const createMockSubscriptionFn = (
 const eventsOf = (update: WalletSyncUpdate): readonly EventsSyncUpdate[] =>
   update._tag === 'Events' ? update.updates : [];
 
-// Helper to capture batch information at the consumer and log it
+/**
+ * Re-groups the sync's output by count and time with `groupedWithin`, records each group's size, and logs it.
+ *
+ * @remarks
+ *   The groups are its own, not the sync's batches: the sync closes a batch only between whole transactions, which
+ *   `groupedWithin` knows nothing about. It shows that grouping by time happens under a slow chain, not where the sync
+ *   cuts its batches.
+ */
 const withBatchLogging = <A, E, R>(
   stream: Stream.Stream<A, E, R>,
   batchSize: number,
@@ -186,8 +180,6 @@ const withBatchLogging = <A, E, R>(
   return Effect.gen(function* () {
     const batchesRef = yield* Ref.make<readonly number[]>([]);
 
-    // Re-group the stream to detect batches (using same params as Sync.ts)
-    // This will create batches that match the original batching behavior
     const groupedStream = stream.pipe(
       Stream.groupedWithin(batchSize, batchTimeout),
       Stream.tap((chunk) => {
@@ -227,8 +219,8 @@ describe('Wallet subscription', () => {
 
   describe('should stream GraphQL subscription', () => {
     it('should handle batching events into multiples of batch size config with no delay', async () => {
-      const mockEventHexes = await createMockEventHexes();
-      const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHexes);
+      const mockEventHex = await createMockEventHex(1000n);
+      const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHex);
 
       const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
       const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
@@ -261,11 +253,11 @@ describe('Wallet subscription', () => {
     });
 
     it('should respect custom batchUpdates.timeout configuration', async () => {
-      const mockEventHexes = await createMockEventHexes();
+      const mockEventHex = await createMockEventHex(1000n);
       const eventCount = 20;
 
       // Events arrive one-by-one with a 5ms delay between each
-      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHexes, {
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex, {
         delayEvents: true,
         minDelay: Duration.millis(5),
         maxDelay: Duration.millis(5),
@@ -309,11 +301,11 @@ describe('Wallet subscription', () => {
     });
 
     it('should respect custom batchUpdates.spacing configuration', async () => {
-      const mockEventHexes = await createMockEventHexes();
+      const mockEventHex = await createMockEventHex(1000n);
       const eventCount = 30;
 
       // Events arrive instantly (no delay)
-      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHexes);
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex);
 
       const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
       const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
@@ -359,8 +351,8 @@ describe('Wallet subscription', () => {
       const minDelay = Duration.millis(500);
       const maxDelay = Duration.millis(1500);
 
-      const mockEventHexes = await createMockEventHexes();
-      const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHexes, {
+      const mockEventHex = await createMockEventHex(1000n);
+      const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHex, {
         delayEvents: true,
         minDelay,
         maxDelay,
@@ -480,8 +472,8 @@ describe('Wallet subscription', () => {
     const versionOf = (id: number): number => (id <= 3 ? 3 : id <= 5 ? 9 : 11);
 
     const collectUpdates = async (eventCount: number, batchSize: number) => {
-      const mockEventHexes = await createMockEventHexes();
-      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHexes, undefined, versionOf);
+      const mockEventHex = await createMockEventHex(1000n);
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex, undefined, versionOf);
       const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
       const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
 
@@ -615,6 +607,11 @@ describe('Wallet subscription', () => {
       );
     });
 
+    /** The `index`-th event of a timeline (id `index + 1`) as the indexer serves it, when it holds events up to `maxId`. */
+    const eventOf = (raw: string, index: number, maxId: number): ZswapEventsSubscription => ({
+      zswapLedgerEvents: { id: index + 1, raw, protocolVersion: 3, maxId },
+    });
+
     /**
      * Serves `raws` with ids from 1, all at once, as an indexer serves a backlog whose last stored event is `maxId` (by
      * default the last of `raws`).
@@ -624,9 +621,18 @@ describe('Wallet subscription', () => {
       (
         _variables: ZswapEventsSubscriptionVariables,
       ): Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient> =>
-        Stream.fromIterable(
-          raws.map((raw, i) => ({ zswapLedgerEvents: { id: i + 1, raw, protocolVersion: 3, maxId } })),
-        );
+        Stream.fromIterable(raws.map((raw, index) => eventOf(raw, index, maxId)));
+
+    /** The sync service under test, over a stub indexer, with no version watch and no spacing between batches. */
+    const syncServiceWith = (batchUpdates: Readonly<{ size: number; timeout: number }>) =>
+      makeEventsSyncService({
+        indexerClientConnection: {
+          indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+          indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+        },
+        versionWatch: noVersionWatch,
+        batchUpdates: { ...batchUpdates, spacing: 0 },
+      });
 
     /** Syncs a fresh wallet through `subscription` with the given batch size, and returns each batch's event ids. */
     const batchesOf = (
@@ -634,16 +640,8 @@ describe('Wallet subscription', () => {
       subscription: ReturnType<typeof subscriptionOf> = subscriptionOf(chain.raws),
     ): Promise<readonly (readonly number[])[]> =>
       Effect.gen(function* () {
-        const syncService = makeEventsSyncService({
-          indexerClientConnection: {
-            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
-            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
-          },
-          versionWatch: noVersionWatch,
-          // A timeout no test reaches, so only the size and the transaction boundaries decide where a batch ends.
-          batchUpdates: { size, timeout: 60_000, spacing: 0 },
-        });
-        const updates = yield* syncService
+        // A timeout no test reaches, so only the size and the transaction boundaries decide where a batch ends.
+        const updates = yield* syncServiceWith({ size, timeout: 60_000 })
           .updates(CoreWallet.initEmpty(owner, networkId), owner)
           .pipe(Stream.runCollect);
         return Chunk.toArray(updates).map((update) => eventsOf(update).map((event) => event.id));
@@ -677,21 +675,15 @@ describe('Wallet subscription', () => {
     ): Promise<readonly (readonly number[])[]> =>
       Effect.gen(function* () {
         const batches = yield* Ref.make<readonly (readonly number[])[]>([]);
-        const syncService = makeEventsSyncService({
-          indexerClientConnection: {
-            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
-            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
-          },
-          versionWatch: noVersionWatch,
-          batchUpdates: { ...batchUpdates, spacing: 0 },
-        });
-        const fiber = yield* syncService.updates(CoreWallet.initEmpty(owner, networkId), owner).pipe(
-          Stream.runForEach((update) =>
-            Ref.update(batches, (all) => [...all, eventsOf(update).map((event) => event.id)]),
-          ),
-          Effect.provideService(ZswapEvents.tag, subscription),
-          Effect.fork,
-        );
+        const fiber = yield* syncServiceWith(batchUpdates)
+          .updates(CoreWallet.initEmpty(owner, networkId), owner)
+          .pipe(
+            Stream.runForEach((update) =>
+              Ref.update(batches, (all) => [...all, eventsOf(update).map((event) => event.id)]),
+            ),
+            Effect.provideService(ZswapEvents.tag, subscription),
+            Effect.fork,
+          );
         yield* TestClock.adjust(elapsed);
         yield* Fiber.interrupt(fiber);
         return yield* Ref.get(batches);
@@ -765,9 +757,7 @@ describe('Wallet subscription', () => {
         ProtocolVersion.ProtocolVersion(7n),
       );
       const capability = makeEventsSyncCapability();
-      const eventOf = (raw: string, i: number) => ({
-        zswapLedgerEvents: { id: i + 1, raw, protocolVersion: 3, maxId: chain.raws.length },
-      });
+      const chainEvents = chain.raws.map((raw, index) => eventOf(raw, index, chain.raws.length));
 
       /**
        * Syncs from `wallet` through the capability until the stream has gone quiet, then stops the wallet. Returns the
@@ -782,25 +772,19 @@ describe('Wallet subscription', () => {
         Effect.gen(function* () {
           const state = yield* Ref.make(wallet);
           const written = yield* Ref.make<readonly ledger.ZswapStateChanges[]>([]);
-          const syncService = makeEventsSyncService({
-            indexerClientConnection: {
-              indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
-              indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
-            },
-            versionWatch: noVersionWatch,
-            batchUpdates: { size: 3, timeout: 100, spacing: 0 },
-          });
-          const fiber = yield* syncService.updates(wallet, owner).pipe(
-            Stream.runForEach((update) =>
-              Effect.gen(function* () {
-                const [next, { changes }] = capability.applyUpdate(yield* Ref.get(state), update, activeRange);
-                yield* Ref.set(state, next);
-                yield* Ref.update(written, (all) => [...all, ...changes]);
-              }),
-            ),
-            Effect.provideService(ZswapEvents.tag, subscription),
-            Effect.fork,
-          );
+          const fiber = yield* syncServiceWith({ size: 3, timeout: 100 })
+            .updates(wallet, owner)
+            .pipe(
+              Stream.runForEach((update) =>
+                Effect.gen(function* () {
+                  const [next, { changes }] = capability.applyUpdate(yield* Ref.get(state), update, activeRange);
+                  yield* Ref.set(state, next);
+                  yield* Ref.update(written, (all) => [...all, ...changes]);
+                }),
+              ),
+              Effect.provideService(ZswapEvents.tag, subscription),
+              Effect.fork,
+            );
           yield* TestClock.adjust(Duration.seconds(1));
           yield* Fiber.interrupt(fiber);
           return [yield* Ref.get(state), yield* Ref.get(written)] as const;
@@ -809,13 +793,11 @@ describe('Wallet subscription', () => {
       // The indexer has served the mint and the transfer's input, and the transfer's outputs are still on their way
       // when the wallet stops.
       const [stopped, writtenBeforeStop] = await runUntilStopped(CoreWallet.initEmpty(owner, networkId), () =>
-        Stream.fromIterable(chain.raws.slice(0, 2).map(eventOf)).pipe(Stream.concat(Stream.never)),
+        Stream.fromIterable(chainEvents.slice(0, 2)).pipe(Stream.concat(Stream.never)),
       );
       // The restarted wallet resumes from the state it stopped at, and the indexer serves from its cursor on.
       const [, writtenAfterRestart] = await runUntilStopped(stopped, (variables) =>
-        Stream.fromIterable(
-          chain.raws.map(eventOf).filter((event) => event.zswapLedgerEvents.id >= (variables.id ?? 1)),
-        ),
+        Stream.fromIterable(chainEvents.filter((event) => event.zswapLedgerEvents.id >= (variables.id ?? 1))),
       );
 
       const transferWrites = [...writtenBeforeStop, ...writtenAfterRestart]
