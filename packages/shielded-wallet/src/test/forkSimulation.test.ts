@@ -49,7 +49,7 @@ import {
 import { ForkSimulator, V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Deferred, Duration, Effect, Option, Ref, Schedule, Stream, SubscriptionRef, pipe, type Scope } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { type TransactionHistory as V1TransactionHistory, V1Tag } from '../v1/index.js';
 import { CoreWallet, PublicKeys, Sync, type TransactionHistory, V2Tag, WalletError } from '../v2/index.js';
 import { type CapturedMigration, type ForkWallet, makeForkWallet } from './forkHarness.js';
@@ -842,3 +842,123 @@ describe('a migration that leaves the wallet’s state behind', () => {
       );
     }).pipe(Effect.scoped, Effect.runPromise));
 });
+
+describe('a stop while history writes are still running', () => {
+  it('should log each V1 write it interrupts, naming its transaction, because that section is never recorded', async () =>
+    Effect.gen(function* () {
+      const logs = yield* capturedConsole;
+      const coins = chainCoins();
+      const fork = yield* forkingChain(coins);
+      const started = yield* Ref.make<readonly string[]>([]);
+
+      const wallet = yield* makeForkWallet({
+        v8: fork.v8,
+        v9: fork.awaitV9(),
+        networkId,
+        forkVersion,
+        seed,
+        v1History: { ...noOpHistoryDetails, put: (changes) => writeThatNeverLands(started, changes.source) },
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+
+      yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
+        discard: true,
+      });
+      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+      yield* fork.advanceToFork();
+      yield* wallet.awaitMigration;
+      yield* settled(wallet);
+      // The premise: one write per payment is running, carried past the hand-over.
+      const running = yield* startedAtLeast(started, walletValues.length);
+      expect(running).toHaveLength(walletValues.length);
+
+      yield* wallet.stop;
+
+      expect(running.filter((source) => !loggedAsNotRecorded(logs, source))).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should log each V2 write it interrupts, naming its transaction, because that section is never recorded', async () =>
+    Effect.gen(function* () {
+      const logs = yield* capturedConsole;
+      const coins = chainCoins();
+      const fork = yield* forkingChain(coins);
+      const started = yield* Ref.make<readonly string[]>([]);
+
+      const wallet = yield* makeForkWallet({
+        v8: fork.v8,
+        v9: fork.awaitV9(),
+        networkId,
+        forkVersion,
+        seed,
+        v2History: { ...noOpHistoryDetails, put: (changes) => writeThatNeverLands(started, changes.source) },
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+
+      yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
+        discard: true,
+      });
+      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+      const v9 = yield* fork.advanceToFork();
+      yield* wallet.awaitMigration;
+      yield* settled(wallet);
+      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
+      yield* v9.submitTransaction(v9Payment(networkId, late));
+      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+      // The premise: the V2 variant's write for that payment is running.
+      const running = yield* startedAtLeast(started, 1);
+      expect(running).toHaveLength(1);
+
+      yield* wallet.stop;
+
+      expect(running.filter((source) => !loggedAsNotRecorded(logs, source))).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/** Transaction details for any hash, so only `put` decides what a history fake does. */
+const noOpHistoryDetails = {
+  getTransactionDetails: (hash: string) =>
+    Effect.succeed({
+      hash,
+      block: { hash: '', height: 0, timestamp: 0 },
+      status: 'SUCCESS' as const,
+      identifiers: [],
+    }),
+};
+
+/** A history write that records the transaction it was started for, then never finishes. */
+const writeThatNeverLands = (started: Ref.Ref<readonly string[]>, source: string): Effect.Effect<void> =>
+  Ref.update(started, (sources) => [...sources, source]).pipe(Effect.zipRight(Effect.never));
+
+/** The writes started, once there are at least `count` of them or two seconds have passed. */
+const startedAtLeast = (started: Ref.Ref<readonly string[]>, count: number): Effect.Effect<readonly string[]> =>
+  Ref.get(started).pipe(
+    Effect.filterOrFail((sources) => sources.length >= count),
+    Effect.retry(Schedule.spaced(Duration.millis(10)).pipe(Schedule.upTo(Duration.seconds(2)))),
+    Effect.orElse(() => Ref.get(started)),
+  );
+
+/**
+ * Every line written to the console for the rest of the scope, while the console itself stays quiet.
+ *
+ * @remarks
+ *   The wallet runs on its own Effect runtime behind a Promise API, so its log lines reach only the global console, not a
+ *   logger the test could provide. The array is mutated by the spies: it is test scaffolding, released with the scope.
+ */
+const capturedConsole: Effect.Effect<readonly string[], never, Scope.Scope> = Effect.acquireRelease(
+  Effect.sync(() => {
+    const lines: string[] = [];
+    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((method) =>
+      vi.spyOn(console, method).mockImplementation((...args: unknown[]) => {
+        lines.push(args.map(String).join(' '));
+      }),
+    );
+    return { lines, spies };
+  }),
+  ({ spies }) => Effect.sync(() => spies.forEach((spy) => spy.mockRestore())),
+).pipe(Effect.map(({ lines }) => lines));
+
+/** Whether a warning says the history section of `source` was not recorded. */
+const loggedAsNotRecorded = (lines: readonly string[], source: string): boolean =>
+  lines.some((line) => line.includes(source) && /not recorded/.test(line));
