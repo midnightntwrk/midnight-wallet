@@ -95,6 +95,8 @@ export interface StallDetection<Item> {
    * until an item reports a tip, which then replaces it. Left out by a caller that has seen no tip.
    */
   readonly knownTip?: bigint;
+  /** How long a session that is behind may deliver nothing before it is given up on. {@link STALL_TIMEOUT} when left out. */
+  readonly timeout?: Duration.DurationInput;
 }
 
 /** How long an open session that is behind may deliver nothing before it is given up on. */

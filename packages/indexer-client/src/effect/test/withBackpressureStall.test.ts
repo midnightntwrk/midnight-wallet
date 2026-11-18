@@ -181,6 +181,37 @@ describe('withBackpressure stall detection', () => {
     expect(observation.disposals).toBe(1);
   });
 
+  it('should wait as long as it is told to before giving up on a session that is behind, because how long a source may take to deliver is for whoever runs against it to say', async () => {
+    const observation = await run(
+      Effect.gen(function* () {
+        const feed = makeFeed();
+        const { fiber } = yield* consume(
+          feed,
+          options({ stall: { tip: (item) => item.maxId, timeout: Duration.seconds(90) } }),
+        );
+
+        [1n, 2n, 3n].forEach((id) => feed.deliver(event(id, 10n)));
+        yield* settle;
+
+        yield* advance(Duration.millis(89_999));
+        const beforeTimeout = yield* Fiber.poll(fiber);
+        yield* advance(Duration.millis(1));
+        const atTimeout = yield* Fiber.poll(fiber);
+
+        return { runningBeforeTimeout: Option.isNone(beforeTimeout), failureAtTimeout: failureOf(atTimeout) };
+      }),
+    );
+
+    expect(observation.runningBeforeTimeout).toBe(true);
+    // The failure says how long it waited, since that is no longer the same for every session.
+    expect(observation.failureAtTimeout).toMatchObject({
+      _tag: 'SubscriptionStalledError',
+      lastKey: 3n,
+      tip: 10n,
+      timeout: Duration.seconds(90),
+    });
+  });
+
   it('should leave a silent session open when the last event it delivered was the tip, because a source with nothing left to deliver is silent too', async () => {
     const observation = await run(
       Effect.gen(function* () {

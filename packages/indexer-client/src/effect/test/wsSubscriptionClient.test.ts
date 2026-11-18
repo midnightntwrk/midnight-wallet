@@ -403,7 +403,14 @@ describe('WsSubscriptionClient', () => {
     // A subscription the indexer stops writing to while its socket stays open raises nothing: no close, no error, no
     // completion. The only failures a sync retries on are the ones this client reports, so a session given up on has
     // to come out of it as one of them.
-    it('should fail with a ServerError when a session that is behind delivers nothing for 30 seconds, because a transport failure is what the sync retries on', async () => {
+    /**
+     * What a subscription has failed with once the first of ten events has arrived and the open connection has then
+     * said nothing for `silence`.
+     *
+     * @param silence How long the connection stays silent after the first event.
+     * @param timeout How long the subscription is told a silent session may be waited on; left out, it is not told.
+     */
+    const failureAfterSilence = (silence: Duration.Duration, timeout?: Duration.Duration) => {
       // Type cast required because: the fake server ignores the query text entirely; the document only has to print
       // and to type the one event the fake answers with.
       const eventsSubscription = parse('subscription { events { id maxId } }') as Query.Document<
@@ -411,7 +418,7 @@ describe('WsSubscriptionClient', () => {
         Record<string, never>
       >;
 
-      const failure = await Effect.gen(function* () {
+      return Effect.gen(function* () {
         const client = yield* SubscriptionClient.SubscriptionClient;
         const firstEvent = yield* Deferred.make<void>();
         const fiber = yield* client
@@ -421,7 +428,10 @@ describe('WsSubscriptionClient', () => {
             from: 0n,
             variables: () => ({}),
             key: (result) => BigInt(result.events.id),
-            stall: { tip: (result) => BigInt(result.events.maxId) },
+            stall: {
+              tip: (result) => BigInt(result.events.maxId),
+              ...(timeout === undefined ? {} : { timeout }),
+            },
           })
           .pipe(
             Stream.runForEach(() => Deferred.succeed(firstEvent, undefined)),
@@ -430,7 +440,7 @@ describe('WsSubscriptionClient', () => {
 
         // The first of ten events arrives, and then the open connection says nothing.
         yield* Deferred.await(firstEvent);
-        yield* TestClock.adjust(Duration.seconds(30));
+        yield* TestClock.adjust(silence);
         yield* Effect.promise(nextMacrotask).pipe(Effect.repeatN(4));
 
         return Option.flatMap(yield* Fiber.poll(fiber), (exit) =>
@@ -447,11 +457,25 @@ describe('WsSubscriptionClient', () => {
         Effect.provide(TestContext.TestContext),
         Effect.runPromise,
       );
+    };
 
-      expect(Option.getOrUndefined(failure)).toEqual(
-        new ServerError({
-          message: 'The subscription delivered nothing for 30 seconds while behind: last key 1, highest known 10',
-        }),
+    it('should fail with a ServerError when a session that is behind delivers nothing for 30 seconds, because a transport failure is what the sync retries on', async () => {
+      const failure = await failureAfterSilence(Duration.seconds(30));
+
+      // Asserted apart: equality between two errors of one class does not look at their messages.
+      expect(Option.getOrUndefined(failure)).toBeInstanceOf(ServerError);
+      expect(Option.getOrUndefined(failure)?.message).toBe(
+        'The subscription delivered nothing for 30 seconds while behind: last key 1, highest known 10',
+      );
+    });
+
+    it('should name the time it was told to wait in the failure, because the message is how whoever reads it learns which silence ran out', async () => {
+      const failure = await failureAfterSilence(Duration.seconds(90), Duration.seconds(90));
+
+      // Asserted apart: equality between two errors of one class does not look at their messages.
+      expect(Option.getOrUndefined(failure)).toBeInstanceOf(ServerError);
+      expect(Option.getOrUndefined(failure)?.message).toBe(
+        'The subscription delivered nothing for 90 seconds while behind: last key 1, highest known 10',
       );
     });
   });

@@ -13,7 +13,7 @@
 import * as ledger from '@midnightntwrk/ledger-v8';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import type * as IndexerClientEffect from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Effect, Stream } from 'effect';
+import { Duration, Effect, Stream } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeEventsSyncService } from '../Sync.js';
@@ -29,7 +29,12 @@ type StallRequest = {
   /** What the sync reads as the end of the timeline, off an event whose id is 7 on a timeline whose highest id is 99. */
   readonly tipOfEvent7: bigint | undefined;
   readonly knownTip: bigint | undefined;
+  /** How long the sync asked for a silent session to be waited on, in milliseconds, when it named a time at all. */
+  readonly timeoutMillis: number | undefined;
 };
+
+const millisOf = (timeout: Duration.DurationInput | undefined): number | undefined =>
+  timeout === undefined ? undefined : Duration.toMillis(timeout);
 
 const tipOfEvent7 = (tip: ((item: never) => bigint) | undefined): bigint | undefined =>
   // Type cast required because: the fake client is generic over every subscription document, and this test drives
@@ -56,6 +61,7 @@ vi.mock('@midnightntwrk/wallet-sdk-indexer-client/effect', async (importOriginal
         asked: options.stall !== undefined,
         tipOfEvent7: tipOfEvent7(options.stall?.tip),
         knownTip: options.stall?.knownTip,
+        timeoutMillis: millisOf(options.stall?.timeout),
       });
       return Stream.empty;
     },
@@ -73,11 +79,15 @@ const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
 const newWallet = (): CoreWallet => CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
 
-const stallRequests = async (state: CoreWallet): Promise<readonly StallRequest[]> => {
+const stallRequests = async (
+  state: CoreWallet,
+  connection: { readonly stallTimeout?: number } = {},
+): Promise<readonly StallRequest[]> => {
   const syncService = makeEventsSyncService({
     indexerClientConnection: {
       indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
       indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+      ...connection,
     },
     versionWatch: { intervalMs: 0 },
   });
@@ -119,5 +129,17 @@ describe('V1 shielded wallet event subscription stall detection', () => {
     const requests = await stallRequests(newWallet());
 
     expect(requests).toEqual([{ asked: true, tipOfEvent7: 99n, knownTip: undefined }]);
+  });
+
+  it('should ask for a silent session to be waited on for as long as it is configured to, so that a wallet against a slow indexer can be given longer than the default', async () => {
+    const requests = await stallRequests(newWallet(), { stallTimeout: 90_000 });
+
+    expect(requests.map((request) => request.timeoutMillis)).toEqual([90_000]);
+  });
+
+  it('should name no time to wait when it is configured with none, so that the subscription falls back on its own default', async () => {
+    const requests = await stallRequests(newWallet());
+
+    expect(requests.map((request) => request.timeoutMillis)).toEqual([undefined]);
   });
 });

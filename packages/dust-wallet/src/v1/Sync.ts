@@ -230,6 +230,11 @@ export type IndexerClientConnection = {
   bufferSize?: number;
   /** In-flight count at which the disposed WS subscription is reopened. Default: 100. */
   resumeThreshold?: number;
+  /**
+   * How long, in milliseconds, an event subscription that is behind may deliver nothing before it is given up on and
+   * reopened. Default: 30000.
+   */
+  stallTimeout?: number;
 };
 
 export type BatchUpdatesConfig = {
