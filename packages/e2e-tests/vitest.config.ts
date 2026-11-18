@@ -57,12 +57,26 @@ export default defineConfig({
           include: ['**/**/tests/*.undeployed.test.ts', '**/**/tests/*.universal.test.ts'],
         },
       },
+      // The dust healthchecks and the token-transfer healthchecks run the same seed in separate wallet instances. Run at
+      // once, both pick the same Dust coin to pay a fee, and the node rejects whichever transaction arrives second as a
+      // Dust double spend. The dust file therefore runs in a group of its own, finishing before the rest of the remote
+      // lane starts; it goes first because it is short, while the rest includes a sync of the stable wallet from genesis.
+      // `test-remote` selects both projects.
+      {
+        extends: true,
+        test: {
+          name: 'remote-dust',
+          include: ['**/**/tests/dust.remote.test.ts'],
+          sequence: { groupOrder: 0 },
+        },
+      },
       {
         extends: true,
         test: {
           name: 'remote',
           include: ['**/**/tests/*.remote.test.ts', '**/**/tests/*.universal.test.ts'],
-          exclude: ['**/fundTestWallets.remote.test.ts'],
+          exclude: ['**/fundTestWallets.remote.test.ts', '**/dust.remote.test.ts'],
+          sequence: { groupOrder: 1 },
         },
       },
       // The funding script spends the funding wallet, so its project exists only when `yarn turbo test-fund` asks for it: a bare
