@@ -70,8 +70,8 @@ export interface BackpressureOptions<Item, V> {
   /** Monotonic key extractor — items with a key not strictly greater than the running watermark are dropped. */
   readonly key: (result: Item) => bigint;
   /**
-   * Fails the stream when an open session that is behind delivers nothing for {@link STALL_TIMEOUT}. A session is behind
-   * when the tip is above the last key delivered, the tip being what the latest item reported through
+   * Fails the stream when an open session that is behind delivers nothing for {@link StallDetection.timeout}. A session
+   * is behind when the tip is above the last key delivered, the tip being what the latest item reported through
    * {@link StallDetection.tip}, or {@link StallDetection.knownTip} until an item has reported one. A session at the tip,
    * one with no tip known, and one paused for backpressure are left alone. Omitted, a silent session is waited on for
    * as long as it stays open.
@@ -95,15 +95,21 @@ export interface StallDetection<Item> {
    * until an item reports a tip, which then replaces it. Left out by a caller that has seen no tip.
    */
   readonly knownTip?: bigint;
-  /** How long a session that is behind may deliver nothing before it is given up on. {@link STALL_TIMEOUT} when left out. */
+  /**
+   * How long a session that is behind may deliver nothing before it is given up on. {@link STALL_TIMEOUT} when left out;
+   * a source known to be slow to deliver is given longer.
+   */
   readonly timeout?: Duration.DurationInput;
 }
 
-/** How long an open session that is behind may deliver nothing before it is given up on. */
+/**
+ * How long an open session that is behind may deliver nothing before it is given up on, unless
+ * {@link StallDetection.timeout} says otherwise.
+ */
 export const STALL_TIMEOUT = Duration.seconds(30);
 
 /**
- * An open session that was behind delivered nothing for {@link STALL_TIMEOUT}.
+ * An open session that was behind delivered nothing for as long as it was given.
  *
  * The source raised nothing itself: a session it stops writing to while the connection stays open neither ends nor
  * fails. This is the failure the wrapper raises in its place, which gives whatever retries the stream its chance to.
@@ -113,6 +119,8 @@ export class SubscriptionStalledError extends Data.TaggedError('SubscriptionStal
   readonly lastKey: bigint;
   /** How far the source was known to go. */
   readonly tip: bigint;
+  /** How long the session was given to deliver something. */
+  readonly timeout: Duration.Duration;
 }> {}
 
 /**
@@ -282,7 +290,12 @@ export const decideStall = (s: BPState, now: number, timeoutMillis: number): rea
       const remaining = aliveAt + timeoutMillis - now;
       return remaining > 0
         ? [Either.right(remaining), s]
-        : [Either.left(new SubscriptionStalledError({ lastKey: s.lastKey, tip })), { ...s, terminal: true }];
+        : [
+            Either.left(
+              new SubscriptionStalledError({ lastKey: s.lastKey, tip, timeout: Duration.millis(timeoutMillis) }),
+            ),
+            { ...s, terminal: true },
+          ];
     },
   });
 };
@@ -296,8 +309,8 @@ export const decideStall = (s: BPState, now: number, timeoutMillis: number): rea
  * reaches `bufferSize` and resumed (re-opened with `variables(lastKey)`) once the consumer drains back to
  * `resumeThreshold`.
  *
- * With {@link BackpressureOptions.stall}, an open session that is behind and delivers nothing for {@link STALL_TIMEOUT}
- * is closed and the stream fails with a {@link SubscriptionStalledError}, after everything the session did deliver.
+ * With {@link BackpressureOptions.stall}, an open session that is behind and delivers nothing for its timeout is closed
+ * and the stream fails with a {@link SubscriptionStalledError}, after everything the session did deliver.
  *
  * See {@link BackpressureOptions} for the monotonic-key dedup invariant.
  */
@@ -308,7 +321,7 @@ export const withBackpressure = <Item, V, E>(
   type Emit = StreamEmit.EmitOpsPush<E | SubscriptionStalledError, Item>;
 
   const { bufferSize, resumeThreshold, key, from, variables, stall } = options;
-  const stallTimeoutMillis = Duration.toMillis(STALL_TIMEOUT);
+  const stallTimeoutMillis = Duration.toMillis(stall?.timeout ?? STALL_TIMEOUT);
   const tipOf = (item: Item): Option.Option<bigint> => Option.map(Option.fromNullable(stall), ({ tip }) => tip(item));
 
   // Stream.unwrap re-runs the factory per subscription, so each consumer of

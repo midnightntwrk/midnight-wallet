@@ -595,6 +595,7 @@ export const makeEventsSyncService = (
       const batchSpacing = config.batchUpdates?.spacing ?? 4;
       const bufferSize = config.indexerClientConnection.bufferSize ?? 10000;
       const resumeThreshold = config.indexerClientConnection.resumeThreshold ?? 100;
+      const { stallTimeout } = config.indexerClientConnection;
 
       const eventsStream = pipe(
         // Backpressure caps the in-flight queue between the WS push and the
@@ -618,6 +619,8 @@ export const makeEventsSyncService = (
           stall: {
             tip: (r) => BigInt(r.zswapLedgerEvents.maxId),
             ...(knownTip > 0n ? { knownTip } : {}),
+            // Named only when configured, so that the default stays the subscription's to hold.
+            ...(stallTimeout === undefined ? {} : { timeout: Duration.millis(stallTimeout) }),
           },
         }),
         Stream.provideLayer(

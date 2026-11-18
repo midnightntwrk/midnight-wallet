@@ -689,6 +689,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       const knownTip = highestRelevantWalletIndex > appliedIndex ? highestRelevantWalletIndex : appliedIndex;
       const bufferSize = config.indexerClientConnection.bufferSize ?? 10000;
       const resumeThreshold = config.indexerClientConnection.resumeThreshold ?? 100;
+      const { stallTimeout } = config.indexerClientConnection;
 
       // The boundary is load-bearing, not waste: this subscription emits only events (no tip/progress
       // sentinel), and `isConnected`/the tip (`maxId`) are set only when an event is received. So the
@@ -724,6 +725,8 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
           stall: {
             tip: (r) => BigInt(r.dustLedgerEvents.maxId),
             ...(knownTip > 0n ? { knownTip } : {}),
+            // Named only when configured, so that the default stays the subscription's to hold.
+            ...(stallTimeout === undefined ? {} : { timeout: Duration.millis(stallTimeout) }),
           },
         }),
         Stream.mapEffect((subscription) =>

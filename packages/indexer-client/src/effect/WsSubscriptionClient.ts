@@ -15,7 +15,7 @@ import { createClient, type Client, type SubscribePayload } from 'graphql-ws';
 import { type GraphQLError, print } from 'graphql';
 import { SubscriptionClient } from './SubscriptionClient.js';
 import { type Query } from './Query.js';
-import { withBackpressure, type Source, STALL_TIMEOUT, type SubscriptionStalledError } from './Backpressure.js';
+import { withBackpressure, type Source, type SubscriptionStalledError } from './Backpressure.js';
 import { makeDeflateWebSocket } from './DeflateWebSocket.js';
 import {
   type InvalidProtocolSchemeError,
@@ -47,7 +47,7 @@ const toClientOrServerError = (err: unknown): ClientError | ServerError =>
 const stalledAsServerError = (stalled: SubscriptionStalledError): ServerError =>
   new ServerError({
     message:
-      `The subscription delivered nothing for ${Duration.toSeconds(STALL_TIMEOUT)} seconds while behind: ` +
+      `The subscription delivered nothing for ${Duration.toSeconds(stalled.timeout)} seconds while behind: ` +
       `last key ${stalled.lastKey}, highest known ${stalled.tip}`,
   });
 
