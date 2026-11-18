@@ -33,6 +33,11 @@ type Feed = {
   readonly source: Source<Event, Variables, never>;
   /** Delivers an event to the open session, the way a frame arrives on a socket. A closed session receives nothing. */
   readonly deliver: (event: Event) => void;
+  /**
+   * Delivers an event through one session, counted in the order they were opened, whether or not it has been closed
+   * since: the way a frame already on its way when its session closed would arrive.
+   */
+  readonly deliverThrough: (session: number, event: Event) => void;
   readonly observed: Observed;
 };
 
@@ -43,12 +48,16 @@ type Feed = {
 const makeFeed = (): Feed => {
   const observed: Observed = { opened: [], disposals: 0 };
   const live: { onItem: ((event: Event) => void) | null } = { onItem: null };
+  // Every session's callback, kept past its closing so a test can deliver through a session that is no longer open.
+  const sessions: Array<(event: Event) => void> = [];
 
   return {
     observed,
     deliver: (event) => live.onItem?.(event),
+    deliverThrough: (session, event) => sessions[session]?.(event),
     source: ({ variables, onItem }) => {
       observed.opened.push(variables.cursor);
+      sessions.push(onItem);
       live.onItem = onItem;
       return () => {
         observed.disposals += 1;
@@ -320,17 +329,61 @@ describe('withBackpressure stall detection', () => {
     expect(observation.disposals).toBe(0);
   });
 
+  it('should fail the stream 30 seconds after the last event a session that is behind delivered, because the silence that counts is the time since its last sign of life', async () => {
+    const observation = await run(
+      Effect.gen(function* () {
+        const feed = makeFeed();
+        const { fiber, received } = yield* consume(feed);
+
+        feed.deliver(event(1n, 10n));
+        yield* settle;
+
+        // The last event arrives twenty seconds in, so the thirty seconds of silence end at fifty.
+        yield* advance(Duration.seconds(20));
+        feed.deliver(event(2n, 10n));
+        yield* settle;
+
+        yield* advance(Duration.millis(29_999));
+        const beforeTimeout = yield* Fiber.poll(fiber);
+        yield* advance(Duration.millis(1));
+        const atTimeout = yield* Fiber.poll(fiber);
+
+        return {
+          runningBeforeTimeout: Option.isNone(beforeTimeout),
+          failureAtTimeout: failureOf(atTimeout),
+          received: yield* Ref.get(received),
+        };
+      }),
+    );
+
+    expect(observation.runningBeforeTimeout).toBe(true);
+    expect(observation.failureAtTimeout).toMatchObject({ _tag: 'SubscriptionStalledError', lastKey: 2n, tip: 10n });
+    expect(observation.received).toEqual([1n, 2n]);
+  });
+
   it('should not give up on a session it paused for backpressure, because that silence is its own doing', async () => {
     const observation = await run(
       Effect.gen(function* () {
-        const { feed, fiber } = yield* pausedBehind;
+        const { feed, fiber, received, release } = yield* pausedBehind;
         const disposalsWhenPaused = feed.observed.disposals;
 
         yield* advance(Duration.minutes(10));
+        const settledWhilePaused = yield* Fiber.poll(fiber);
+        const openedWhilePaused = [...feed.observed.opened];
+        const disposalsAfterPause = feed.observed.disposals;
+
+        // A failure raised during the pause would wait behind the events the consumer has yet to take, out of sight
+        // until it takes them.
+        yield* Deferred.succeed(release, undefined);
+        yield* settle;
 
         return {
           disposalsWhenPaused,
-          settled: yield* Fiber.poll(fiber),
+          settledWhilePaused,
+          openedWhilePaused,
+          disposalsAfterPause,
+          settledAfterDrain: yield* Fiber.poll(fiber),
+          received: yield* Ref.get(received),
           opened: [...feed.observed.opened],
           disposals: feed.observed.disposals,
         };
@@ -339,8 +392,13 @@ describe('withBackpressure stall detection', () => {
 
     // The pause itself closed the one session; nothing was reopened or failed while it lasted.
     expect(observation.disposalsWhenPaused).toBe(1);
-    expect(observation.settled).toEqual(Option.none());
-    expect(observation.opened).toEqual([0n]);
+    expect(observation.settledWhilePaused).toEqual(Option.none());
+    expect(observation.openedWhilePaused).toEqual([0n]);
+    expect(observation.disposalsAfterPause).toBe(1);
+    // Drained, the stream carries on from the last event it emitted rather than ending in a failure the pause earned.
+    expect(observation.settledAfterDrain).toEqual(Option.none());
+    expect(observation.received).toEqual([1n, 2n, 3n]);
+    expect(observation.opened).toEqual([0n, 3n]);
     expect(observation.disposals).toBe(1);
   });
 
@@ -376,5 +434,73 @@ describe('withBackpressure stall detection', () => {
     expect(observation.received).toEqual([1n, 2n, 3n]);
     // Once for the pause, once for the reopened session the wrapper gave up on.
     expect(observation.disposals).toBe(2);
+  });
+
+  it('should give up on a reopened session 30 seconds after it reopened even when the session it replaced delivers late, because an event from a closed session says nothing about the open one', async () => {
+    const observation = await run(
+      Effect.gen(function* () {
+        const { feed, fiber, received, release } = yield* pausedBehind;
+
+        yield* Deferred.succeed(release, undefined);
+        yield* settle;
+
+        // Twenty seconds into the reopened session's silence, the session closed for the pause delivers one more
+        // event, naming a tip far above the one the wrapper holds.
+        yield* advance(Duration.seconds(20));
+        feed.deliverThrough(0, event(4n, 500n));
+        yield* settle;
+
+        yield* advance(Duration.millis(9_999));
+        const beforeTimeout = yield* Fiber.poll(fiber);
+        yield* advance(Duration.millis(1));
+        const atTimeout = yield* Fiber.poll(fiber);
+
+        return {
+          opened: [...feed.observed.opened],
+          runningBeforeTimeout: Option.isNone(beforeTimeout),
+          failureAtTimeout: failureOf(atTimeout),
+          received: yield* Ref.get(received),
+        };
+      }),
+    );
+
+    expect(observation.opened).toEqual([0n, 3n]);
+    expect(observation.runningBeforeTimeout).toBe(true);
+    // Neither the late event's arrival nor the tip it names moved the open session's reckoning.
+    expect(observation.failureAtTimeout).toMatchObject({ _tag: 'SubscriptionStalledError', lastKey: 3n, tip: 100n });
+    expect(observation.received).toEqual([1n, 2n, 3n]);
+  });
+
+  it('should count a re-delivered event it drops as a sign of life and take the tip it reports, because the session that sent it is alive and knows where the timeline now ends', async () => {
+    const observation = await run(
+      Effect.gen(function* () {
+        const { feed, fiber, received, release } = yield* pausedBehind;
+
+        yield* Deferred.succeed(release, undefined);
+        yield* settle;
+
+        // The reopened session's first event is the one it was opened at, which the consumer already has. It arrives
+        // twenty seconds in, by which time the timeline has grown.
+        yield* advance(Duration.seconds(20));
+        feed.deliver(event(3n, 200n));
+        yield* settle;
+
+        yield* advance(Duration.millis(29_999));
+        const beforeTimeout = yield* Fiber.poll(fiber);
+        yield* advance(Duration.millis(1));
+        const atTimeout = yield* Fiber.poll(fiber);
+
+        return {
+          runningBeforeTimeout: Option.isNone(beforeTimeout),
+          failureAtTimeout: failureOf(atTimeout),
+          received: yield* Ref.get(received),
+        };
+      }),
+    );
+
+    // Thirty seconds from the dropped event, not from the reopening, and against the tip the dropped event named.
+    expect(observation.runningBeforeTimeout).toBe(true);
+    expect(observation.failureAtTimeout).toMatchObject({ _tag: 'SubscriptionStalledError', lastKey: 3n, tip: 200n });
+    expect(observation.received).toEqual([1n, 2n, 3n]);
   });
 });

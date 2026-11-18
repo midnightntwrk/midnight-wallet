@@ -92,7 +92,7 @@ describe('V1 shielded wallet event subscription stall detection', () => {
     recorded.requests.length = 0;
   });
 
-  it("should ask for a session that is behind and silent to be given up on, reading where the timeline ends from an event's highest id", async () => {
+  it("should ask for a session that is behind and silent to be given up on, reading where the timeline ends from an event's highest id, because its own id is never above the last event delivered", async () => {
     const requests = await stallRequests(newWallet());
 
     expect(requests.map((request) => request.tipOfEvent7)).toEqual([99n]);

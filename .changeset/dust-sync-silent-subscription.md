@@ -10,7 +10,8 @@ A dust or zswap event subscription that an indexer stopped writing to, with its 
 was behind waiting for as long as the connection lasted. Both wallets, on both variants, now give up on it: when a
 wallet is behind the highest event id it knows of and nothing arrives for 30 seconds, the sync fails and the existing
 retry reconnects and resubscribes from the last event applied. A wallet level with the timeline, or on a chain with no
-such events, is left alone.
+such events, is left alone. `DustWallet.stepSync` has no retry of its own, so a step waiting on such a subscription now
+rejects after those 30 seconds.
 
 In the indexer client, `BackpressureOptions` takes an optional `stall` (`tip`, `knownTip`); a subscription given up on
 fails with a `ServerError`.
