@@ -209,16 +209,29 @@ export type ForkingDustConfiguration = {
    * instead of replaying the ledger-v8 dust history.
    *
    * @remarks
-   *   Setting it is the opt-in: `DustWallet` sets it to an indexer search when `skipLedgerV8DustHistory` is on. Asked by
-   *   a fresh start only, and before {@link chainVersionProbe}; a restore resumes from the cursor its snapshot carries.
+   *   A composition without it replays the ledger-v8 dust history. `DustWallet` sets it to an indexer search unless
+   *   `skipLedgerV8DustHistory` is `false`, and so does any composition that spreads `dustWalletProbes(configuration)`
+   *   into its configuration. Asked by a fresh start only, and before {@link chainVersionProbe}; a restore resumes from
+   *   the cursor its snapshot carries.
    *
    *   An answer at a version the V2 variant owns starts the wallet there, in the state the V2 variant's own migration
    *   builds from an empty one with its cursor on the event the answer names: the state the hand-over at the boundary
    *   leaves a wallet in, valued against the same dust parameters. Anything else, whether no answer, a rejection, one
-   *   that does not come in time, a version below the boundary or a migration that fails, leaves the start as it would
-   *   be without it.
+   *   that does not come within {@link dustTimelineStartTimeout}, a version below the boundary or a migration that
+   *   fails, leaves the start as it would be without it.
    */
   dustTimelineStartProbe?: DustTimelineStartProbe;
+  /**
+   * How long a fresh start waits for {@link dustTimelineStartProbe} to answer.
+   *
+   * @remarks
+   *   The same field as `DefaultDustConfiguration.dustTimelineStartTimeout`, so `DustWallet` and a composition that
+   *   spreads the application's configuration into this one pass it on unchanged. Read only by a fresh start that has a
+   *   probe to ask: a string that is not a duration fails that start, and never a restore. A zero duration means the
+   *   probe is not asked at all.
+   * @default '2 minutes'
+   */
+  dustTimelineStartTimeout?: Duration.DurationInput;
   /**
    * The rates a fresh start values its empty state against when the start names none.
    *
@@ -596,9 +609,13 @@ export function CustomForkingDustWallet<
    * @remarks
    *   Longer than {@link probeTimeout}, because the indexer search behind it opens one short subscription per halving of
    *   the timeline rather than asking a single query. A ceiling, not a typical cost: on expiry the start proceeds as
-   *   one without the search.
+   *   one without the search. Configurable, because how long the search takes depends on the indexer: through a hosted
+   *   one it has been measured at 26 to 38 seconds. Decoded by a fresh start that has a search to wait for, the only
+   *   reader, so a value that is not a duration fails that start and never a restore.
    */
-  const timelineStartTimeout = Duration.seconds(30);
+  const timelineStartTimeout: Effect.Effect<Duration.Duration> = Effect.sync(() =>
+    Duration.decode(configuration.dustTimelineStartTimeout ?? Duration.minutes(2)),
+  );
 
   /** Where a fresh start begins when the timeline search answered for it: the V2 variant, and where to park it. */
   type TimelineStart = Readonly<{
@@ -610,26 +627,32 @@ export function CustomForkingDustWallet<
    * Where the dust event timeline reaches `forks.v9`, with the V2 variant that reads it from there, or nothing.
    *
    * @remarks
-   *   Nothing for every way the search can come back without a start, none of them distinguished: no probe configured, an
-   *   answer of nothing, a rejection, one that outlived {@link timelineStartTimeout}, or a version no V2 variant owns.
-   *   Each leaves the start to {@link probedStart}, as if no probe were configured.
+   *   Nothing for every way the search can come back without a start, none of them distinguished: no probe configured, a
+   *   zero {@link timelineStartTimeout} (the probe is then not asked), an answer of nothing, a rejection, one that
+   *   outlived the timeout, or a version no V2 variant owns. Each leaves the start to {@link probedStart}, as if no
+   *   probe were configured.
    */
+  const timelineStartProbe = configuration.dustTimelineStartProbe;
   const timelineStart: Effect.Effect<Option.Option<TimelineStart>> =
-    configuration.dustTimelineStartProbe === undefined
+    timelineStartProbe === undefined
       ? Effect.succeedNone
-      : pipe(
-          Effect.tryPromise(configuration.dustTimelineStartProbe),
-          Effect.timeout(timelineStartTimeout),
-          Effect.map(
-            Option.flatMap((start) =>
-              pipe(
-                BaseWallet.variantFor(start.version),
-                Option.filter((variant) => Variant.getVersionedVariantTag(variant) === V2Tag),
-                Option.map((variant): TimelineStart => ({ start, variant })),
+      : Effect.flatMap(timelineStartTimeout, (timeout) =>
+          Duration.isZero(timeout)
+            ? Effect.succeedNone
+            : pipe(
+                Effect.tryPromise(timelineStartProbe),
+                Effect.timeout(timeout),
+                Effect.map(
+                  Option.flatMap((start) =>
+                    pipe(
+                      BaseWallet.variantFor(start.version),
+                      Option.filter((variant) => Variant.getVersionedVariantTag(variant) === V2Tag),
+                      Option.map((variant): TimelineStart => ({ start, variant })),
+                    ),
+                  ),
+                ),
+                Effect.orElseSucceed(() => Option.none<TimelineStart>()),
               ),
-            ),
-          ),
-          Effect.orElseSucceed(() => Option.none<TimelineStart>()),
         );
 
   /**
@@ -1253,13 +1276,15 @@ export type DustWalletClass = ForkingDustWalletClass<V1SyncUpdate, V2SyncUpdate,
 
 /**
  * The probes `DustWallet` asks before it chooses where a fresh start begins: which protocol version the chain is on,
- * and, with `skipLedgerV8DustHistory`, where the dust timeline reaches `forks.v9`.
+ * and, unless `skipLedgerV8DustHistory` is `false`, where the dust timeline reaches `forks.v9`.
  *
  * @remarks
  *   Exported so that a composition with its own variants, such as one whose V2 variant syncs from projections, starts
  *   from the same place `DustWallet` does without restating how the probes are made. A `chainVersionProbe` already in
- *   the configuration is kept; otherwise the wallet's own indexer is asked. The timeline search is set only when
- *   `skipLedgerV8DustHistory` is `true`, and is best-effort: when it finds nothing, the start is the one without it.
+ *   the configuration is kept; otherwise the wallet's own indexer is asked. The timeline search is set unless
+ *   `skipLedgerV8DustHistory` is `false`, and is best-effort: when it finds nothing, the start is the one without it.
+ *   How long a start waits for it is `dustTimelineStartTimeout`, which reaches the wallet with the rest of the
+ *   configuration rather than through these probes.
  * @example
  *   ```ts
  *   const wallet = CustomForkingDustWallet(
@@ -1280,7 +1305,7 @@ export const dustWalletProbes = (
   findTimelineStart: typeof findDustTimelineStart = findDustTimelineStart,
 ): Pick<ForkingDustConfiguration, 'chainVersionProbe' | 'dustTimelineStartProbe'> => ({
   chainVersionProbe: configuration.chainVersionProbe ?? makeIndexerChainVersionProbe(configuration),
-  ...(configuration.skipLedgerV8DustHistory === true
+  ...(configuration.skipLedgerV8DustHistory !== false
     ? { dustTimelineStartProbe: () => Effect.runPromise(findTimelineStart(configuration, configuration.forks.v9)) }
     : {}),
 });
@@ -1307,9 +1332,10 @@ export const dustWalletProbes = (
  *   supplies its own `chainVersionProbe`; one whose chain cannot be reached loses nothing, because the answer is
  *   best-effort and its absence is the behaviour this wallet had before.
  *
- *   **With `skipLedgerV8DustHistory`, a fresh start first searches for where the dust timeline reaches the boundary**,
- *   and on a chain that has crossed it starts the V2 variant there, without reading the ledger-v8 dust history. The
- *   search is best-effort too: when it finds nothing, the start is the one described above.
+ *   **A fresh start first searches for where the dust timeline reaches the boundary**, unless `skipLedgerV8DustHistory`
+ *   is `false`, and on a chain that has crossed it starts the V2 variant there, without reading the ledger-v8 dust
+ *   history. The search is best-effort too: when it finds nothing, or does not finish within
+ *   `dustTimelineStartTimeout`, the start is the one described above.
  * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
  * @returns The wallet class.
  */

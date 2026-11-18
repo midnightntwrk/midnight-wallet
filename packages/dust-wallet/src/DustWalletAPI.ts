@@ -501,6 +501,10 @@ export type DefaultDustConfiguration = {
    * variant with the dust the chain re-emitted as ledger-v9 events when it crossed the v9 fork.
    *
    * @remarks
+   *   On unless set to `false`. A wallet that crosses the boundary discards the state it built from the ledger-v8 dust
+   *   history, so on a long-lived network the replay is most of a cold sync and leaves a fresh wallet only its
+   *   transaction history. Set it to `false` to replay the history anyway.
+   *
    *   Fresh starts only. A restore resumes from the cursor its snapshot carries and is unaffected.
    *
    *   The start looks up the last dust event below `forks.v9` and parks the V2 variant's cursor there, with an empty
@@ -518,8 +522,29 @@ export type DefaultDustConfiguration = {
    *
    *   Specific to the v9 fork rather than a mechanism for later ones: it rests on the chain having re-emitted its dust as
    *   ledger-v9 events when it crossed, which happens once, for that fork. A chain still below `forks.v9`, one born on
-   *   ledger-v9, or an indexer that cannot be searched leaves the start as it is without this option.
-   * @default false
+   *   ledger-v9, an indexer that cannot be searched, or a search that outlives {@link dustTimelineStartTimeout} ends
+   *   with the wallet starting where it would with this option `false`, but only after the search.
+   *
+   *   The search runs before every fresh start: two indexer lookups on a chain born on ledger-v9, ten seconds on a chain
+   *   with no dust event yet, and up to {@link dustTimelineStartTimeout} with a slow indexer. A local chain that starts
+   *   many wallets before it has any dust is better off with `false`.
+   * @default true
    */
   skipLedgerV8DustHistory?: boolean;
+  /**
+   * How long a fresh start waits for the search behind {@link skipLedgerV8DustHistory} before it gives up on it.
+   *
+   * @remarks
+   *   The search opens one short dust event subscription per halving of the timeline; through a hosted indexer one search
+   *   has been measured at 26 to 38 seconds. On expiry the start replays the ledger-v8 dust history, as it would
+   *   without the search.
+   *
+   *   Any `Duration.DurationInput`; a number is milliseconds. Zero (also a negative number or `NaN`) skips the search.
+   *   `Infinity` leaves it bounded only by its lookups' own timeouts. A string that is not a duration fails a fresh
+   *   start that searches; a restore never reads it.
+   *
+   *   A search that outlives the timeout is not cancelled: it runs on until its lookups end, and its answer is ignored.
+   * @default '2 minutes'
+   */
+  dustTimelineStartTimeout?: Duration.DurationInput;
 };

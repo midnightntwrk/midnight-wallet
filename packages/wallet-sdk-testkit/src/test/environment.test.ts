@@ -52,8 +52,8 @@ describe('makeEnvironment', () => {
 
   it('should leave the undeployed dust wallet without the skip, so a local chain that runs ledger-v9 from its first block pays no wait for a boundary search that cannot find anything', () => {
     // The search waits out its event-tip probe on a chain with no dust events yet, so on a fresh local stack every new
-    // wallet would start that much later.
-    expect(makeEnvironment('undeployed', endpoints).getDustWalletConfig().skipLedgerV8DustHistory).not.toBe(true);
+    // wallet would start that much later. Explicitly `false`: left unset, the dust wallet skips by default.
+    expect(makeEnvironment('undeployed', endpoints).getDustWalletConfig().skipLedgerV8DustHistory).toBe(false);
   });
 });
 

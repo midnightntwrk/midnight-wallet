@@ -42,7 +42,7 @@ import {
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import { Cause, Deferred, Effect, Option, Queue, Ref, Runtime, type Scope, Stream } from 'effect';
+import { Cause, Deferred, Duration, Effect, Option, Queue, Ref, Runtime, type Scope, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type DustTimelineStartProbe, asV8DustParameters } from '../DustWallet.js';
@@ -86,6 +86,7 @@ const walletOnChainAt = (
   version: ProtocolVersion.ProtocolVersion,
   chainVersionProbe?: ChainVersionProbe,
   dustTimelineStartProbe?: DustTimelineStartProbe,
+  dustTimelineStartTimeout?: Duration.DurationInput,
 ): Effect.Effect<ForkWallet, never, Scope.Scope> =>
   Effect.gen(function* () {
     const history: readonly TimelineEvent[] = numberedFrom(chain.eventBytes, 1, Number(version));
@@ -102,6 +103,7 @@ const walletOnChainAt = (
       syncTime: chain.syncTime,
       ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}),
       ...(dustTimelineStartProbe !== undefined ? { dustTimelineStartProbe } : {}),
+      ...(dustTimelineStartTimeout !== undefined ? { dustTimelineStartTimeout } : {}),
     });
     yield* Effect.addFinalizer(() => wallet.stop);
     yield* wallet.start;
@@ -425,6 +427,104 @@ describe('a dust wallet that skips the ledger-v8 dust history', () => {
       const current = yield* restored.runtime.currentVariant;
       expect(current.runningVariant.__polyTag__).toBe(V1Tag);
     }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/** A search that gives `probe`'s answer only after `delay`, as one through a slow indexer does. */
+const answeringAfter =
+  (delay: Duration.DurationInput, probe: DustTimelineStartProbe): DustTimelineStartProbe =>
+  () =>
+    Effect.runPromise(Effect.sleep(delay).pipe(Effect.zipRight(Effect.promise(probe))));
+
+describe('how long a fresh start waits for the dust timeline search', () => {
+  /**
+   * Where a fresh start under `timeout` begins when the search answers after 300 ms: the variant it chose and its
+   * cursor, read before any sync could move either.
+   */
+  const startUnder = (timeout: Duration.DurationInput) =>
+    Effect.gen(function* () {
+      const chain = yield* Effect.promise(() => buildDustChain());
+      const history = numberedFrom(chain.eventBytes, 1, Number(v8Version));
+      const replay = numberedFrom(chain.eventBytes, history.length + 1, Number(v9Version));
+      const lastV8Id = BigInt(history.length);
+
+      const wallet = yield* makeForkWallet({
+        v8: Stream.make(history),
+        replayed: Effect.succeed(replay),
+        networkId,
+        forkVersion,
+        seed: dustSeed(),
+        dustParameters,
+        syncTime: chain.syncTime,
+        chainVersionProbe: chainReporting(v8Version),
+        dustTimelineStartProbe: answeringAfter('300 millis', timelineReaching(lastV8Id, v9Version)),
+        dustTimelineStartTimeout: timeout,
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+
+      const started = yield* wallet.currentState;
+      return { tag: yield* wallet.activeTag, appliedIndex: started.state.progress.appliedIndex, lastV8Id };
+    });
+
+  it.each<{ as: string; within: Duration.DurationInput; short: Duration.DurationInput }>([
+    { as: 'milliseconds', within: 2_000, short: 50 },
+    { as: 'a duration string', within: '2 seconds', short: '50 millis' },
+    { as: 'a Duration', within: Duration.seconds(2), short: Duration.millis(50) },
+  ])(
+    'honours a dustTimelineStartTimeout given as $as: an answer after 300 ms parks the wallet under 2 s, and is given up on under 50 ms',
+    async ({ within, short }) =>
+      Effect.gen(function* () {
+        // Parked where the search said, so the start waited for it.
+        const waited = yield* startUnder(within);
+        expect(waited.tag).toBe(V2Tag);
+        expect(waited.appliedIndex).toBe(waited.lastV8Id);
+
+        // The same answer in the same time, given up on: the start a wallet without the search makes.
+        const gaveUp = yield* startUnder(short);
+        expect(gaveUp.tag).toBe(V1Tag);
+        expect(gaveUp.appliedIndex).toBe(0n);
+      }).pipe(Effect.scoped, Effect.runPromise),
+  );
+
+  it('waits with no ceiling of its own for an Infinity dustTimelineStartTimeout', async () =>
+    Effect.gen(function* () {
+      const waited = yield* startUnder(Number.POSITIVE_INFINITY);
+
+      expect(waited.tag).toBe(V2Tag);
+      expect(waited.appliedIndex).toBe(waited.lastV8Id);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('gives up on a search that outlives the configured dustTimelineStartTimeout, and replays the ledger-v8 dust history', async () =>
+    Effect.gen(function* () {
+      const chain = yield* Effect.promise(() => buildDustChain());
+      // The same answer as above, and in the same time: only the timeout differs.
+      const late = answeringAfter('200 millis', timelineReaching(2n, v9Version));
+      const wallet = yield* walletOnChainAt(chain, v8Version, chainReporting(v8Version), late, '20 millis');
+
+      const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+      expect(synced.state.progress.appliedIndex).toBe(BigInt(DUST_EVENT_COUNT));
+      expect(yield* wallet.migration).toStrictEqual(Option.none());
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it.each<Duration.DurationInput>([0, -1, Number.NaN, Duration.zero])(
+    'does not ask the search at all when dustTimelineStartTimeout decodes to zero (%s), and replays the ledger-v8 dust history',
+    async (timeout) =>
+      Effect.gen(function* () {
+        const chain = yield* Effect.promise(() => buildDustChain());
+        const asked = yield* Ref.make(0);
+        const counting: DustTimelineStartProbe = () =>
+          Effect.runPromise(
+            Ref.update(asked, (count) => count + 1).pipe(Effect.as(Option.some({ cursor: 2n, version: v9Version }))),
+          );
+
+        const wallet = yield* walletOnChainAt(chain, v8Version, chainReporting(v8Version), counting, timeout);
+
+        const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+        expect(yield* Ref.get(asked)).toBe(0);
+        expect(yield* wallet.activeTag).toBe(V1Tag);
+        expect(synced.state.progress.appliedIndex).toBe(BigInt(DUST_EVENT_COUNT));
+      }).pipe(Effect.scoped, Effect.runPromise),
+  );
 });
 
 describe('a dust wallet starting on a chain that has already forked', () => {
