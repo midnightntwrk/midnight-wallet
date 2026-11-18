@@ -11,7 +11,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /// <reference types="vitest" />
-import { configDefaults, defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig, type TestUserConfig } from 'vitest/config';
+
+// The html reporter cannot serialize a bigint, and Vitest keeps a retried test's first-attempt error: when that error
+// carries a bigint field (as InsufficientDustForFeeError does), the reporter throws and the run exits 1 although every
+// test passed. A local run still writes the report, and can go red this way. CI leaves it out, because CI retries and no
+// CI step reads it — except the fork lane, which never retries and uploads the whole reports/ directory for
+// post-mortems, so its `test-fork` script asks for it with E2E_HTML_REPORT.
+const htmlReporters: Extract<NonNullable<TestUserConfig['reporters']>, unknown[]> = process.env['CI'] === 'true' &&
+process.env['E2E_HTML_REPORT'] !== 'true'
+  ? []
+  : [['html', { outputFile: './reports/html/index.html' }]];
 
 export default defineConfig({
   test: {
@@ -26,7 +36,7 @@ export default defineConfig({
       'default',
       ['junit', { outputFile: './reports/test-report.xml' }],
       ['json', { outputFile: './reports/test-report.json' }],
-      ['html', { outputFile: './reports/html/index.html' }],
+      ...htmlReporters,
     ],
     projects: [
       // Pure helpers, such as the funding script's plan: no Docker and no network. Run it with
@@ -47,12 +57,26 @@ export default defineConfig({
           include: ['**/**/tests/*.undeployed.test.ts', '**/**/tests/*.universal.test.ts'],
         },
       },
+      // The dust healthchecks and the token-transfer healthchecks run the same seed in separate wallet instances. Run at
+      // once, both pick the same Dust coin to pay a fee, and the node rejects whichever transaction arrives second as a
+      // Dust double spend. The dust file therefore runs in a group of its own, finishing before the rest of the remote
+      // lane starts; it goes first because it is short, while the rest includes a sync of the stable wallet from genesis.
+      // `test-remote` selects both projects.
+      {
+        extends: true,
+        test: {
+          name: 'remote-dust',
+          include: ['**/**/tests/dust.remote.test.ts'],
+          sequence: { groupOrder: 0 },
+        },
+      },
       {
         extends: true,
         test: {
           name: 'remote',
           include: ['**/**/tests/*.remote.test.ts', '**/**/tests/*.universal.test.ts'],
-          exclude: ['**/fundTestWallets.remote.test.ts'],
+          exclude: ['**/fundTestWallets.remote.test.ts', '**/dust.remote.test.ts'],
+          sequence: { groupOrder: 1 },
         },
       },
       // The funding script spends the funding wallet, so its project exists only when `yarn turbo test-fund` asks for it: a bare

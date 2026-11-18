@@ -18,6 +18,7 @@ import {
   parseMidnightNetwork,
   provideWallet,
   shouldPersistState,
+  willRetry,
   useWalletTestEnvironment,
   type WalletInit,
   type WalletLifecycle,
@@ -27,6 +28,7 @@ import { logger } from './logger.js';
 import { exit } from 'node:process';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { carried } from './helpers/transactions.js';
+import { REMOTE_SYNC_TIMEOUT_MS } from './helpers/remoteTimeouts.js';
 import { Buffer } from 'buffer';
 
 /** Tests performing a token transfer */
@@ -52,9 +54,7 @@ describe('Token transfer', () => {
   let sender: WalletInit;
   let receiver: WalletInit;
   let lifecycle: WalletLifecycle;
-  // A remote sync from scratch takes tens of seconds and the transfer itself a couple of minutes, so a bound in the
-  // tens of minutes only ever means something has wedged. An hour just turns one wedge into an hour of lane time.
-  const syncTimeout = 15 * 60 * 1000; // 15 minutes
+  const syncTimeout = REMOTE_SYNC_TIMEOUT_MS;
   const timeout = 600_000;
 
   beforeEach(async () => {
@@ -94,8 +94,13 @@ describe('Token transfer', () => {
   }, syncTimeout);
 
   afterEach(async (context) => {
-    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
-    await lifecycle.release({ syncCacheDir, persist: shouldPersistState(context) });
+    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`. A failed attempt that
+    // vitest will retry keeps their snapshots for the retry to restore.
+    await lifecycle.release({
+      syncCacheDir,
+      persist: shouldPersistState(context),
+      willRetry: willRetry(context),
+    });
   }, timeout);
 
   test(

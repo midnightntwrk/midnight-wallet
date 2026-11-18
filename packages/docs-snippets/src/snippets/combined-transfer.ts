@@ -57,9 +57,11 @@ await sender.wallet
 const receiverState = await rx.firstValueFrom(
   receiver.wallet.state().pipe(
     rx.filter((s) => s.isSynced),
+    // The two outputs land in different wallets, which sync independently: wait for both, not just the first.
     rx.filter((s) => {
       const nightBalance = s.unshielded.balances[Token.night] ?? 0n;
-      return nightBalance > 0n;
+      const shieldedBalance = s.shielded.balances[Token.night] ?? 0n;
+      return nightBalance > 0n && shieldedBalance > 0n;
     }),
   ),
 );

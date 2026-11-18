@@ -606,6 +606,10 @@ describe('Token transfer', () => {
       const unregisteredNightUtxos = receiver3StateAfterTransfer.unshielded.availableCoins.filter(
         (coin) => coin.meta.registeredForDustGeneration === false,
       );
+      // The registration pays its own fee from Dust its Night UTxOs generate, and that Night has only just arrived:
+      // registering before generation covers the fee fails with InsufficientDustForFee.
+      const { fee: estimatedRegistrationFee } = await receiver3.wallet.estimateRegistration(unregisteredNightUtxos);
+      await receiver3.wallet.waitForGeneratedDust(unregisteredNightUtxos, estimatedRegistrationFee);
       const dustRegistrationRecipe = await receiver3.wallet.registerNightUtxosForDustGeneration(
         unregisteredNightUtxos,
         receiver3.unshieldedKeystore.getPublicKey(),
