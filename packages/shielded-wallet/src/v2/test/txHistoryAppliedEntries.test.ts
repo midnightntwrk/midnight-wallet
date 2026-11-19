@@ -442,6 +442,21 @@ describe('RunningV2Variant tx-history entries written before their details are k
     expect(entryOf(result.entries, 'tx-9')?.shieldedDetailsPending).toBe(false);
   });
 
+  it('should keep syncing while the pending entries cannot be read, so the balances never wait on the history', async () => {
+    const result = await runVariant({
+      storage: emptyStorage(),
+      batches: [['tx-new']],
+      indexer: answersFrom(Duration.days(1)),
+      settleFor: Duration.millis(1),
+      storageSeenByWallet: (storage) =>
+        storageWith(storage, { getAll: () => Promise.reject(new Error('storage unavailable')) }),
+    });
+
+    // The first observation is the state before the batch; a later one means the state moved past it.
+    expect(result.historyAtEachState.length).toBeGreaterThan(1);
+    expect(entryOf(result.entries, 'tx-new')?.shieldedDetailsPending).toBe(true);
+  });
+
   it('should warn each time reading the pending entries fails, and complete them once a read succeeds', async () => {
     // Test setup: the storage is promise-based, so its failed reads are counted outside the Effect.
     const failedReads: string[] = [];
