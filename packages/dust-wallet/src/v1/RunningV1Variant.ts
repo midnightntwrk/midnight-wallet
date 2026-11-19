@@ -144,9 +144,9 @@ export declare namespace RunningV1Variant {
 /**
  * How often a change's history entry is attempted again after an attempt gave up: its lookup outlasted
  * `getTransactionDetails`' own retry window, or the write failed. The state has already moved past the change, so this
- * is the only path by which its entry still reaches the history; it keeps going for as long as the variant runs. Each
- * attempt takes a lookup permit only while it runs, so a change the indexer cannot answer for yet never holds one while
- * it waits.
+ * is the only path by which its entry still reaches the history; it keeps going for as long as the variant runs. An
+ * attempt holds a lookup permit for the whole lookup, its own retry window included, and releases it between attempts,
+ * so a change the indexer cannot answer for yet holds none while it waits here.
  */
 const recordRetrySchedule = Schedule.spaced(Duration.minutes(1)).pipe(Schedule.jittered);
 
@@ -224,7 +224,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
    *   change keys: stop it first. Two workers would be no better — they would apply two keys' updates to one state.
    */
   #backgroundWorkerLock: Ref.Ref<boolean>;
-  /** Completes the entries the history still marks pending; runs at most once however often it is evaluated. */
+  /**
+   * Reads the entries the history still marks pending and forks their completion; runs at most once however often it is
+   * evaluated.
+   */
   readonly #completePendingDetailsOnce: Effect.Effect<void>;
 
   constructor(
@@ -237,9 +240,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     this.#v1Context = v1Context;
     this.#syncLock = Effect.runSync(Ref.make(false));
     this.#backgroundWorkerLock = Effect.runSync(Ref.make(false));
-    this.#completePendingDetailsOnce = Effect.runSync(
-      Effect.once(Effect.suspend(() => this.#completePendingDetails())),
-    );
+    this.#completePendingDetailsOnce = Effect.runSync(Effect.once(this.#completePendingDetails()));
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
@@ -321,8 +322,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         }
         return pipe(
           // Entries a previous run stored but never completed (the wallet stopped, or was restored from a snapshot
-          // taken mid-lookup) are completed in the background. Started once per variant, however many passes run.
-          Stream.fromEffect(Effect.forkIn(this.#completePendingDetailsOnce, this.#scope)),
+          // taken mid-lookup) are read before the pass applies anything, so an entry the pass itself records is not
+          // also read as pending and looked up twice. Their completion is forked. Run once per variant, however many
+          // passes run.
+          Stream.fromEffect(this.#completePendingDetailsOnce),
           Stream.drain,
           Stream.concat(
             pipe(
@@ -349,8 +352,8 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                   }),
               }).pipe(
                 // Each change's entry is stored before the state that moves past it is committed, so a snapshot taken
-                // at any moment is never ahead of its history. A failed write fails the update: the state stays where it
-                // was and the pass fails, rather than move past a change the history does not hold.
+                // at any moment is never ahead of its history. A failed write is logged and the update still commits:
+                // the entry is written in full once its details are known, and the balances never wait on the history.
                 Effect.tap(([changesResult]) => this.#recordApplied(changesResult)),
               ),
             ).pipe(
@@ -374,9 +377,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                               ),
                             ),
                           ),
-                        // `concurrency` only bounds fiber creation within this one batch; the real cap on simultaneous
-                        // indexer queries is the variant-wide semaphore acquired around each lookup.
-                        { discard: true, concurrency: 8 },
+                        // Every change gets its own fiber, so one the indexer cannot answer for never holds up the rest;
+                        // the cap on simultaneous indexer queries is the variant-wide semaphore acquired around each
+                        // lookup.
+                        { discard: true, concurrency: 'unbounded' },
                       ),
                       Effect.forkScoped,
                     ),
@@ -391,69 +395,105 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     );
   }
 
-  /** Stores every change of an applied update as an incomplete entry, when the history service can. */
-  #recordApplied({ changes, protocolVersion }: ChangesResult): Effect.Effect<void, WalletError> {
-    const service = this.#v1Context.transactionHistoryService;
-    const recordApplied = service.recordApplied?.bind(service);
-    return recordApplied === undefined || changes.length === 0
+  /**
+   * Stores every change of an applied update as an incomplete entry, when the history service can. A change whose entry
+   * cannot be stored is logged and left to the lookup, which writes the entry in full once its details are known.
+   */
+  #recordApplied({ changes, protocolVersion }: ChangesResult): Effect.Effect<void> {
+    const appliedEntries = this.#v1Context.transactionHistoryService.appliedEntries;
+    return appliedEntries === undefined
       ? Effect.void
-      : Effect.forEach(changes, (change) => recordApplied(change, protocolVersion), { discard: true }).pipe(
-          Effect.mapError(
-            (cause) => new OtherWalletError({ message: 'Error while recording applied changes in the history', cause }),
-          ),
-        );
-  }
-
-  /** Looks up and fills in every entry the history still marks `dustDetailsPending`. */
-  #completePendingDetails(): Effect.Effect<void> {
-    const service = this.#v1Context.transactionHistoryService;
-    const pendingDetails = service.pendingDetails?.bind(service);
-    const completeDetails = service.completeDetails?.bind(service);
-    return pendingDetails === undefined || completeDetails === undefined
-      ? Effect.void
-      : pipe(
-          pendingDetails(),
-          Effect.retry({ schedule: recordRetrySchedule }),
-          Effect.flatMap((hashes) =>
-            Effect.forEach(
-              hashes,
-              (hash) =>
-                this.#recordWithRetries(
-                  hash,
-                  pipe(
-                    service.getTransactionDetails(hash),
-                    Effect.flatMap((metadata) => completeDetails(hash, metadata)),
+      : Effect.forEach(
+          changes,
+          (change) =>
+            appliedEntries
+              .record(change, protocolVersion)
+              .pipe(
+                Effect.catchAll((error) =>
+                  Effect.logError(
+                    error,
+                    `Failed to record applied dust tx-history entry for ${change.source}; it is written once its details are known`,
                   ),
                 ),
-              { discard: true, concurrency: 8 },
-            ),
-          ),
-          Effect.catchAllCause((cause) => Effect.logError(cause, 'Failed to read pending dust tx-history entries')),
+              ),
+          { discard: true, concurrency: 'unbounded' },
         );
   }
 
   /**
-   * Runs one history write for `hash` under a lookup permit until it succeeds. The state has already moved past the
-   * change, so it will not be re-processed: an attempt that gives up (an indexer outage longer than
-   * getTransactionDetails' retry window) is tried again, rather than losing the dust section.
+   * Reads the entries the history still marks `dustDetailsPending` and forks the lookup that completes each. A failed
+   * read is retried in the background, logging each failure, until one succeeds.
+   */
+  #completePendingDetails(): Effect.Effect<void> {
+    const service = this.#v1Context.transactionHistoryService;
+    const appliedEntries = service.appliedEntries;
+    if (appliedEntries === undefined) return Effect.void;
+
+    const readPending = appliedEntries
+      .pending()
+      .pipe(
+        Effect.tapError((error) =>
+          Effect.logWarning(error, 'Failed to read pending dust tx-history entries; trying again'),
+        ),
+      );
+    const complete = (hashes: readonly string[]): Effect.Effect<void> =>
+      Effect.forEach(
+        hashes,
+        (hash) =>
+          this.#recordWithRetries(
+            hash,
+            pipe(
+              service.getTransactionDetails(hash),
+              Effect.flatMap((metadata) => appliedEntries.complete(hash, metadata)),
+            ),
+          ),
+        { discard: true, concurrency: 'unbounded' },
+      );
+    return pipe(
+      readPending,
+      Effect.matchEffect({
+        onSuccess: (hashes) => Effect.forkIn(complete(hashes), this.#scope),
+        onFailure: () =>
+          Effect.forkIn(
+            pipe(readPending, Effect.retry({ schedule: recordRetrySchedule }), Effect.flatMap(complete)),
+            this.#scope,
+          ),
+      }),
+      Effect.asVoid,
+      // The read is retried until it succeeds, so only a defect lands here.
+      Effect.catchAllCause((cause) =>
+        Effect.logError(cause, 'Defect while completing pending dust tx-history entries'),
+      ),
+    );
+  }
+
+  /**
+   * Runs one history write for `hash` under a lookup permit, trying it again while it fails in a way waiting can fix
+   * (an indexer outage longer than getTransactionDetails' retry window, or a failed write): the state has already moved
+   * past the change, so nothing else writes its entry. It stops at a failure waiting cannot fix (an invalid indexer
+   * URL, a 4xx or GraphQL error, or a blockless entry); an entry stored before its details were known then stays
+   * pending until the wallet next starts.
    */
   #recordWithRetries(
     hash: string,
     attempt: Effect.Effect<void, TransactionHistoryError | BlocklessFinalizedEntryError>,
   ): Effect.Effect<void> {
+    const isRetryable = (error: TransactionHistoryError | BlocklessFinalizedEntryError): boolean =>
+      error._tag === 'Wallet.TransactionHistory' && error.retryable !== false;
     return pipe(
       this.#txHistoryPermits.withPermits(1)(attempt),
       Effect.tapError((error) =>
-        Effect.logWarning(error, `Failed to record dust tx-history section for ${hash}; trying again`),
+        isRetryable(error)
+          ? Effect.logWarning(error, `Failed to record dust tx-history section for ${hash}; trying again`)
+          : Effect.void,
       ),
-      Effect.retry({
-        schedule: recordRetrySchedule,
-        while: (error) => error._tag === 'Wallet.TransactionHistory' && error.retryable !== false,
-      }),
+      Effect.retry({ schedule: recordRetrySchedule, while: isRetryable }),
       Effect.catchAllCause((cause) =>
-        // Only a failure that waiting cannot fix lands here. Surface it as a structured error carrying the tx hash, not
-        // a silent Console.error defect.
-        Effect.logError(cause, `Failed to record dust tx-history section for ${hash}`),
+        // A failure waiting cannot fix, or a defect. Surface it as a structured error carrying the tx hash.
+        Effect.logError(
+          cause,
+          `Failed to record dust tx-history section for ${hash} and will not try again; an entry stored before its details were known stays pending until the wallet next starts`,
+        ),
       ),
     );
   }

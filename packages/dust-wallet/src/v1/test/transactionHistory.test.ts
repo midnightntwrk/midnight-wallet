@@ -291,7 +291,7 @@ describe('makeSimulatorTransactionHistoryService.getTransactionDetails (dust)', 
     // landed in was not recorded. Collapsing them into one message sends a caller looking for the wrong problem.
     expect(missing).toBe(`No transaction found in storage for hash: ${hash}`);
     expect(blockless).toBe(
-      `Transaction ${hash} is finalized but its history entry records no block (restored from a pre-lifecycle history)`,
+      `Transaction ${hash} is finalized but its history entry records no block (restored from a pre-lifecycle history, or not yet completed: details pending)`,
     );
     expect(blockless).not.toBe(missing);
 
@@ -318,8 +318,8 @@ describe('makeSimulatorTransactionHistoryService.getTransactionDetails (dust)', 
   });
 });
 
-describe('makeDefaultTransactionHistoryService.pendingDetails (dust)', () => {
-  it('should not read the history from a storage without gotApplied, since no entry in it can be pending', async () => {
+describe('makeDefaultTransactionHistoryService.appliedEntries (dust)', () => {
+  it('is absent for a storage without gotApplied, so the history is never read for pending entries', () => {
     const backing = new InMemoryTransactionHistoryStorage(DustTransactionHistoryEntrySchema);
     // Test setup: the storage is promise-based, so its reads are collected outside the Effect.
     const reads: string[] = [];
@@ -339,9 +339,40 @@ describe('makeDefaultTransactionHistoryService.pendingDetails (dust)', () => {
       () => undefined,
     );
 
-    const pending = await Effect.runPromise(service.pendingDetails?.() ?? Effect.succeed([]));
-
-    expect(pending).toEqual([]);
+    expect(service.appliedEntries).toBeUndefined();
     expect(reads).toEqual([]);
+  });
+
+  it('lists only the entries this wallet still marks pending, not finished ones or those another wallet marks pending', async () => {
+    const storage = new InMemoryTransactionHistoryStorage(DustTransactionHistoryEntrySchema);
+    const section = { receivedUtxos: [], spentUtxos: [] };
+    await storage.gotApplied({
+      hash: 'pending-here',
+      identifiers: [],
+      protocolVersion: 1,
+      dust: section,
+      dustDetailsPending: true,
+    });
+    await storage.gotApplied({ hash: 'finished', identifiers: [], protocolVersion: 1, dust: section });
+    await storage.gotFinalized({
+      hash: 'finished',
+      identifiers: ['id'],
+      status: 'SUCCESS',
+      fees: 1234n,
+      finalizedBlock: { hash: 'block-hash', height: 42, timestamp: new Date(1_700_000_000) },
+      dustDetailsPending: false,
+    });
+    // Another wallet's flag, which this reader keeps unread rather than drops.
+    await storage.gotApplied({
+      hash: 'pending-elsewhere',
+      identifiers: [],
+      protocolVersion: 1,
+      ...{ shieldedDetailsPending: true },
+    });
+    const service = makeDefaultTransactionHistoryService({ ...config, txHistoryStorage: storage }, () => undefined);
+
+    const pending = await Effect.runPromise(service.appliedEntries?.pending() ?? Effect.succeed(['no appliedEntries']));
+
+    expect(pending).toEqual(['pending-here']);
   });
 });

@@ -111,11 +111,18 @@ const historyServiceOf = (
 const countingPendingReads = (
   service: TransactionHistoryService,
   reads: Ref.Ref<number>,
-): TransactionHistoryService => ({
-  ...service,
-  pendingDetails: () =>
-    Ref.update(reads, (n) => n + 1).pipe(Effect.zipRight(service.pendingDetails?.() ?? Effect.succeed([]))),
-});
+): TransactionHistoryService => {
+  const appliedEntries = service.appliedEntries;
+  return appliedEntries === undefined
+    ? service
+    : {
+        ...service,
+        appliedEntries: {
+          ...appliedEntries,
+          pending: () => Ref.update(reads, (n) => n + 1).pipe(Effect.zipRight(appliedEntries.pending())),
+        },
+      };
+};
 
 /** `storage` seen through `overrides`: what a storage with those methods replaced would do. */
 const storageWith = (storage: Storage, overrides: Partial<ShieldedHistoryStorage>): ShieldedHistoryStorage => ({

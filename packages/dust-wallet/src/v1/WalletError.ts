@@ -61,10 +61,11 @@ export class TransactionHistoryError extends Data.TaggedError('Wallet.Transactio
  * A finalized history entry that records no block, met where a block is needed.
  *
  * @remarks
- *   Only an entry restored from a history written before the lifecycle field existed looks like this: it is known to have
- *   been finalized, but the block it landed in was never recorded, and none is invented. It is its own error rather
- *   than a message on {@link TransactionHistoryError} so that a caller which can fetch the block by hash matches on the
- *   tag.
+ *   Two entries look like this: one restored from a history written before the lifecycle field existed, known to have
+ *   been finalized but with the block it landed in never recorded; and one stored when the wallet applied the
+ *   transaction, whose details (block included) are still pending. No block is invented for either. It is its own error
+ *   rather than a message on {@link TransactionHistoryError} so that a caller which can fetch the block by hash matches
+ *   on the tag.
  * @example
  *   ```ts
  *   if (error._tag === 'Wallet.BlocklessFinalizedEntry') fetchBlockFor(error.hash);

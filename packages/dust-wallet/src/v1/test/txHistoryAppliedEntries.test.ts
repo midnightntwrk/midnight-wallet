@@ -112,11 +112,18 @@ const historyServiceOf = (
 const countingPendingReads = (
   service: TransactionHistoryService,
   reads: Ref.Ref<number>,
-): TransactionHistoryService => ({
-  ...service,
-  pendingDetails: () =>
-    Ref.update(reads, (n) => n + 1).pipe(Effect.zipRight(service.pendingDetails?.() ?? Effect.succeed([]))),
-});
+): TransactionHistoryService => {
+  const appliedEntries = service.appliedEntries;
+  return appliedEntries === undefined
+    ? service
+    : {
+        ...service,
+        appliedEntries: {
+          ...appliedEntries,
+          pending: () => Ref.update(reads, (n) => n + 1).pipe(Effect.zipRight(appliedEntries.pending())),
+        },
+      };
+};
 
 const syncServiceOf = (batches: readonly FakeSyncUpdate[]): SyncService<CoreWallet, null, FakeSyncUpdate> => ({
   backgroundRepeat: BackgroundRepeat.Once(),
