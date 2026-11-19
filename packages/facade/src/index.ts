@@ -267,9 +267,10 @@ const feedingInclusions = (
   serialize: () => storage.serialize(),
   gotPending: (entry) => storage.gotPending(entry),
   gotRejected: (entry) => storage.gotRejected(entry),
-  ...(storage.gotApplied !== undefined
-    ? { gotApplied: (entry) => storage.gotApplied?.(entry) ?? Promise.resolve() }
-    : {}),
+  ...Option.match(Option.fromNullable(storage.gotApplied?.bind(storage)), {
+    onNone: () => ({}),
+    onSome: (gotApplied) => ({ gotApplied }),
+  }),
   gotFinalized: async (entry) => {
     await storage.gotFinalized(entry);
     await Option.match(inclusionVerdictOf(entry.status), {
