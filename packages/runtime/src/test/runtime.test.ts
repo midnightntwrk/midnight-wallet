@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Cause, Deferred, Effect, Either, LogLevel, Logger, Option, Ref } from 'effect';
+import { Cause, Deferred, Effect, Either, LogLevel, Logger, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { StateChange, VersionChangeType, WalletRuntimeError } from '../abstractions/index.js';
@@ -689,6 +689,66 @@ describe('Variant activation and context', () => {
       expect(builderC.built[0]?.receivedContext).toMatchObject({
         activationRange: [ProtocolVersion.ProtocolVersion(100n), ProtocolVersion.MaxSupportedVersion],
       });
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should hand every variant the same runtime scope, which outlives a hand-over and closes when the wallet stops, so work a variant forks into it is neither cut short nor leaked', () =>
+    Effect.gen(function* () {
+      const firstBuilder = new InterceptingVariantBuilder<typeof First, number>(First);
+      const secondBuilder = new InterceptingVariantBuilder<typeof Second, number>(Second);
+      const Wallet = WalletBuilder.init()
+        .withVariant(ProtocolVersion.MinSupportedVersion, firstBuilder)
+        .withVariant(ProtocolVersion.ProtocolVersion(100n), secondBuilder)
+        .build();
+      const wallet = Wallet.startEmpty(Wallet);
+      yield* Effect.addFinalizer(() => Effect.promise(() => wallet.stop()));
+
+      /**
+       * Forks work that runs until interrupted into `scope`, once it is running, and returns a signal completed when it
+       * is interrupted. Waiting for it to run matters: a fiber interrupted before it starts runs none of its handlers.
+       */
+      const forkUntilInterrupted = (scope: Scope.Scope) =>
+        Effect.gen(function* () {
+          const running = yield* Deferred.make<void>();
+          const interrupted = yield* Deferred.make<void>();
+          yield* Effect.forkIn(
+            Deferred.succeed(running, undefined).pipe(
+              Effect.zipRight(Effect.never),
+              Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
+            ),
+            scope,
+          );
+          yield* Deferred.await(running);
+          return interrupted;
+        });
+
+      /** The runtime scope the builder's first variant was started with; a missing one fails the test. */
+      const runtimeScopeOf = (builder: {
+        built: readonly { receivedContext: { runtimeScope?: Scope.Scope } | undefined }[];
+      }) => Effect.orDie(Effect.fromNullable(builder.built[0]?.receivedContext?.runtimeScope));
+
+      yield* firstStateWhere(wallet.rawState);
+      const firstScope = yield* runtimeScopeOf(firstBuilder);
+      const firstWork = yield* forkUntilInterrupted(firstScope);
+
+      yield* wallet.runtime.dispatch({
+        [First]: (variant: InterceptingRunningVariant<typeof First, number>) =>
+          variant.emitProtocolVersionChange(
+            VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(100n) }),
+          ),
+        [Second]: () => Effect.void,
+      });
+      yield* firstStateWhere(wallet.rawState, atVersion(ProtocolVersion.ProtocolVersion(100n)));
+      const secondScope = yield* runtimeScopeOf(secondBuilder);
+      const secondWork = yield* forkUntilInterrupted(secondScope);
+
+      expect(secondScope).toBe(firstScope);
+      // The first variant's scope has closed with the hand-over; the work it forked into the runtime scope has not.
+      expect(yield* Deferred.isDone(firstWork)).toBe(false);
+
+      yield* Effect.promise(() => wallet.stop());
+
+      yield* Deferred.await(firstWork).pipe(Effect.timeout('2 seconds'));
+      yield* Deferred.await(secondWork).pipe(Effect.timeout('2 seconds'));
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('surfaces a migrateState failure as a WalletRuntimeError on the state stream', () =>

@@ -29,15 +29,20 @@ import {
 } from 'effect';
 import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { ZswapEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import type {
   ZswapEventsSubscription,
   ZswapEventsSubscriptionVariables,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
-import { type EventsSyncUpdate, type WalletSyncUpdate, makeEventsSyncService } from '../Sync.js';
+import {
+  type EventsSyncUpdate,
+  type WalletSyncUpdate,
+  makeEventsSyncCapability,
+  makeEventsSyncService,
+} from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 
 vi.setConfig({
@@ -45,7 +50,7 @@ vi.setConfig({
 });
 
 // Helper to create a valid hex-encoded ledger event
-const createMockEventHex = async (): Promise<string> => {
+const createMockEventHex = async (amount: bigint): Promise<string> => {
   // Use Simulator to generate a real event, then serialize it
   return await Effect.gen(function* () {
     const scope = yield* Scope.make();
@@ -54,7 +59,7 @@ const createMockEventHex = async (): Promise<string> => {
         {
           type: 'shielded',
           tokenType: ledger.shieldedToken().raw,
-          amount: 1000n,
+          amount,
           recipient: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
         },
       ],
@@ -116,7 +121,9 @@ const createMockSubscriptionFn = (
           id,
           raw: mockEventHex,
           protocolVersion: protocolVersionOf(id),
-          maxId: totalRecords,
+          // Each event is the newest the source holds, so each completes its transaction the moment it arrives: the
+          // sync never cuts a transaction across batches, and these suites count events per batch.
+          maxId: id,
         },
       })),
     );
@@ -147,7 +154,14 @@ const createMockSubscriptionFn = (
   };
 };
 
-// Helper to capture batch information at the consumer and log it
+/**
+ * Re-groups the sync's output by count and time with `groupedWithin`, records each group's size, and logs it.
+ *
+ * @remarks
+ *   The groups are its own, not the sync's batches: the sync closes a batch only between whole transactions, which
+ *   `groupedWithin` knows nothing about. It shows that grouping by time happens under a slow chain, not where the sync
+ *   cuts its batches.
+ */
 const withBatchLogging = <A, E, R>(
   stream: Stream.Stream<A, E, R>,
   batchSize: number,
@@ -156,8 +170,6 @@ const withBatchLogging = <A, E, R>(
   return Effect.gen(function* () {
     const batchesRef = yield* Ref.make<readonly number[]>([]);
 
-    // Re-group the stream to detect batches (using same params as Sync.ts)
-    // This will create batches that match the original batching behavior
     const groupedStream = stream.pipe(
       Stream.groupedWithin(batchSize, batchTimeout),
       Stream.tap((chunk) => {
@@ -207,7 +219,7 @@ describe('Wallet subscription', () => {
 
   describe('should stream GraphQL subscription', () => {
     it('should handle batching events into multiples of batch size config with no delay', async () => {
-      const mockEventHex = await createMockEventHex();
+      const mockEventHex = await createMockEventHex(1000n);
       const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHex);
 
       const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
@@ -241,7 +253,7 @@ describe('Wallet subscription', () => {
     });
 
     it('should respect custom batchUpdates.timeout configuration', async () => {
-      const mockEventHex = await createMockEventHex();
+      const mockEventHex = await createMockEventHex(1000n);
       const eventCount = 20;
 
       // Events arrive one-by-one with a 5ms delay between each
@@ -289,7 +301,7 @@ describe('Wallet subscription', () => {
     });
 
     it('should respect custom batchUpdates.spacing configuration', async () => {
-      const mockEventHex = await createMockEventHex();
+      const mockEventHex = await createMockEventHex(1000n);
       const eventCount = 30;
 
       // Events arrive instantly (no delay)
@@ -339,7 +351,7 @@ describe('Wallet subscription', () => {
       const minDelay = Duration.millis(500);
       const maxDelay = Duration.millis(1500);
 
-      const mockEventHex = await createMockEventHex();
+      const mockEventHex = await createMockEventHex(1000n);
       const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHex, {
         delayEvents: true,
         minDelay,
@@ -460,7 +472,7 @@ describe('Wallet subscription', () => {
     const versionOf = (id: number): number => (id <= 3 ? 3 : id <= 5 ? 9 : 11);
 
     const collectUpdates = async (eventCount: number, batchSize: number) => {
-      const mockEventHex = await createMockEventHex();
+      const mockEventHex = await createMockEventHex(1000n);
       const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex, undefined, versionOf);
       const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
       const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
@@ -497,6 +509,348 @@ describe('Wallet subscription', () => {
         [3, 9],
         [9, 11],
       ]);
+    });
+  });
+
+  describe('transaction boundaries', () => {
+    const owner = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 5));
+    const stranger = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 6));
+    const networkId = NetworkId.NetworkId.Undeployed;
+    const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
+
+    type Chain = Readonly<{
+      /** Every event of the chain in timeline order, encoded as the indexer serves it. */
+      raws: readonly string[];
+      mintHash: string;
+      transferHash: string;
+      strangerHash: string;
+    }>;
+
+    /**
+     * A real chain of three transactions: a genesis mint paying the owner 500 (one event), a transfer spending it, 100
+     * to a stranger and 400 back as change (an input then two outputs), and the stranger sending its 100 to itself (an
+     * input then one output).
+     */
+    const buildChain = (): Promise<Chain> =>
+      Effect.gen(function* () {
+        const simulator = yield* V8.Simulator.init({
+          genesisMints: [
+            { type: 'shielded' as const, tokenType: ledger.shieldedToken().raw, amount: 500n, recipient: owner },
+          ],
+        });
+        const lastBlockEvents = () =>
+          simulator.state$.pipe(
+            Stream.take(1),
+            Stream.runHead,
+            Effect.map(Option.getOrThrow),
+            Effect.map(V8.getLastBlockEvents),
+          );
+        const send = (
+          keys: ledger.ZswapSecretKeys,
+          spentFrom: readonly ledger.Event[],
+          outputs: readonly (readonly [bigint, ledger.ZswapSecretKeys])[],
+        ) => {
+          const local = new ledger.ZswapLocalState().replayEvents(
+            keys,
+            spentFrom.map((event) => ledger.Event.deserialize(event.serialize())),
+          );
+          const coin = [...local.coins][0];
+          const [, input] = local.spend(keys, coin, 0);
+          const offer = outputs.reduce(
+            (acc, [value, to]) => {
+              const info = ledger.createShieldedCoinInfo(coin.type, value);
+              return acc.merge(
+                ledger.ZswapOffer.fromOutput(
+                  ledger.ZswapOutput.new(info, 0, to.coinPublicKey, to.encryptionPublicKey),
+                  info.type,
+                  info.value,
+                ),
+              );
+            },
+            ledger.ZswapOffer.fromInput(input, coin.type, coin.value),
+          );
+          return simulator.submitTransaction(ledger.Transaction.fromParts(networkId, offer).eraseProofs(), {
+            strictness: {},
+          });
+        };
+
+        const mint = yield* lastBlockEvents();
+        yield* send(owner, mint, [
+          [100n, stranger],
+          [400n, owner],
+        ]);
+        const transfer = yield* lastBlockEvents();
+        yield* send(stranger, [...mint, ...transfer], [[100n, stranger]]);
+        const strangers = yield* lastBlockEvents();
+
+        return {
+          raws: [...mint, ...transfer, ...strangers].map((event) => hex(event.serialize())),
+          mintHash: mint[0].source.transactionHash,
+          transferHash: transfer[0].source.transactionHash,
+          strangerHash: strangers[0].source.transactionHash,
+        };
+      }).pipe(Effect.scoped, Effect.runPromise);
+
+    let chain: Chain;
+    beforeAll(async () => {
+      chain = await buildChain();
+      // The test's premise: the size-3 batches the source would form by count alone cut the transfer after its input.
+      expect(chain.raws.map((raw) => ledger.Event.deserialize(Buffer.from(raw, 'hex')).source.transactionHash)).toEqual(
+        [
+          chain.mintHash,
+          chain.transferHash,
+          chain.transferHash,
+          chain.transferHash,
+          chain.strangerHash,
+          chain.strangerHash,
+        ],
+      );
+    });
+
+    /** The `index`-th event of a timeline (id `index + 1`) as the indexer serves it, when it holds events up to `maxId`. */
+    const eventOf = (raw: string, index: number, maxId: number): ZswapEventsSubscription => ({
+      zswapLedgerEvents: { id: index + 1, raw, protocolVersion: 3, maxId },
+    });
+
+    /**
+     * Serves `raws` with ids from 1, all at once, as an indexer serves a backlog whose last stored event is `maxId` (by
+     * default the last of `raws`).
+     */
+    const subscriptionOf =
+      (raws: readonly string[], maxId: number = raws.length) =>
+      (
+        _variables: ZswapEventsSubscriptionVariables,
+      ): Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient> =>
+        Stream.fromIterable(raws.map((raw, index) => eventOf(raw, index, maxId)));
+
+    /** The sync service under test, over a stub indexer, with no version watch and no spacing between batches. */
+    const syncServiceWith = (batchUpdates: Readonly<{ size: number; timeout: number }>) =>
+      makeEventsSyncService({
+        indexerClientConnection: {
+          indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+          indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+        },
+        versionWatch: noVersionWatch,
+        batchUpdates: { ...batchUpdates, spacing: 0 },
+      });
+
+    /** Syncs a fresh wallet through `subscription` with the given batch size, and returns each batch's event ids. */
+    const batchesOf = (
+      size: number,
+      subscription: ReturnType<typeof subscriptionOf> = subscriptionOf(chain.raws),
+    ): Promise<readonly (readonly number[])[]> =>
+      Effect.gen(function* () {
+        // A timeout no test reaches, so only the size and the transaction boundaries decide where a batch ends.
+        const updates = yield* syncServiceWith({ size, timeout: 60_000 })
+          .updates(CoreWallet.initEmpty(owner, networkId), owner)
+          .pipe(Stream.runCollect);
+        return Chunk.toArray(updates).map((update) => eventsOf(update).map((event) => event.id));
+      }).pipe(Effect.provideService(ZswapEvents.tag, subscription), Effect.scoped, Effect.runPromise);
+
+    it('should deliver none of a transaction the timeline ends part-way through, so the next sync fetches it whole rather than writing it in part', async () => {
+      // The timeline ends after the mint and the transfer's input, while the indexer holds the chain up to its sixth
+      // event: the transfer's outputs exist, and this run never received them.
+      expect(await batchesOf(3, subscriptionOf(chain.raws.slice(0, 2), chain.raws.length))).toEqual([[1]]);
+    });
+
+    /**
+     * Serves `raws` as {@link subscriptionOf} does, then keeps the subscription open with nothing more to send, as an
+     * indexer does once it has served everything it holds.
+     */
+    const openSubscriptionOf =
+      (raws: readonly string[], maxId: number = raws.length) =>
+      (
+        variables: ZswapEventsSubscriptionVariables,
+      ): Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient> =>
+        subscriptionOf(raws, maxId)(variables).pipe(Stream.concat(Stream.never));
+
+    /**
+     * Syncs a fresh wallet through `subscription` under the test clock, lets `elapsed` pass, then stops the wallet.
+     * Returns each batch delivered before the stop, as event ids.
+     */
+    const batchesBeforeStop = (
+      subscription: ReturnType<typeof openSubscriptionOf>,
+      batchUpdates: Readonly<{ size: number; timeout: number }>,
+      elapsed: Duration.Duration,
+    ): Promise<readonly (readonly number[])[]> =>
+      Effect.gen(function* () {
+        const batches = yield* Ref.make<readonly (readonly number[])[]>([]);
+        const fiber = yield* syncServiceWith(batchUpdates)
+          .updates(CoreWallet.initEmpty(owner, networkId), owner)
+          .pipe(
+            Stream.runForEach((update) =>
+              Ref.update(batches, (all) => [...all, eventsOf(update).map((event) => event.id)]),
+            ),
+            Effect.provideService(ZswapEvents.tag, subscription),
+            Effect.fork,
+          );
+        yield* TestClock.adjust(elapsed);
+        yield* Fiber.interrupt(fiber);
+        return yield* Ref.get(batches);
+      }).pipe(Effect.provide(TestContext.TestContext), Effect.scoped, Effect.runPromise);
+
+    it('should deliver a transaction whose last event is the last the indexer holds without waiting for another, so a wallet at the tip applies it', async () => {
+      // The mint and the transfer, and nothing after them: the transfer's last event (id 4) is the indexer's `maxId`.
+      const batches = await batchesBeforeStop(
+        openSubscriptionOf(chain.raws.slice(0, 4)),
+        { size: 10, timeout: 100 },
+        Duration.seconds(1),
+      );
+
+      expect(batches).toEqual([[1, 2, 3, 4]]);
+    });
+
+    it('should deliver a batch as soon as its whole transactions fill it, without waiting for the timeout', async () => {
+      // The mint and the transfer fill a batch of four exactly, and the timeout is far beyond the time allowed.
+      const batches = await batchesBeforeStop(
+        openSubscriptionOf(chain.raws.slice(0, 4)),
+        { size: 4, timeout: 60_000 },
+        Duration.seconds(1),
+      );
+
+      expect(batches).toEqual([[1, 2, 3, 4]]);
+    });
+
+    it('should deliver a transaction larger than the batch size as soon as it is whole, without waiting for the timeout', async () => {
+      // The transfer alone, served from id 1: three events against a size of two, and nothing after it.
+      const batches = await batchesBeforeStop(
+        openSubscriptionOf(chain.raws.slice(1, 4)),
+        { size: 2, timeout: 60_000 },
+        Duration.seconds(1),
+      );
+
+      expect(batches).toEqual([[1, 2, 3]]);
+    });
+
+    it('should deliver an event this ledger version cannot read as soon as it arrives, as a transaction of its own', async () => {
+      // The mint, then bytes that are no event of this ledger version, while the indexer holds more after them. A batch
+      // of two fills only if the unreadable event is complete the moment it arrives.
+      const batches = await batchesBeforeStop(
+        openSubscriptionOf([chain.raws[0], 'deadbeef'], chain.raws.length),
+        { size: 2, timeout: 60_000 },
+        Duration.seconds(1),
+      );
+
+      expect(batches).toEqual([[1, 2]]);
+    });
+
+    it('should deliver every event of a transaction in one batch, so the transaction is applied, and written to tx history, whole', async () => {
+      // A batch of three cut by count would split the transfer (ids 2..4) after its first two events; the transfer
+      // that fills the batch goes in whole instead, and the stranger's transaction (ids 5..6) starts the next.
+      expect(await batchesOf(3)).toEqual([
+        [1, 2, 3, 4],
+        [5, 6],
+      ]);
+    });
+
+    it('should deliver a transaction larger than the batch size whole, in the batch it fills, so it too is written to tx history once', async () => {
+      // Ids 2..4 are the transfer: three events against a size of two.
+      expect(await batchesOf(2)).toEqual([
+        [1, 2, 3, 4],
+        [5, 6],
+      ]);
+    });
+
+    it('should write a transaction the batch that hands over completes once, whole, because the batch splits at the version boundary and never inside the transaction', async () => {
+      const activeRange = ProtocolVersion.makeRange(
+        ProtocolVersion.ProtocolVersion(0n),
+        ProtocolVersion.ProtocolVersion(7n),
+      );
+      // The mint and the transfer under this ledger version, then the first event of a version past the active range:
+      // the batch that completes the transfer is also the one that hands over.
+      const subscription = () =>
+        Stream.fromIterable([
+          ...chain.raws.slice(0, 4).map((raw, index) => eventOf(raw, index, 5)),
+          { zswapLedgerEvents: { id: 5, raw: 'deadbeef', protocolVersion: 9, maxId: 5 } },
+        ]);
+
+      const updates = await syncServiceWith({ size: 10, timeout: 60_000 })
+        .updates(CoreWallet.initEmpty(owner, networkId), owner)
+        .pipe(
+          Stream.runCollect,
+          Effect.map(Chunk.toArray),
+          Effect.provideService(ZswapEvents.tag, subscription),
+          Effect.scoped,
+          Effect.runPromise,
+        );
+      // The premise: one batch, carrying both the transfer and the hand-over.
+      expect(updates.map((update) => eventsOf(update).map((event) => event.id))).toEqual([[1, 2, 3, 4, 5]]);
+
+      const capability = makeEventsSyncCapability();
+      const [, written] = updates.reduce<readonly [CoreWallet, readonly ledger.ZswapStateChanges[]]>(
+        ([wallet, changesSoFar], update) => {
+          const [next, { changes }] = capability.applyUpdate(wallet, update, activeRange);
+          return [next, [...changesSoFar, ...changes]];
+        },
+        [CoreWallet.initEmpty(owner, networkId), []],
+      );
+
+      expect(
+        written
+          .filter((changes) => changes.source === chain.transferHash)
+          .map((changes) => ({
+            spent: changes.spentCoins.map((coin) => coin.value),
+            received: changes.receivedCoins.map((coin) => coin.value),
+          })),
+      ).toEqual([{ spent: [500n], received: [400n] }]);
+    });
+
+    it('should write a transaction once, whole, after a restart, when the wallet stopped while only part of it had arrived', async () => {
+      const activeRange = ProtocolVersion.makeRange(
+        ProtocolVersion.ProtocolVersion(0n),
+        ProtocolVersion.ProtocolVersion(7n),
+      );
+      const capability = makeEventsSyncCapability();
+      const chainEvents = chain.raws.map((raw, index) => eventOf(raw, index, chain.raws.length));
+
+      /**
+       * Syncs from `wallet` through the capability until the stream has gone quiet, then stops the wallet. Returns the
+       * state it stopped at and every change handed to tx history on the way.
+       */
+      const runUntilStopped = (
+        wallet: CoreWallet,
+        subscription: (
+          variables: ZswapEventsSubscriptionVariables,
+        ) => Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>,
+      ) =>
+        Effect.gen(function* () {
+          const state = yield* Ref.make(wallet);
+          const written = yield* Ref.make<readonly ledger.ZswapStateChanges[]>([]);
+          const fiber = yield* syncServiceWith({ size: 3, timeout: 100 })
+            .updates(wallet, owner)
+            .pipe(
+              Stream.runForEach((update) =>
+                Effect.gen(function* () {
+                  const [next, { changes }] = capability.applyUpdate(yield* Ref.get(state), update, activeRange);
+                  yield* Ref.set(state, next);
+                  yield* Ref.update(written, (all) => [...all, ...changes]);
+                }),
+              ),
+              Effect.provideService(ZswapEvents.tag, subscription),
+              Effect.fork,
+            );
+          yield* TestClock.adjust(Duration.seconds(1));
+          yield* Fiber.interrupt(fiber);
+          return [yield* Ref.get(state), yield* Ref.get(written)] as const;
+        }).pipe(Effect.provide(TestContext.TestContext), Effect.scoped, Effect.runPromise);
+
+      // The indexer has served the mint and the transfer's input, and the transfer's outputs are still on their way
+      // when the wallet stops.
+      const [stopped, writtenBeforeStop] = await runUntilStopped(CoreWallet.initEmpty(owner, networkId), () =>
+        Stream.fromIterable(chainEvents.slice(0, 2)).pipe(Stream.concat(Stream.never)),
+      );
+      // The restarted wallet resumes from the state it stopped at, and the indexer serves from its cursor on.
+      const [, writtenAfterRestart] = await runUntilStopped(stopped, (variables) =>
+        Stream.fromIterable(chainEvents.filter((event) => event.zswapLedgerEvents.id >= (variables.id ?? 1))),
+      );
+
+      const transferWrites = [...writtenBeforeStop, ...writtenAfterRestart]
+        .filter((changes) => changes.source === chain.transferHash)
+        .map((changes) => ({
+          spent: changes.spentCoins.map((coin) => coin.value),
+          received: changes.receivedCoins.map((coin) => coin.value),
+        }));
+      expect(transferWrites).toEqual([{ spent: [500n], received: [400n] }]);
     });
   });
 });

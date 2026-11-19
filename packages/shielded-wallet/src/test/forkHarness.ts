@@ -143,12 +143,12 @@ const transactionDetails = (hash: string) => ({
  *   fork. Written out once per variant because the two `TransactionHistoryService` types name their own ledger's
  *   `ZswapStateChanges`.
  */
-const noOpV1History: V1.TransactionHistory.TransactionHistoryService = {
+export const noOpV1History: V1.TransactionHistory.TransactionHistoryService = {
   put: () => Effect.void,
   getTransactionDetails: (hash) => Effect.succeed(transactionDetails(hash)),
 };
 
-const noOpV2History: V2.TransactionHistory.TransactionHistoryService = {
+export const noOpV2History: V2.TransactionHistory.TransactionHistoryService = {
   put: () => Effect.void,
   getTransactionDetails: (hash) => Effect.succeed(transactionDetails(hash)),
 };
@@ -221,6 +221,18 @@ export type ForkWalletConfig = Readonly<{
    * variant and learns the version from the first event it sees.
    */
   chainVersionProbe?: ChainVersionProbe;
+  /**
+   * Where the V1 variant records transaction history.
+   *
+   * Absent means a no-op history: only tests about tx history need one.
+   */
+  v1History?: V1.TransactionHistory.TransactionHistoryService;
+  /**
+   * Where the V2 variant records transaction history.
+   *
+   * Absent means nowhere, as for `v1History`.
+   */
+  v2History?: V2.TransactionHistory.TransactionHistoryService;
 }>;
 
 /** A state emission, whichever variant produced it. */
@@ -272,7 +284,17 @@ export type ForkWallet = Readonly<{
  * @returns The running wallet and its observation channels.
  */
 export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWallet> => {
-  const { v8, v9, networkId, forkVersion, seed, startFrom, chainVersionProbe } = config;
+  const {
+    v8,
+    v9,
+    networkId,
+    forkVersion,
+    seed,
+    startFrom,
+    chainVersionProbe,
+    v1History = noOpV1History,
+    v2History = noOpV2History,
+  } = config;
 
   const v8Keys = ledgerV8.ZswapSecretKeys.fromSeed(seed);
   const v9Keys = ledgerV9.ZswapSecretKeys.fromSeed(seed);
@@ -285,7 +307,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     .withSerializationDefaults()
     .withTransactingDefaults()
     .withCoinsAndBalancesDefaults()
-    .withTransactionHistory(() => noOpV1History)
+    .withTransactionHistory(() => v1History)
     .withKeysDefaults()
     .withStartAuxDefaults()
     .withCoinSelectionDefaults();
@@ -296,7 +318,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     .withSerializationDefaults()
     .withTransactingDefaults()
     .withCoinsAndBalancesDefaults()
-    .withTransactionHistory(() => noOpV2History)
+    .withTransactionHistory(() => v2History)
     .withKeysDefaults()
     .withStartAuxDefaults()
     .withCoinSelectionDefaults()
