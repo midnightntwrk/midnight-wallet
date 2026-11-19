@@ -156,9 +156,14 @@ export const mergeShieldedSections = (existing: ShieldedSection, incoming: Shiel
 /**
  * Shielded entry schema. Extends the common entry shape with an optional `shielded` section. Tightening — required
  * `shielded` plus required `protocolVersion`/`status` — happens at the writer-input type, not on the stored shape.
+ *
+ * `shieldedDetailsPending` is `true` while the shielded wallet has applied the transaction but not yet learnt its
+ * details (block, status, identifiers) from the indexer, and `false` once it has. An entry without it was written
+ * complete.
  */
 export const ShieldedTransactionHistoryEntrySchema = TransactionHistoryStorage.extendEntrySchema({
   shielded: Schema.optional(ShieldedSectionSchema),
+  shieldedDetailsPending: Schema.optional(Schema.Boolean),
 });
 
 export type ShieldedTransactionHistoryEntry = Schema.Schema.Type<typeof ShieldedTransactionHistoryEntrySchema>;
