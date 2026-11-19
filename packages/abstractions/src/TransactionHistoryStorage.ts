@@ -182,6 +182,16 @@ export type FinalizedEntryInput<T extends TransactionHistoryEntryCommon = Transa
 > & { readonly finalizedBlock: FinalizedBlock };
 
 /**
+ * Input for `gotApplied` — the entry minus its `lifecycle` field, which the storage attaches itself. Carries no block:
+ * a wallet writes it when it applies a transaction's effects, before the indexer has told it which block the
+ * transaction landed in.
+ */
+export type AppliedEntryInput<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon> = Omit<
+  T,
+  'lifecycle'
+>;
+
+/**
  * Input for `gotRejected` — the entry minus its `lifecycle` field, which the storage attaches itself. Carries
  * `rejectedAt` and the optional `reason` directly so callers don't construct the lifecycle object.
  */
@@ -227,6 +237,11 @@ export interface TransactionHistoryWriter<T extends TransactionHistoryEntryCommo
    * `pending` or `rejected` entry this entry {@link coversTransaction covers} under another hash.
    */
   gotFinalized(entry: FinalizedEntryInput<T>): Promise<void>;
+  /**
+   * Record that a wallet has applied a transaction whose details (block, status, identifiers) it does not know yet.
+   * Optional: a storage without it gets only the complete entry, once the wallet has looked the details up.
+   */
+  gotApplied?(entry: AppliedEntryInput<T>): Promise<void>;
   /**
    * Record that a tx will not land — failed, partial-success, TTL-expired, or otherwise reverted. Keyed the same way as
    * `gotPending` so the lifecycle transition is in-place. Writes nothing when a `finalized` entry already covers the

@@ -25,6 +25,7 @@ import {
   type TransactionHistoryEntryCommon,
   type PendingEntryInput,
   type FinalizedEntryInput,
+  type AppliedEntryInput,
   type RejectedEntryInput,
   type SerializedTransactionHistory,
   coversTransaction,
@@ -115,6 +116,10 @@ export class InMemoryTransactionHistoryStorage<
     const entry = { ...rest, lifecycle: { status: 'finalized', finalizedBlock } } as unknown as T;
     await this.#upsert(entry);
     this.#clearUnfinalizedCoveredBy(entry);
+  }
+
+  gotApplied(_input: AppliedEntryInput<T>): Promise<void> {
+    return Promise.resolve();
   }
 
   async gotRejected(input: RejectedEntryInput<T>): Promise<void> {

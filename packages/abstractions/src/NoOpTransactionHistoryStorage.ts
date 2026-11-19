@@ -17,6 +17,7 @@ import {
   type TransactionHistoryEntryCommon,
   type PendingEntryInput,
   type FinalizedEntryInput,
+  type AppliedEntryInput,
   type RejectedEntryInput,
   type SerializedTransactionHistory,
 } from './TransactionHistoryStorage.js';
@@ -29,6 +30,10 @@ export class NoOpTransactionHistoryStorage<
   }
 
   gotFinalized(_entry: FinalizedEntryInput<T>): Promise<void> {
+    return Promise.resolve();
+  }
+
+  gotApplied(_entry: AppliedEntryInput<T>): Promise<void> {
     return Promise.resolve();
   }
 
