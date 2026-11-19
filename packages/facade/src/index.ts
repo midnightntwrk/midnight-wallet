@@ -261,24 +261,24 @@ const inclusionVerdictOf = (
 const feedingInclusions = (
   storage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>,
   lifecycle: TransactionLifecycleService<LifecycleTx>,
-): TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry> => ({
-  getAll: () => storage.getAll(),
-  get: (hash) => storage.get(hash),
-  serialize: () => storage.serialize(),
-  gotPending: (entry) => storage.gotPending(entry),
-  gotRejected: (entry) => storage.gotRejected(entry),
-  ...Option.match(Option.fromNullable(storage.gotApplied?.bind(storage)), {
-    onNone: () => ({}),
-    onSome: (gotApplied) => ({ gotApplied }),
-  }),
-  gotFinalized: async (entry) => {
-    await storage.gotFinalized(entry);
-    await Option.match(inclusionVerdictOf(entry.status), {
-      onNone: () => Promise.resolve(),
-      onSome: (verdict) => lifecycle.included(entry.identifiers, verdict),
-    });
-  },
-});
+): TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry> => {
+  const gotApplied = storage.gotApplied?.bind(storage);
+  return {
+    getAll: () => storage.getAll(),
+    get: (hash) => storage.get(hash),
+    serialize: () => storage.serialize(),
+    gotPending: (entry) => storage.gotPending(entry),
+    gotRejected: (entry) => storage.gotRejected(entry),
+    ...(gotApplied === undefined ? {} : { gotApplied }),
+    gotFinalized: async (entry) => {
+      await storage.gotFinalized(entry);
+      await Option.match(inclusionVerdictOf(entry.status), {
+        onNone: () => Promise.resolve(),
+        onSome: (verdict) => lifecycle.included(entry.identifiers, verdict),
+      });
+    },
+  };
+};
 import {
   type DustAddress,
   type ShieldedAddress,
@@ -291,7 +291,9 @@ import {
  * Pass this to `InMemoryTransactionHistoryStorage` to enable serialize/restore.
  *
  * `shieldedDetailsPending` / `dustDetailsPending` are `true` while that wallet has applied the transaction but not yet
- * learnt its details from the indexer, and `false` once it has; an entry with either `true` is not finished yet.
+ * learnt its details from the indexer, and `false` once it has. An entry with either `true` is not finished yet: its
+ * lifecycle is already `finalized`, but it may record no status, block or identifiers, so a missing status there does
+ * not mean the transaction succeeded.
  */
 export const WalletEntrySchema = TransactionHistoryStorage.extendEntrySchema({
   shielded: Schema.optional(ShieldedSectionSchema),
@@ -306,12 +308,34 @@ export type WalletEntry = Schema.Schema.Type<typeof WalletEntrySchema>;
 /** A `WalletEntry` whose lifecycle is `pending`. */
 export type PendingWalletEntry = WalletEntry & { readonly lifecycle: TransactionHistoryStorage.PendingLifecycle };
 
-/** A `WalletEntry` whose lifecycle is `finalized`. */
+/**
+ * A `WalletEntry` whose lifecycle is `finalized`. Its details may still be pending (see {@link WalletEntrySchema}):
+ * check `shieldedDetailsPending` and `dustDetailsPending` before reading its status, block or identifiers.
+ */
 export type FinalizedWalletEntry = WalletEntry & { readonly lifecycle: TransactionHistoryStorage.FinalizedLifecycle };
+
+/** Whether a wallet stored `entry` when it applied the transaction and has not yet learnt its details. */
+const hasDetailsPending = (entry: WalletEntry): boolean =>
+  entry.shieldedDetailsPending === true || entry.dustDetailsPending === true;
 
 export const isPendingWalletEntry = (entry: WalletEntry): entry is PendingWalletEntry =>
   entry.lifecycle.status === 'pending';
 
+/**
+ * Whether `entry`'s lifecycle is `finalized`. True as well for an entry a wallet stored when it applied the
+ * transaction, before learning its details: one with `shieldedDetailsPending` or `dustDetailsPending` `true` records no
+ * status, block or identifiers yet, so it is not a confirmed outcome.
+ *
+ * @example
+ *   ```ts
+ *   const confirmed = entries.filter(
+ *     (e) => isFinalizedWalletEntry(e) && e.shieldedDetailsPending !== true && e.dustDetailsPending !== true,
+ *   );
+ *   ```;
+ *
+ * @param entry The history entry to test.
+ * @returns `true` when the entry's lifecycle is `finalized`.
+ */
 export const isFinalizedWalletEntry = (entry: WalletEntry): entry is FinalizedWalletEntry =>
   entry.lifecycle.status === 'finalized';
 
@@ -339,6 +363,9 @@ const mergeOptionalSection = <T>(
  * - **`lifecycle`** — incoming wins, except that a late rejection cannot overwrite recorded on-chain inclusion.
  * - **Wallet sections** (`shielded`, `unshielded`, `dust`) — combined via per-section merge when both sides have them;
  *   otherwise whichever side is present is used.
+ * - **Pending flags** (`shieldedDetailsPending`, `dustDetailsPending`) — incoming wins where it carries the flag,
+ *   existing is kept where it does not, each wallet's flag on its own: a wallet completing its details clears only its
+ *   own flag, and leaves the other wallet's as it was.
  * - **Fields this build does not declare** — kept from both sides, incoming winning a shared name. A storage that keeps
  *   such fields on the entry value itself hands them to this merge on every later write to the same transaction, so
  *   dropping them here would lose them as surely as a reader ignoring them.
@@ -2975,7 +3002,9 @@ export class WalletFacade {
 
   /**
    * The finalized entry recording `tx`, if sync has written one, even under the hash aggregation gave it on-chain. A
-   * transaction whose stamp no epoch can read has no entry, rather than an error, so a verdict on it still resolves.
+   * transaction whose stamp no epoch can read has no entry, rather than an error, so a verdict on it still resolves. An
+   * entry whose details are still pending is skipped: it records no status yet, so it cannot say how the chain ran
+   * `tx`.
    */
   private finalizedEntryFor(tx: AnyTx, history: readonly WalletEntry[]): FinalizedWalletEntry | undefined {
     return Option.match(
@@ -2986,7 +3015,9 @@ export class WalletFacade {
           const key = submitTxHistoryKey(carried);
           return history.find(
             (entry): entry is FinalizedWalletEntry =>
-              isFinalizedWalletEntry(entry) && TransactionHistoryStorage.coversTransaction(entry, key),
+              isFinalizedWalletEntry(entry) &&
+              !hasDetailsPending(entry) &&
+              TransactionHistoryStorage.coversTransaction(entry, key),
           );
         },
       },
