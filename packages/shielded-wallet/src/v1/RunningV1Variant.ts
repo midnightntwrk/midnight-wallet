@@ -35,7 +35,7 @@ import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type SerializationCapability } from './Serialization.js';
 import { type ChangesResult, type EventsSyncUpdate, type SyncCapability, type SyncService } from './Sync.js';
 import { type TransactingCapability, type TokenTransfer, type BalancingResult } from './Transacting.js';
-import { OtherWalletError, type WalletError } from './WalletError.js';
+import { OtherWalletError, TransactionHistoryError, type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 import { type CoinSelection } from '@midnightntwrk/wallet-sdk-capabilities';
@@ -101,6 +101,15 @@ export declare namespace RunningV1Variant {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type AnyContext = Context<any, any, any, any>;
 }
+
+/**
+ * How often a change's history entry is attempted again after an attempt gave up: its lookup outlasted
+ * `getTransactionDetails`' own retry window, or the write failed. The state has already moved past the change, so this
+ * is the only path by which its entry still reaches the history; it keeps going for as long as the variant runs. Each
+ * attempt takes a lookup permit only while it runs, so a change the indexer cannot answer for yet never holds one while
+ * it waits.
+ */
+const recordRetrySchedule = Schedule.spaced(Duration.minutes(1)).pipe(Schedule.jittered);
 
 export const V1Tag: unique symbol = Symbol('V1');
 
@@ -245,16 +254,27 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                               ),
                             ),
                           ),
+                          // applyUpdate has already advanced appliedIndex, so this change.source won't be re-processed:
+                          // an attempt that gives up (an indexer outage longer than getTransactionDetails' retry window)
+                          // is tried again, rather than losing the shielded section.
+                          Effect.tapError((error) =>
+                            Effect.logWarning(
+                              error,
+                              `Failed to record shielded tx-history section for ${change.source}; trying again`,
+                            ),
+                          ),
+                          Effect.retry({
+                            schedule: recordRetrySchedule,
+                            while: (error) => error instanceof TransactionHistoryError,
+                          }),
                           Effect.onInterrupt(() =>
                             Effect.logWarning(
                               `Shielded tx-history section for ${change.source} not recorded: wallet stopped`,
                             ),
                           ),
                           Effect.catchAllCause((cause) =>
-                            // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
-                            // here. applyUpdate has already advanced appliedIndex, so this change.source won't be
-                            // re-processed — the shielded section is permanently lost. Surface that as a structured
-                            // error carrying the tx hash, not a silent Console.error defect.
+                            // Only a failure that waiting cannot fix lands here. Surface it as a structured error carrying
+                            // the tx hash, not a silent Console.error defect.
                             Effect.logError(cause, `Failed to record shielded tx-history section for ${change.source}`),
                           ),
                         ),
