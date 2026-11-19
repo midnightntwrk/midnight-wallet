@@ -188,6 +188,11 @@ export type FinalizedEntryInput<T extends TransactionHistoryEntryCommon = Transa
  * Input for `gotApplied` — the entry minus its `lifecycle` field, which the storage attaches itself. Carries no block:
  * a wallet writes it when it applies a transaction's effects, before the indexer has told it which block the
  * transaction landed in.
+ *
+ * @example
+ *   ```ts
+ *   const applied: AppliedEntryInput = { hash: 'tx-hash', identifiers: [], protocolVersion: 1 };
+ *   ```;
  */
 export type AppliedEntryInput<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon> = Omit<
   T,
@@ -243,6 +248,20 @@ export interface TransactionHistoryWriter<T extends TransactionHistoryEntryCommo
   /**
    * Record that a wallet has applied a transaction whose details (block, status, identifiers) it does not know yet.
    * Optional: a storage without it gets only the complete entry, once the wallet has looked the details up.
+   *
+   * The entry is stored as `finalized` with no `finalizedBlock`; a later `gotFinalized` for the same transaction fills
+   * the block in. It never erases a finalized lifecycle, `status`, `timestamp`, `fees` or identifiers that another
+   * write already recorded under the hash.
+   *
+   * @example
+   *   ```ts
+   *   const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema);
+   *   await storage.gotApplied({ hash: 'tx-hash', identifiers: [], protocolVersion: 1 });
+   *   (await storage.get('tx-hash'))?.lifecycle; // { status: 'finalized' }
+   *   ```;
+   *
+   * @param entry - The entry without its lifecycle; the storage attaches a blockless `finalized` one.
+   * @returns A promise that resolves once the entry is recorded.
    */
   gotApplied?(entry: AppliedEntryInput<T>): Promise<void>;
   /**

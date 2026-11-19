@@ -136,6 +136,16 @@ export class InMemoryTransactionHistoryStorage<
    * block. An entry already under the hash takes the incoming fields through the merge function, but keeps every detail
    * it already records — a finalized lifecycle (and its block), `status`, `timestamp`, `fees` and its identifiers — so
    * a wallet whose sync lags another's never erases what that wallet's complete write recorded.
+   *
+   * @example
+   *   ```ts
+   *   const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema);
+   *   await storage.gotApplied({ hash: 'tx-hash', identifiers: [], protocolVersion: 1 });
+   *   (await storage.get('tx-hash'))?.lifecycle; // { status: 'finalized' }
+   *   ```;
+   *
+   * @param input - The entry without its lifecycle; the storage attaches a blockless `finalized` one.
+   * @returns A promise that resolves once the entry is recorded.
    */
   gotApplied(input: AppliedEntryInput<T>): Promise<void> {
     // Type cast required because: `T` is an open generic, so TypeScript cannot see that `Omit<T, 'lifecycle'>` plus a
