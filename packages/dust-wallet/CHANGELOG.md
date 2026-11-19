@@ -1,5 +1,28 @@
 # @midnightntwrk/wallet-sdk-dust-wallet
 
+## 5.1.1
+
+### Patch Changes
+
+- 9cb2369: fix(dust-wallet,shielded-wallet): notice an event subscription that stays open but stops delivering
+
+  A dust or zswap event subscription that an indexer stopped writing to, with its socket still open, left a wallet that
+  was behind waiting for as long as the connection lasted. Both wallets, on both variants, now give up on it: when a
+  wallet is behind the highest event id it knows of and nothing arrives for 30 seconds, the sync fails and the existing
+  retry reconnects and resubscribes from the last event applied. A wallet level with the timeline, or on a chain with no
+  such events, is left alone. `DustWallet.stepSync` has no retry of its own, so a step waiting on such a subscription
+  now rejects after those 30 seconds. `indexerClientConnection.stallTimeout`, in milliseconds, changes the 30 seconds
+  for an indexer that needs longer.
+
+  In the indexer client, `BackpressureOptions` takes an optional `stall` (`tip`, `knownTip`, `timeout`); a subscription
+  given up on fails with a `ServerError`.
+
+- Updated dependencies [9cb2369]
+- Updated dependencies [413431a]
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.2
+  - @midnightntwrk/wallet-sdk-runtime@2.0.2
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.2
+
 ## 5.1.0
 
 ### Minor Changes

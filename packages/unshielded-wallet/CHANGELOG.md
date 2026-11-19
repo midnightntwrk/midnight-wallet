@@ -1,5 +1,15 @@
 # @midnightntwrk/wallet-sdk-unshielded-wallet
 
+## 4.0.2
+
+### Patch Changes
+
+- Updated dependencies [9cb2369]
+- Updated dependencies [413431a]
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.2
+  - @midnightntwrk/wallet-sdk-runtime@2.0.2
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.2
+
 ## 4.0.1
 
 ### Patch Changes
