@@ -4,8 +4,14 @@
   "nix": {
     "enabled": true
   },
-  "extends": ["config:best-practices", "schedule:weekly", ":disableRateLimiting"],
-  "dependencyDashboard": true,
+  "extends": [
+    "config:best-practices",
+    "schedule:weekly",
+    ":disableRateLimiting"
+  ],
+  "dependencyDashboard": {
+    "enabled": true
+  },
   "semanticCommits": "enabled",
   "rebaseWhen": "conflicted",
   "minimumReleaseAge": "7 days",
@@ -49,7 +55,11 @@
     },
     {
       "groupName": "Midnight libraries and docker images",
-      "matchPackageNames": ["@midnightntwrk/**", "@midnight-ntwrk/**", "ghcr.io/midnight-ntwrk/**"]
+      "matchPackageNames": [
+        "@midnightntwrk/**",
+        "@midnight-ntwrk/**",
+        "ghcr.io/midnight-ntwrk/**"
+      ]
     },
     {
       "description": [
