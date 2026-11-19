@@ -21,7 +21,7 @@ jobs:
           persist-credentials: false
 
       - name: Check License Headers
-        uses: apache/skywalking-eyes/header@a196742f472feaffafea537ce5a2a4c3c53a8de4 # main
+        uses: apache/skywalking-eyes/header@5c28835454eb069b7a4667430f2c40a3d5a9912c # main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -37,7 +37,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Fix License Headers
-        uses: apache/skywalking-eyes/header@a196742f472feaffafea537ce5a2a4c3c53a8de4 # main
+        uses: apache/skywalking-eyes/header@5c28835454eb069b7a4667430f2c40a3d5a9912c # main
         with:
           mode: fix
         env:
