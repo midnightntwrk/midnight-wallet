@@ -314,10 +314,6 @@ export type PendingWalletEntry = WalletEntry & { readonly lifecycle: Transaction
  */
 export type FinalizedWalletEntry = WalletEntry & { readonly lifecycle: TransactionHistoryStorage.FinalizedLifecycle };
 
-/** Whether a wallet stored `entry` when it applied the transaction and has not yet learnt its details. */
-const hasDetailsPending = (entry: WalletEntry): boolean =>
-  entry.shieldedDetailsPending === true || entry.dustDetailsPending === true;
-
 export const isPendingWalletEntry = (entry: WalletEntry): entry is PendingWalletEntry =>
   entry.lifecycle.status === 'pending';
 
@@ -3003,8 +2999,8 @@ export class WalletFacade {
   /**
    * The finalized entry recording `tx`, if sync has written one, even under the hash aggregation gave it on-chain. A
    * transaction whose stamp no epoch can read has no entry, rather than an error, so a verdict on it still resolves. An
-   * entry whose details are still pending is skipped: it records no status yet, so it cannot say how the chain ran
-   * `tx`.
+   * entry whose details are still pending counts: a wallet stored it because it applied `tx`, so the chain included
+   * it.
    */
   private finalizedEntryFor(tx: AnyTx, history: readonly WalletEntry[]): FinalizedWalletEntry | undefined {
     return Option.match(
@@ -3015,9 +3011,7 @@ export class WalletFacade {
           const key = submitTxHistoryKey(carried);
           return history.find(
             (entry): entry is FinalizedWalletEntry =>
-              isFinalizedWalletEntry(entry) &&
-              !hasDetailsPending(entry) &&
-              TransactionHistoryStorage.coversTransaction(entry, key),
+              isFinalizedWalletEntry(entry) && TransactionHistoryStorage.coversTransaction(entry, key),
           );
         },
       },
@@ -3032,10 +3026,14 @@ export class WalletFacade {
   ): Promise<boolean> {
     const entry = this.finalizedEntryFor(tx, history);
     if (entry === undefined) return false;
+    // An entry whose details are still pending records no status: the chain included the transaction, and only the
+    // verdict says how it ran. A verdict that is not an outcome of running it (an orphaning) releases nothing.
+    const status =
+      entry.status ?? (result.status === 'PARTIAL_SUCCESS' || result.status === 'FAILURE' ? result.status : undefined);
     // Included failures still need their unexecuted coin reservations released.
-    if (entry.status === 'PARTIAL_SUCCESS') {
+    if (status === 'PARTIAL_SUCCESS') {
       await this.#revertFailedSegments(tx, failedSegmentsOf(result));
-    } else if (entry.status === 'FAILURE') {
+    } else if (status === 'FAILURE') {
       await this.#releaseRejected(tx);
     }
     // A success needs nothing released: sync settles the coins it spent.
