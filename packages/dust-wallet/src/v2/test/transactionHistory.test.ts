@@ -15,7 +15,7 @@ import {
   type TransactionHistoryStorage,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { TransactionHistoryDetail, type TransactionHistoryDetailQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
-import { ClientError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Cause, Clock, Duration, Effect, Exit, Fiber, Option, Ref, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
@@ -128,6 +128,41 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails (dust)', ()
           expect(failure.value).toBeInstanceOf(TransactionHistoryError);
           expect(failure.value.cause).toBe(clientError);
         }
+      }
+    }
+  });
+
+  it('retries a server error (indexer down, unreachable or 5xx) within the window, since it can clear by waiting', async () => {
+    const service = makeDefaultTransactionHistoryService(config, () => undefined);
+    // A transient failure: the indexer is briefly down. Waiting can turn it into a success, so the retry schedule
+    // must engage for it exactly as it does for a transaction the indexer has not yet ingested.
+    const serverError = new ServerError({ message: 'HTTP 503: Service Unavailable' });
+
+    const program = Effect.gen(function* () {
+      const callCount = yield* Ref.make(0);
+      const fakeQuery = () =>
+        Ref.getAndUpdate(callCount, (n) => n + 1).pipe(
+          Effect.flatMap((n) => (n < 2 ? Effect.fail(serverError) : Effect.succeed(populatedResponse))),
+        );
+      const exit = yield* service
+        .getTransactionDetails(hash)
+        .pipe(Effect.provideService(TransactionHistoryDetail.tag, fakeQuery), Effect.exit);
+      const calls = yield* Ref.get(callCount);
+      return { exit, calls };
+    });
+
+    const result = await runToExit(program);
+
+    expect(Exit.isSuccess(result)).toBe(true);
+    if (Exit.isSuccess(result)) {
+      const { exit, calls } = result.value;
+      // Two failed queries while the indexer is down, then the one that succeeds once it is back.
+      expect(calls).toBe(3);
+      expect(Exit.isSuccess(exit)).toBe(true);
+      if (Exit.isSuccess(exit)) {
+        expect(exit.value.hash).toBe(hash);
+        expect(exit.value.fees).toBe(1234n);
+        expect(exit.value.block).toEqual({ hash: 'block-hash', height: 42, timestamp: 1_700_000_000 });
       }
     }
   });
