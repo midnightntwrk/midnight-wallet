@@ -62,6 +62,19 @@ const entryUnknownFieldsOf = (raw: unknown, encoded: unknown): UnknownFields =>
   isJsonObject(raw) ? unknownFieldsOf(raw, (key) => isJsonObject(encoded) && Object.hasOwn(encoded, key)) : {};
 
 /**
+ * `merged`, with every detail `recorded` already holds put back: its identifiers joined with the merged ones, its
+ * `status`, `timestamp` and `fees` where it has them, and its lifecycle when that is already `finalized`.
+ */
+const keepRecordedDetails = <T extends TransactionHistoryEntryCommon>(recorded: T, merged: T): T => ({
+  ...merged,
+  identifiers: [...new Set([...recorded.identifiers, ...merged.identifiers])],
+  ...(recorded.status !== undefined ? { status: recorded.status } : {}),
+  ...(recorded.timestamp !== undefined ? { timestamp: recorded.timestamp } : {}),
+  ...(recorded.fees !== undefined ? { fees: recorded.fees } : {}),
+  lifecycle: recorded.lifecycle.status === 'finalized' ? recorded.lifecycle : merged.lifecycle,
+});
+
+/**
  * In-memory implementation of the TransactionHistoryStorage interface.
  *
  * `T` is the entry shape — a {@link TransactionHistoryEntryCommon} extension carrying any wallet-specific sections. The
@@ -118,7 +131,22 @@ export class InMemoryTransactionHistoryStorage<
     this.#clearUnfinalizedCoveredBy(entry);
   }
 
-  gotApplied(_input: AppliedEntryInput<T>): Promise<void> {
+  /**
+   * Records a transaction a wallet has applied before it knows the block it landed in, as a `finalized` entry with no
+   * block. An entry already under the hash takes the incoming fields through the merge function, but keeps every detail
+   * it already records — a finalized lifecycle (and its block), `status`, `timestamp`, `fees` and its identifiers — so
+   * a wallet whose sync lags another's never erases what that wallet's complete write recorded.
+   */
+  gotApplied(input: AppliedEntryInput<T>): Promise<void> {
+    // Type cast required because: `T` is an open generic, so TypeScript cannot see that `Omit<T, 'lifecycle'>` plus a
+    // `lifecycle` reconstitutes exactly `T`. The input type guarantees it — `AppliedEntryInput<T>` is that `Omit` — but
+    // the compiler has no rule that puts a spread of a generic's `Omit` back together.
+    const incoming = { ...input, lifecycle: { status: 'finalized' } } as unknown as T;
+    const existing = this.#storage.get(incoming.hash);
+    this.#storage.set(
+      incoming.hash,
+      existing === undefined ? incoming : keepRecordedDetails(existing, this.#merge(existing, incoming)),
+    );
     return Promise.resolve();
   }
 
