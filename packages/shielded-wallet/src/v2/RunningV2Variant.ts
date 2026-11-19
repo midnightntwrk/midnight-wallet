@@ -35,7 +35,12 @@ import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type SerializationCapability } from './Serialization.js';
 import { type ChangesResult, type EventsSyncUpdate, type SyncCapability, type SyncService } from './Sync.js';
 import { type TransactingCapability, type TokenTransfer, type BalancingResult } from './Transacting.js';
-import { OtherWalletError, TransactionHistoryError, type WalletError } from './WalletError.js';
+import {
+  type BlocklessFinalizedEntryError,
+  OtherWalletError,
+  TransactionHistoryError,
+  type WalletError,
+} from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 import { type CoinSelection } from '@midnightntwrk/wallet-sdk-capabilities';
@@ -206,25 +211,35 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   }
 
   startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
-    // Read once, so the fibers this stream forks hold what they use rather than the variant itself.
-    const { stateRef, activationRange } = this.#context;
-    const { syncService, syncCapability, transactionHistoryService } = this.#v2Context;
-    const txHistoryPermits = this.#txHistoryPermits;
+    return pipe(
+      // Entries a previous run stored but never completed (the wallet stopped, or was restored from a snapshot taken
+      // mid-lookup) are completed first. Forked once, outside the retried sync below, so a sync retry never repeats it.
+      Stream.fromEffect(Effect.forkIn(this.#completePendingDetails(), this.#scope)),
+      Stream.drain,
+      Stream.concat(this.#syncUpdates(startAux)),
+    );
+  }
+
+  #syncUpdates(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
     const historyScope = this.#context.runtimeScope ?? this.#scope;
 
     return pipe(
-      SubscriptionRef.get(stateRef),
+      SubscriptionRef.get(this.#context.stateRef),
       Stream.fromEffect,
-      Stream.flatMap((state) => syncService.updates(state, startAux)),
+      Stream.flatMap((state) => this.#v2Context.syncService.updates(state, startAux)),
       Stream.mapEffect((update) =>
         // Applying an update and registering the fiber that records its changes happen as one step: a stop between the
         // two would leave applied changes that nothing records and nothing logs. The recording itself stays
         // interruptible.
         Effect.uninterruptibleMask((restore) =>
-          SubscriptionRef.modifyEffect(stateRef, (state) =>
+          SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
             Effect.try({
               try: () => {
-                const [newState, changesResult] = syncCapability.applyUpdate(state, update, activationRange);
+                const [newState, changesResult] = this.#v2Context.syncCapability.applyUpdate(
+                  state,
+                  update,
+                  this.#context.activationRange,
+                );
                 return [changesResult, newState] as const;
               },
               catch: (err) =>
@@ -232,7 +247,12 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                   message: 'Error while applying sync update',
                   cause: err,
                 }),
-            }),
+            }).pipe(
+              // Each change's entry is stored before the state that moves past it is committed, so a snapshot taken at
+              // any moment is never ahead of its history. A failed write fails the update: the state stays where it was
+              // and the sync retries, rather than move past a change the history does not hold.
+              Effect.tap(([changesResult]) => this.#recordApplied(changesResult)),
+            ),
           ).pipe(
             Effect.flatMap(({ changes, protocolVersion }) =>
               // Skip the tx-history fork entirely when there are no changes.
@@ -245,41 +265,17 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                     Effect.forEach(
                       changes,
                       (change) =>
-                        pipe(
-                          txHistoryPermits.withPermits(1)(
-                            pipe(
-                              transactionHistoryService.getTransactionDetails(change.source),
-                              Effect.flatMap((metadata) =>
-                                transactionHistoryService.put(change, metadata, protocolVersion),
-                              ),
+                        this.#recordWithRetries(
+                          change.source,
+                          pipe(
+                            this.#v2Context.transactionHistoryService.getTransactionDetails(change.source),
+                            Effect.flatMap((metadata) =>
+                              this.#v2Context.transactionHistoryService.put(change, metadata, protocolVersion),
                             ),
-                          ),
-                          // applyUpdate has already advanced appliedIndex, so this change.source won't be re-processed:
-                          // an attempt that gives up (an indexer outage longer than getTransactionDetails' retry window)
-                          // is tried again, rather than losing the shielded section.
-                          Effect.tapError((error) =>
-                            Effect.logWarning(
-                              error,
-                              `Failed to record shielded tx-history section for ${change.source}; trying again`,
-                            ),
-                          ),
-                          Effect.retry({
-                            schedule: recordRetrySchedule,
-                            while: (error) => error instanceof TransactionHistoryError,
-                          }),
-                          Effect.onInterrupt(() =>
-                            Effect.logWarning(
-                              `Shielded tx-history section for ${change.source} not recorded: wallet stopped`,
-                            ),
-                          ),
-                          Effect.catchAllCause((cause) =>
-                            // Only a failure that waiting cannot fix lands here. Surface it as a structured error carrying
-                            // the tx hash, not a silent Console.error defect.
-                            Effect.logError(cause, `Failed to record shielded tx-history section for ${change.source}`),
                           ),
                         ),
                       // `concurrency` only bounds fiber creation within this one batch; the cap on simultaneous writes
-                      // across batches is the variant's semaphore acquired around each write above.
+                      // across batches is the variant's semaphore acquired around each write.
                       { discard: true, concurrency: 8 },
                     ),
                     restore,
@@ -305,6 +301,75 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
             return Duration.millis(Math.min(delayWithJitter, Duration.toMillis(maxDelay)));
           }),
         ),
+      ),
+    );
+  }
+
+  /** Stores every change of an applied update as an incomplete entry, when the history service can. */
+  #recordApplied({ changes, protocolVersion }: ChangesResult): Effect.Effect<void, WalletError> {
+    const service = this.#v2Context.transactionHistoryService;
+    return service.recordApplied === undefined || changes.length === 0
+      ? Effect.void
+      : Effect.forEach(changes, (change) => service.recordApplied?.(change, protocolVersion) ?? Effect.void, {
+          discard: true,
+        }).pipe(
+          Effect.mapError(
+            (cause) => new OtherWalletError({ message: 'Error while recording applied changes in the history', cause }),
+          ),
+        );
+  }
+
+  /** Looks up and fills in every entry the history still marks `shieldedDetailsPending`. */
+  #completePendingDetails(): Effect.Effect<void> {
+    const service = this.#v2Context.transactionHistoryService;
+    return service.pendingDetails === undefined || service.completeDetails === undefined
+      ? Effect.void
+      : pipe(
+          service.pendingDetails(),
+          Effect.retry({ schedule: recordRetrySchedule }),
+          Effect.flatMap((hashes) =>
+            Effect.forEach(
+              hashes,
+              (hash) =>
+                this.#recordWithRetries(
+                  hash,
+                  pipe(
+                    service.getTransactionDetails(hash),
+                    Effect.flatMap((metadata) => service.completeDetails?.(hash, metadata) ?? Effect.void),
+                  ),
+                ),
+              { discard: true, concurrency: 8 },
+            ),
+          ),
+          Effect.catchAllCause((cause) => Effect.logError(cause, 'Failed to read pending shielded tx-history entries')),
+        );
+  }
+
+  /**
+   * Runs one history write for `hash` under a lookup permit until it succeeds. The state has already moved past the
+   * change, so it will not be re-processed: an attempt that gives up (an indexer outage longer than
+   * getTransactionDetails' retry window) is tried again, rather than losing the shielded section.
+   */
+  #recordWithRetries(
+    hash: string,
+    attempt: Effect.Effect<void, TransactionHistoryError | BlocklessFinalizedEntryError>,
+  ): Effect.Effect<void> {
+    return pipe(
+      this.#txHistoryPermits.withPermits(1)(attempt),
+      Effect.tapError((error) =>
+        Effect.logWarning(error, `Failed to record shielded tx-history section for ${hash}; trying again`),
+      ),
+      Effect.retry({
+        schedule: recordRetrySchedule,
+        while: (error) => error instanceof TransactionHistoryError,
+      }),
+      Effect.onInterrupt(() =>
+        Effect.logWarning(`Shielded tx-history section for ${hash} not recorded: wallet stopped`),
+      ),
+      Effect.catchAllCause((cause) =>
+        // Only a failure that waiting cannot fix lands here. Surface it as a structured error carrying the tx hash, not
+        // a silent Console.error defect.
+        Effect.logError(cause, `Failed to record shielded tx-history section for ${hash}`),
       ),
     );
   }

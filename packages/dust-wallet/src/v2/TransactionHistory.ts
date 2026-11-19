@@ -51,9 +51,10 @@ export type DefaultTransactionHistoryConfiguration = {
   txHistoryStorage: DustHistoryStorage;
   indexerClientConnection: { indexerHttpUrl: string };
   /**
-   * How long to keep re-querying the indexer for a transaction's details before giving up, when the WS event arrives
-   * ahead of HTTP ingestion. This is a bounded window, not a guarantee: if the indexer lags beyond it the dust section
-   * is lost (the change is not re-processed, even across restarts) and the failure is logged. Default: 2 minutes.
+   * How long one lookup keeps re-querying the indexer for a transaction's details before giving up, when the WS event
+   * arrives ahead of HTTP ingestion or the indexer is briefly down. A lookup that gives up is logged and tried again
+   * later; with a storage that implements `gotApplied` the entry is already stored, marked `dustDetailsPending`, and is
+   * completed after a restart too. Default: 2 minutes.
    */
   transactionDetailsRetryWindow?: Duration.DurationInput;
 };
@@ -84,6 +85,22 @@ export type TransactionHistoryService = {
   getTransactionDetails(
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<TransactionDetails, TransactionHistoryError | BlocklessFinalizedEntryError>;
+  /**
+   * Stores a change the wallet has applied as an incomplete entry — its dust section, with `dustDetailsPending: true` —
+   * before its details are known. Does nothing when the storage does not implement `gotApplied`. Absent from a service
+   * that cannot complete such an entry later.
+   */
+  recordApplied?(
+    changes: ledger.DustStateChanges,
+    protocolVersion: number,
+  ): Effect.Effect<void, TransactionHistoryError>;
+  /** The hashes of the entries still marked `dustDetailsPending: true`. */
+  pendingDetails?(): Effect.Effect<readonly TransactionHistoryStorage.TransactionHash[], TransactionHistoryError>;
+  /** Fills in the details of an entry `recordApplied` stored, fees included, keeping its section, and clears its flag. */
+  completeDetails?(
+    hash: TransactionHistoryStorage.TransactionHash,
+    metadata: TransactionDetails,
+  ): Effect.Effect<void, TransactionHistoryError>;
 };
 
 const convertQualifiedDustOutput = (utxo: ledger.QualifiedDustOutput) => ({
@@ -92,6 +109,17 @@ const convertQualifiedDustOutput = (utxo: ledger.QualifiedDustOutput) => ({
   seq: utxo.seq,
   backingNight: utxo.backingNight,
   mtIndex: utxo.mtIndex,
+});
+
+const sectionOf = (changes: ledger.DustStateChanges): DustSection => ({
+  receivedUtxos: changes.receivedUtxos.map(convertQualifiedDustOutput),
+  spentUtxos: changes.spentUtxos.map(convertQualifiedDustOutput),
+});
+
+const blockOf = (metadata: TransactionDetails): TransactionHistoryStorage.FinalizedBlock => ({
+  hash: metadata.block.hash,
+  height: metadata.block.height,
+  timestamp: new Date(metadata.block.timestamp),
 });
 
 const convertUpdateToFinalizedInput = (
@@ -104,15 +132,9 @@ const convertUpdateToFinalizedInput = (
   status: metadata.status,
   identifiers: metadata.identifiers,
   fees: metadata.fees,
-  finalizedBlock: {
-    hash: metadata.block.hash,
-    height: metadata.block.height,
-    timestamp: new Date(metadata.block.timestamp),
-  },
-  dust: {
-    receivedUtxos: changes.receivedUtxos.map(convertQualifiedDustOutput),
-    spentUtxos: changes.spentUtxos.map(convertQualifiedDustOutput),
-  } satisfies DustSection,
+  finalizedBlock: blockOf(metadata),
+  dust: sectionOf(changes),
+  dustDetailsPending: false,
 });
 
 const gotFinalizedDust = (
@@ -140,6 +162,49 @@ export const makeDefaultTransactionHistoryService = (
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> =>
       gotFinalizedDust(txHistoryStorage, convertUpdateToFinalizedInput(changes, metadata, protocolVersion)),
+
+    recordApplied: (changes: ledger.DustStateChanges, protocolVersion: number) =>
+      Effect.tryPromise({
+        try: () =>
+          txHistoryStorage.gotApplied?.({
+            hash: changes.source,
+            identifiers: [],
+            protocolVersion,
+            dust: sectionOf(changes),
+            dustDetailsPending: true,
+          }) ?? Promise.resolve(),
+        catch: (e) =>
+          new TransactionHistoryError({
+            message: `Failed to record applied history entry for ${changes.source}`,
+            cause: e,
+          }),
+      }),
+
+    pendingDetails: () =>
+      Effect.tryPromise({
+        try: () => txHistoryStorage.getAll(),
+        catch: (e) => new TransactionHistoryError({ message: 'Failed to read the transaction history', cause: e }),
+      }).pipe(
+        Effect.map((entries) =>
+          // The reader is typed over every wallet's entries, so this wallet's flag is read by name.
+          entries.filter((entry) => entry['dustDetailsPending'] === true).map((entry) => entry.hash),
+        ),
+      ),
+
+    completeDetails: (hash: TransactionHistoryStorage.TransactionHash, metadata: TransactionDetails) =>
+      Effect.tryPromise({
+        try: () =>
+          txHistoryStorage.gotFinalized({
+            hash,
+            status: metadata.status,
+            identifiers: metadata.identifiers,
+            fees: metadata.fees,
+            finalizedBlock: blockOf(metadata),
+            dustDetailsPending: false,
+          }),
+        catch: (e) =>
+          new TransactionHistoryError({ message: `Failed to complete history entry for ${hash}`, cause: e }),
+      }),
 
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,

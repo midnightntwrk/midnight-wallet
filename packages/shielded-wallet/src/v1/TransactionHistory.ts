@@ -49,10 +49,10 @@ export type DefaultTransactionHistoryConfiguration = {
   txHistoryStorage: ShieldedHistoryStorage;
   indexerClientConnection: { indexerHttpUrl: string };
   /**
-   * How long to keep re-querying the indexer for a transaction's details before giving up, when the WS event arrives
-   * ahead of HTTP ingestion. This is a bounded window, not a guarantee: if the indexer lags beyond it the shielded
-   * section is lost (the change is not re-processed, even across restarts) and the failure is logged. Default: 2
-   * minutes.
+   * How long one lookup keeps re-querying the indexer for a transaction's details before giving up, when the WS event
+   * arrives ahead of HTTP ingestion or the indexer is briefly down. A lookup that gives up is logged and tried again
+   * later; with a storage that implements `gotApplied` the entry is already stored, marked `shieldedDetailsPending`,
+   * and is completed after a restart too. Default: 2 minutes.
    */
   transactionDetailsRetryWindow?: Duration.DurationInput;
 };
@@ -82,7 +82,34 @@ export type TransactionHistoryService = {
   getTransactionDetails(
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<TransactionDetails, TransactionHistoryError | BlocklessFinalizedEntryError>;
+  /**
+   * Stores a change the wallet has applied as an incomplete entry — its shielded section, with `shieldedDetailsPending:
+   * true` — before its details are known. Does nothing when the storage does not implement `gotApplied`. Absent from a
+   * service that cannot complete such an entry later.
+   */
+  recordApplied?(
+    changes: ledger.ZswapStateChanges,
+    protocolVersion: number,
+  ): Effect.Effect<void, TransactionHistoryError>;
+  /** The hashes of the entries still marked `shieldedDetailsPending: true`. */
+  pendingDetails?(): Effect.Effect<readonly TransactionHistoryStorage.TransactionHash[], TransactionHistoryError>;
+  /** Fills in the details of an entry `recordApplied` stored, keeping its section, and clears its pending flag. */
+  completeDetails?(
+    hash: TransactionHistoryStorage.TransactionHash,
+    metadata: TransactionDetails,
+  ): Effect.Effect<void, TransactionHistoryError>;
 };
+
+const sectionOf = (changes: ledger.ZswapStateChanges): ShieldedSection => ({
+  receivedCoins: changes.receivedCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
+  spentCoins: changes.spentCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
+});
+
+const blockOf = (metadata: TransactionDetails): TransactionHistoryStorage.FinalizedBlock => ({
+  hash: metadata.block.hash,
+  height: metadata.block.height,
+  timestamp: new Date(metadata.block.timestamp),
+});
 
 const convertUpdateToFinalizedInput = (
   changes: ledger.ZswapStateChanges,
@@ -93,15 +120,9 @@ const convertUpdateToFinalizedInput = (
   protocolVersion,
   status: metadata.status,
   identifiers: metadata.identifiers,
-  finalizedBlock: {
-    hash: metadata.block.hash,
-    height: metadata.block.height,
-    timestamp: new Date(metadata.block.timestamp),
-  },
-  shielded: {
-    receivedCoins: changes.receivedCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
-    spentCoins: changes.spentCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
-  } satisfies ShieldedSection,
+  finalizedBlock: blockOf(metadata),
+  shielded: sectionOf(changes),
+  shieldedDetailsPending: false,
 });
 
 const gotFinalizedShielded = (
@@ -129,6 +150,48 @@ export const makeDefaultTransactionHistoryService = (
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> =>
       gotFinalizedShielded(txHistoryStorage, convertUpdateToFinalizedInput(changes, metadata, protocolVersion)),
+
+    recordApplied: (changes: ledger.ZswapStateChanges, protocolVersion: number) =>
+      Effect.tryPromise({
+        try: () =>
+          txHistoryStorage.gotApplied?.({
+            hash: changes.source,
+            identifiers: [],
+            protocolVersion,
+            shielded: sectionOf(changes),
+            shieldedDetailsPending: true,
+          }) ?? Promise.resolve(),
+        catch: (e) =>
+          new TransactionHistoryError({
+            message: `Failed to record applied history entry for ${changes.source}`,
+            cause: e,
+          }),
+      }),
+
+    pendingDetails: () =>
+      Effect.tryPromise({
+        try: () => txHistoryStorage.getAll(),
+        catch: (e) => new TransactionHistoryError({ message: 'Failed to read the transaction history', cause: e }),
+      }).pipe(
+        Effect.map((entries) =>
+          // The reader is typed over every wallet's entries, so this wallet's flag is read by name.
+          entries.filter((entry) => entry['shieldedDetailsPending'] === true).map((entry) => entry.hash),
+        ),
+      ),
+
+    completeDetails: (hash: TransactionHistoryStorage.TransactionHash, metadata: TransactionDetails) =>
+      Effect.tryPromise({
+        try: () =>
+          txHistoryStorage.gotFinalized({
+            hash,
+            status: metadata.status,
+            identifiers: metadata.identifiers,
+            finalizedBlock: blockOf(metadata),
+            shieldedDetailsPending: false,
+          }),
+        catch: (e) =>
+          new TransactionHistoryError({ message: `Failed to complete history entry for ${hash}`, cause: e }),
+      }),
 
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
