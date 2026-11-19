@@ -16,11 +16,7 @@ import { Duration, Array as EArray, Effect, Schedule, type Schema } from 'effect
 import { TransactionHistoryDetail } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import {
-  BlocklessFinalizedEntryError,
-  TransactionDetailsRejectedError,
-  TransactionHistoryError,
-} from './WalletError.js';
+import { BlocklessFinalizedEntryError, TransactionHistoryError } from './WalletError.js';
 
 import {
   type ShieldedSectionSchema,
@@ -85,10 +81,7 @@ export type TransactionHistoryService = {
   ): Effect.Effect<void, TransactionHistoryError>;
   getTransactionDetails(
     hash: TransactionHistoryStorage.TransactionHash,
-  ): Effect.Effect<
-    TransactionDetails,
-    TransactionHistoryError | TransactionDetailsRejectedError | BlocklessFinalizedEntryError
-  >;
+  ): Effect.Effect<TransactionDetails, TransactionHistoryError | BlocklessFinalizedEntryError>;
   /**
    * Stores a change the wallet has applied as an incomplete entry — its shielded section, with `shieldedDetailsPending:
    * true` — before its details are known. Does nothing when the storage does not implement `gotApplied`. Absent from a
@@ -205,7 +198,7 @@ export const makeDefaultTransactionHistoryService = (
 
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
-    ): Effect.Effect<TransactionDetails, TransactionHistoryError | TransactionDetailsRejectedError> =>
+    ): Effect.Effect<TransactionDetails, TransactionHistoryError> =>
       Effect.gen(function* () {
         const statusQuery = yield* TransactionHistoryDetail;
         const result = yield* statusQuery({ transactionHash: hash });
@@ -243,8 +236,8 @@ export const makeDefaultTransactionHistoryService = (
         // already-behind indexer. Two failures are transient: the typed "not yet indexed" one, and a `ServerError`
         // (indexer down, unreachable or 5xx), which clears once the indexer is back. Beyond the window they surface as
         // a `TransactionHistoryError`, which the caller tries again later. Anything else (bad URL, 4xx, GraphQL or
-        // schema error) cannot succeed by waiting, so it fails fast, as a `TransactionDetailsRejectedError` no caller
-        // retries, instead of holding a fan-out slot for the whole window.
+        // schema error) cannot succeed by waiting, so it fails fast, as a `TransactionHistoryError` marked
+        // `retryable: false` that no caller retries, instead of holding a fan-out slot for the whole window.
         Effect.retry({
           schedule: Schedule.exponential(Duration.seconds(1)).pipe(
             Schedule.either(Schedule.spaced(Duration.seconds(10))),
@@ -261,10 +254,10 @@ export const makeDefaultTransactionHistoryService = (
                   message: `Failed to fetch transaction metadata for ${hash}`,
                   cause: error,
                 })
-              : new TransactionDetailsRejectedError({
+              : new TransactionHistoryError({
                   message: `The indexer rejected the transaction metadata query for ${hash}`,
-                  hash,
                   cause: error,
+                  retryable: false,
                 }),
         ),
       ),
@@ -302,7 +295,10 @@ export const makeSimulatorTransactionHistoryService = (
           (entry): Effect.Effect<TransactionDetails, TransactionHistoryError | BlocklessFinalizedEntryError> =>
             !isFinalized(entry)
               ? Effect.fail(
-                  new TransactionHistoryError({ message: `No transaction found in storage for hash: ${hash}` }),
+                  new TransactionHistoryError({
+                    message: `No transaction found in storage for hash: ${hash}`,
+                    retryable: false,
+                  }),
                 )
               : entry.lifecycle.finalizedBlock === undefined
                 ? Effect.fail(

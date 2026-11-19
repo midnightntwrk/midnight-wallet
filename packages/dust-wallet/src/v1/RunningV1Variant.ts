@@ -36,11 +36,10 @@ import {
 import { ProtocolVersion, Token, VariantState } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type BlocklessFinalizedEntryError,
-  type TransactionDetailsRejectedError,
   InsufficientDustForFeeError,
   OtherWalletError,
   SyncWalletError,
-  TransactionHistoryError,
+  type TransactionHistoryError,
   type WalletError,
 } from './WalletError.js';
 import { dustTreeRoots } from './Utils.js';
@@ -440,10 +439,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
    */
   #recordWithRetries(
     hash: string,
-    attempt: Effect.Effect<
-      void,
-      TransactionHistoryError | TransactionDetailsRejectedError | BlocklessFinalizedEntryError
-    >,
+    attempt: Effect.Effect<void, TransactionHistoryError | BlocklessFinalizedEntryError>,
   ): Effect.Effect<void> {
     return pipe(
       this.#txHistoryPermits.withPermits(1)(attempt),
@@ -452,7 +448,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       ),
       Effect.retry({
         schedule: recordRetrySchedule,
-        while: (error) => error instanceof TransactionHistoryError,
+        while: (error) => error._tag === 'Wallet.TransactionHistory' && error.retryable !== false,
       }),
       Effect.catchAllCause((cause) =>
         // Only a failure that waiting cannot fix lands here. Surface it as a structured error carrying the tx hash, not

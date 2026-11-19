@@ -86,9 +86,23 @@ export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
   cause?: unknown;
 }> {}
 
+/**
+ * Reading, looking up or writing a transaction-history entry failed.
+ *
+ * @remarks
+ *   Most such failures can clear by waiting: the indexer has not ingested the transaction yet, or is down or unreachable.
+ *   One marked `retryable: false` cannot: the indexer refused the query outright (a 4xx response or a GraphQL error),
+ *   the indexer URL is invalid, or the only source holds no such transaction. Absent means it may clear by waiting.
+ * @example
+ *   ```ts
+ *   Effect.retry(lookup, { schedule, while: (error) => error.retryable !== false });
+ *   ```;
+ */
 export class TransactionHistoryError extends Data.TaggedError('Wallet.TransactionHistory')<{
   message: string;
   cause?: unknown;
+  /** `false` when waiting cannot turn the failure into a success; absent when it may. */
+  readonly retryable?: false;
 }> {}
 
 /**
@@ -108,25 +122,6 @@ export class BlocklessFinalizedEntryError extends Data.TaggedError('Wallet.Block
   readonly message: string;
   /** The transaction whose history entry records no block. */
   readonly hash: string;
-}> {}
-
-/**
- * The indexer refused a transaction-details query outright (a 4xx response or a GraphQL error), as opposed to not
- * having indexed the transaction yet or being unreachable.
- *
- * @remarks
- *   Waiting cannot turn this into an answer, so it is never retried. Its own tag, rather than a message on
- *   {@link TransactionHistoryError}, lets a retry policy tell it apart from the failures that do clear by waiting.
- * @example
- *   ```ts
- *   if (error._tag === 'Wallet.TransactionDetailsRejected') reportIndexerMisconfiguration(error.hash);
- *   ```;
- */
-export class TransactionDetailsRejectedError extends Data.TaggedError('Wallet.TransactionDetailsRejected')<{
-  readonly message: string;
-  /** The transaction whose details were asked for. */
-  readonly hash: string;
-  readonly cause?: unknown;
 }> {}
 
 /**

@@ -37,9 +37,8 @@ import { type ChangesResult, type EventsSyncUpdate, type SyncCapability, type Sy
 import { type TransactingCapability, type TokenTransfer, type BalancingResult } from './Transacting.js';
 import {
   type BlocklessFinalizedEntryError,
-  type TransactionDetailsRejectedError,
   OtherWalletError,
-  TransactionHistoryError,
+  type TransactionHistoryError,
   type WalletError,
 } from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
@@ -359,10 +358,7 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
    */
   #recordWithRetries(
     hash: string,
-    attempt: Effect.Effect<
-      void,
-      TransactionHistoryError | TransactionDetailsRejectedError | BlocklessFinalizedEntryError
-    >,
+    attempt: Effect.Effect<void, TransactionHistoryError | BlocklessFinalizedEntryError>,
   ): Effect.Effect<void> {
     return pipe(
       this.#txHistoryPermits.withPermits(1)(attempt),
@@ -371,7 +367,7 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       ),
       Effect.retry({
         schedule: recordRetrySchedule,
-        while: (error) => error instanceof TransactionHistoryError,
+        while: (error) => error._tag === 'Wallet.TransactionHistory' && error.retryable !== false,
       }),
       Effect.onInterrupt(() =>
         Effect.logWarning(`Shielded tx-history section for ${hash} not recorded: wallet stopped`),

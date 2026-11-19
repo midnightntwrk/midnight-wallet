@@ -25,11 +25,7 @@ import {
   type DefaultTransactionHistoryConfiguration,
   type ShieldedHistoryStorage,
 } from '../TransactionHistory.js';
-import {
-  BlocklessFinalizedEntryError,
-  type TransactionDetailsRejectedError,
-  TransactionHistoryError,
-} from '../WalletError.js';
+import { BlocklessFinalizedEntryError, TransactionHistoryError } from '../WalletError.js';
 
 const hash = 'c0a46613b653a5c6f14a369f3799cdb122a57c3ec83a9f1358717fa8a2221204';
 
@@ -270,12 +266,7 @@ const blockFinalizedEntry: TransactionHistoryStorage.TransactionHistoryEntryWith
 
 const simulatorDetails = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash | undefined,
-): Promise<
-  Exit.Exit<
-    { readonly hash: string },
-    TransactionHistoryError | TransactionDetailsRejectedError | BlocklessFinalizedEntryError
-  >
-> =>
+): Promise<Exit.Exit<{ readonly hash: string }, TransactionHistoryError | BlocklessFinalizedEntryError>> =>
   Effect.runPromiseExit(
     makeSimulatorTransactionHistoryService(
       { ...config, txHistoryStorage: storageReturning(entry) },
