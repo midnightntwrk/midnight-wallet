@@ -27,7 +27,7 @@ import {
 } from '../TransactionHistory.js';
 import {
   BlocklessFinalizedEntryError,
-  TransactionDetailsRejectedError,
+  type TransactionDetailsRejectedError,
   TransactionHistoryError,
 } from '../WalletError.js';
 
@@ -100,7 +100,7 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails (dust)', ()
     }
   });
 
-  it('fails fast on a client error (4xx or GraphQL), with an error of its own, instead of retrying through the window', async () => {
+  it('fails fast on a client error (4xx or GraphQL), marked not retryable, instead of retrying through the window', async () => {
     const service = makeDefaultTransactionHistoryService(config, () => undefined);
     // A permanent failure (bad URL, 4xx, schema mismatch): waiting cannot turn it into a success, so the
     // retry-for-indexer-lag schedule must not engage for it.
@@ -129,9 +129,10 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails (dust)', ()
         const failure = Cause.failureOption(exit.cause);
         expect(Option.isSome(failure)).toBe(true);
         if (Option.isSome(failure)) {
-          // Its own tag, so a caller's retry policy cannot mistake it for a failure that clears by waiting.
-          expect(failure.value).toBeInstanceOf(TransactionDetailsRejectedError);
-          expect(failure.value).toMatchObject({ hash, cause: clientError });
+          // The same tag as every other history failure, marked so a caller's retry policy cannot mistake it for a
+          // failure that clears by waiting.
+          expect(failure.value).toBeInstanceOf(TransactionHistoryError);
+          expect(failure.value).toMatchObject({ retryable: false, cause: clientError });
         }
       }
     }
@@ -220,6 +221,23 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails (dust)', ()
       }
     }
   });
+
+  it('fails with a retryable TransactionHistoryError when a server error outlasts the window, so the caller tries again later', async () => {
+    const service = makeDefaultTransactionHistoryService(config, () => undefined);
+    const serverError = new ServerError({ message: 'HTTP 503: Service Unavailable' });
+
+    const program = service
+      .getTransactionDetails(hash)
+      // The indexer stays down for longer than the retry window.
+      .pipe(Effect.provideService(TransactionHistoryDetail.tag, () => Effect.fail(serverError)));
+
+    const exit = await runToExit(program);
+
+    const failure = failureOf(exit);
+    expect(failure).toBeInstanceOf(TransactionHistoryError);
+    expect(failure).toMatchObject({ cause: serverError });
+    expect(failure).not.toHaveProperty('retryable', false);
+  });
 });
 
 /**
@@ -290,6 +308,13 @@ describe('makeSimulatorTransactionHistoryService.getTransactionDetails (dust)', 
     expect(failureOf(await simulatorDetails(undefined))).toBeInstanceOf(TransactionHistoryError);
     expect(failureOf(await simulatorDetails(blocklessFinalizedEntry))).toBeInstanceOf(BlocklessFinalizedEntryError);
     expect(failureOf(await simulatorDetails(blocklessFinalizedEntry))).toMatchObject({ hash });
+  });
+
+  it('marks a transaction missing from storage not retryable, since storage is the only source and waiting cannot add it', async () => {
+    const missing = failureOf(await simulatorDetails(undefined));
+
+    expect(missing).toBeInstanceOf(TransactionHistoryError);
+    expect(missing).toMatchObject({ retryable: false });
   });
 
   it('returns the details when the finalized entry does record a block', async () => {
