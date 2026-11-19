@@ -42,7 +42,7 @@
   },
   "devDependencies": {
     "@midnightntwrk/wallet-sdk-node-client": "2.0.1",
-    "@polkadot/rpc-provider": "^16.5.4"
+    "@polkadot/rpc-provider": "16.5.6"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
