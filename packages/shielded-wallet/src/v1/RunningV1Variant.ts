@@ -37,6 +37,7 @@ import { type ChangesResult, type EventsSyncUpdate, type SyncCapability, type Sy
 import { type TransactingCapability, type TokenTransfer, type BalancingResult } from './Transacting.js';
 import {
   type BlocklessFinalizedEntryError,
+  type TransactionDetailsRejectedError,
   OtherWalletError,
   TransactionHistoryError,
   type WalletError,
@@ -163,6 +164,8 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   readonly #txHistoryPermits = Effect.makeSemaphore(8).pipe(Effect.runSync);
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
+  /** Completes the entries the history still marks pending; runs at most once however often it is evaluated. */
+  readonly #completePendingDetailsOnce: Effect.Effect<void>;
 
   constructor(
     scope: Scope.Scope,
@@ -172,6 +175,9 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     this.#scope = scope;
     this.#context = context;
     this.#v1Context = v1Context;
+    this.#completePendingDetailsOnce = Effect.runSync(
+      Effect.once(Effect.suspend(() => this.#completePendingDetails())),
+    );
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
@@ -214,7 +220,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     return pipe(
       // Entries a previous run stored but never completed (the wallet stopped, or was restored from a snapshot taken
       // mid-lookup) are completed first. Forked once, outside the retried sync below, so a sync retry never repeats it.
-      Stream.fromEffect(Effect.forkIn(this.#completePendingDetails(), this.#scope)),
+      Stream.fromEffect(Effect.forkIn(this.#completePendingDetailsOnce, this.#scope)),
       Stream.drain,
       Stream.concat(this.#syncUpdates(startAux)),
     );
@@ -308,11 +314,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   /** Stores every change of an applied update as an incomplete entry, when the history service can. */
   #recordApplied({ changes, protocolVersion }: ChangesResult): Effect.Effect<void, WalletError> {
     const service = this.#v1Context.transactionHistoryService;
-    return service.recordApplied === undefined || changes.length === 0
+    const recordApplied = service.recordApplied?.bind(service);
+    return recordApplied === undefined || changes.length === 0
       ? Effect.void
-      : Effect.forEach(changes, (change) => service.recordApplied?.(change, protocolVersion) ?? Effect.void, {
-          discard: true,
-        }).pipe(
+      : Effect.forEach(changes, (change) => recordApplied(change, protocolVersion), { discard: true }).pipe(
           Effect.mapError(
             (cause) => new OtherWalletError({ message: 'Error while recording applied changes in the history', cause }),
           ),
@@ -322,10 +327,12 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   /** Looks up and fills in every entry the history still marks `shieldedDetailsPending`. */
   #completePendingDetails(): Effect.Effect<void> {
     const service = this.#v1Context.transactionHistoryService;
-    return service.pendingDetails === undefined || service.completeDetails === undefined
+    const pendingDetails = service.pendingDetails?.bind(service);
+    const completeDetails = service.completeDetails?.bind(service);
+    return pendingDetails === undefined || completeDetails === undefined
       ? Effect.void
       : pipe(
-          service.pendingDetails(),
+          pendingDetails(),
           Effect.retry({ schedule: recordRetrySchedule }),
           Effect.flatMap((hashes) =>
             Effect.forEach(
@@ -335,7 +342,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                   hash,
                   pipe(
                     service.getTransactionDetails(hash),
-                    Effect.flatMap((metadata) => service.completeDetails?.(hash, metadata) ?? Effect.void),
+                    Effect.flatMap((metadata) => completeDetails(hash, metadata)),
                   ),
                 ),
               { discard: true, concurrency: 8 },
@@ -352,7 +359,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
    */
   #recordWithRetries(
     hash: string,
-    attempt: Effect.Effect<void, TransactionHistoryError | BlocklessFinalizedEntryError>,
+    attempt: Effect.Effect<
+      void,
+      TransactionHistoryError | TransactionDetailsRejectedError | BlocklessFinalizedEntryError
+    >,
   ): Effect.Effect<void> {
     return pipe(
       this.#txHistoryPermits.withPermits(1)(attempt),

@@ -36,6 +36,7 @@ import {
 import { ProtocolVersion, Token, VariantState } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type BlocklessFinalizedEntryError,
+  type TransactionDetailsRejectedError,
   InsufficientDustForFeeError,
   OtherWalletError,
   SyncWalletError,
@@ -402,11 +403,10 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   /** Stores every change of an applied update as an incomplete entry, when the history service can. */
   #recordApplied({ changes, protocolVersion }: ChangesResult): Effect.Effect<void, WalletError> {
     const service = this.#v2Context.transactionHistoryService;
-    return service.recordApplied === undefined || changes.length === 0
+    const recordApplied = service.recordApplied?.bind(service);
+    return recordApplied === undefined || changes.length === 0
       ? Effect.void
-      : Effect.forEach(changes, (change) => service.recordApplied?.(change, protocolVersion) ?? Effect.void, {
-          discard: true,
-        }).pipe(
+      : Effect.forEach(changes, (change) => recordApplied(change, protocolVersion), { discard: true }).pipe(
           Effect.mapError(
             (cause) => new OtherWalletError({ message: 'Error while recording applied changes in the history', cause }),
           ),
@@ -416,10 +416,12 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   /** Looks up and fills in every entry the history still marks `dustDetailsPending`. */
   #completePendingDetails(): Effect.Effect<void> {
     const service = this.#v2Context.transactionHistoryService;
-    return service.pendingDetails === undefined || service.completeDetails === undefined
+    const pendingDetails = service.pendingDetails?.bind(service);
+    const completeDetails = service.completeDetails?.bind(service);
+    return pendingDetails === undefined || completeDetails === undefined
       ? Effect.void
       : pipe(
-          service.pendingDetails(),
+          pendingDetails(),
           Effect.retry({ schedule: recordRetrySchedule }),
           Effect.flatMap((hashes) =>
             Effect.forEach(
@@ -429,7 +431,7 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                   hash,
                   pipe(
                     service.getTransactionDetails(hash),
-                    Effect.flatMap((metadata) => service.completeDetails?.(hash, metadata) ?? Effect.void),
+                    Effect.flatMap((metadata) => completeDetails(hash, metadata)),
                   ),
                 ),
               { discard: true, concurrency: 8 },
@@ -446,7 +448,10 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
    */
   #recordWithRetries(
     hash: string,
-    attempt: Effect.Effect<void, TransactionHistoryError | BlocklessFinalizedEntryError>,
+    attempt: Effect.Effect<
+      void,
+      TransactionHistoryError | TransactionDetailsRejectedError | BlocklessFinalizedEntryError
+    >,
   ): Effect.Effect<void> {
     return pipe(
       this.#txHistoryPermits.withPermits(1)(attempt),

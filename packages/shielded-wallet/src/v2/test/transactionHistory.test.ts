@@ -252,7 +252,12 @@ const blockFinalizedEntry: TransactionHistoryStorage.TransactionHistoryEntryWith
 
 const simulatorDetails = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash | undefined,
-): Promise<Exit.Exit<{ readonly hash: string }, TransactionHistoryError | BlocklessFinalizedEntryError>> =>
+): Promise<
+  Exit.Exit<
+    { readonly hash: string },
+    TransactionHistoryError | TransactionDetailsRejectedError | BlocklessFinalizedEntryError
+  >
+> =>
   Effect.runPromiseExit(
     makeSimulatorTransactionHistoryService(
       { ...config, txHistoryStorage: storageReturning(entry) },
