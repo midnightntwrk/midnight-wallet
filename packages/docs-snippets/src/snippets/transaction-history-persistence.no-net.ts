@@ -33,7 +33,9 @@ await txHistoryStorage.gotFinalized({
   finalizedBlock: { hash: 'block-hash', height: 42, timestamp: new Date('2026-04-01T00:00:00.000Z') },
 });
 
-// Save this string wherever the wallet snapshot is saved.
+// Save this string wherever the wallet snapshot is saved, serializing it after the snapshot (or both at one point
+// between sync updates): the wallets store each entry before their state moves past it, so a history serialized after
+// its snapshot holds every transaction that snapshot has applied.
 const savedHistory = await txHistoryStorage.serialize();
 // #endregion persist
 
