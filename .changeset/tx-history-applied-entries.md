@@ -31,8 +31,10 @@ default service provides it exactly when the storage implements `gotApplied`.
 
 The facade passes `gotApplied` through to the configured storage when it has it, and `WalletEntrySchema` declares both
 flags, so a facade history keeps them through serialize and restore. An entry with either flag `true` is not finished:
-it is `finalized` but may record no status, block or identifiers yet, so a missing status there does not mean success,
-and the facade does not read it as the outcome of a transaction it is reconciling. An application that restores its
-history with its own entry schema must declare the flag of each wallet it runs (`shieldedDetailsPending`,
-`dustDetailsPending`); a schema without them keeps them through serialize and restore, but unread, so the restored
-wallet never finds those entries pending, never completes them, and their stored flag stays `true`.
+it is `finalized` but may record no status, block or identifiers yet, so a missing status there does not mean success.
+The facade still counts it as proof the chain included the transaction: when the transaction's verdict arrives, a
+partial success releases the failed segments' bookings, a failure releases all of them, and an orphaning releases
+nothing, since sync already owns the coins. An application that restores its history with its own entry schema must
+declare the flag of each wallet it runs (`shieldedDetailsPending`, `dustDetailsPending`); a schema without them keeps
+them through serialize and restore, but unread, so the restored wallet never finds those entries pending, never
+completes them, and their stored flag stays `true`.
