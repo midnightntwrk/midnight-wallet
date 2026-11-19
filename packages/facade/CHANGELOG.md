@@ -1,5 +1,17 @@
 # @midnightntwrk/wallet-sdk-facade
 
+## 5.0.2
+
+### Patch Changes
+
+- Updated dependencies [9cb2369]
+- Updated dependencies [413431a]
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.2
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.1.1
+  - @midnightntwrk/wallet-sdk-shielded@4.0.2
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.2
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.2
+
 ## 5.0.1
 
 ### Patch Changes
