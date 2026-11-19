@@ -160,6 +160,49 @@ describe('RunningV2Variant.startSync tx-history fan-out', () => {
     // The cap only queues work, it never drops it.
     expect(result.recorded).toBe(12);
   });
+
+  it("should keep recording history after the variant's own scope closes, when the runtime gives it a longer-lived scope", async () => {
+    const sources = ['a1', 'a2', 'a3'];
+
+    const recorded = await Effect.gen(function* () {
+      const counters: FanOutCounters = {
+        inFlight: yield* Ref.make(0),
+        maxInFlight: yield* Ref.make(0),
+        recorded: yield* Ref.make(0),
+      };
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.init(new ledger.ZswapLocalState(), secretKeys, networkId),
+      );
+      const variantScope = yield* Scope.make();
+      const runtimeScope = yield* Scope.make();
+      const variant = new RunningV2Variant(
+        variantScope,
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+          runtimeScope,
+        },
+        variantContextOf([sources], trackingHistoryService(counters)),
+      );
+
+      yield* variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, variantScope));
+      // Every recording has started and is parked for 10s on the clock when the variant's scope closes, as it does
+      // when the wallet hands over to the next variant.
+      yield* TestClock.adjust(Duration.millis(1));
+      yield* Scope.close(variantScope, Exit.void);
+      yield* TestClock.adjust(Duration.minutes(1));
+      const recordedAfterClose = yield* Ref.get(counters.recorded);
+
+      yield* Scope.close(runtimeScope, Exit.void);
+      return recordedAfterClose;
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(recorded).toBe(sources.length);
+  });
 });
 
 describe('RunningV2Variant.state protocol version signalling', () => {
