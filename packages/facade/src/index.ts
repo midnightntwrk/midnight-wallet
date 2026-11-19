@@ -254,6 +254,9 @@ const inclusionVerdictOf = (
 /**
  * `storage`, with every inclusion a wallet's sync writes also moving the transaction's lifecycle record, once the write
  * has succeeded: a record must not show an inclusion the history failed to keep.
+ *
+ * `gotApplied` is passed through exactly when `storage` has it, so a storage without it stays one the wallets write
+ * only complete entries to. An applied entry carries no status, so it moves no record.
  */
 const feedingInclusions = (
   storage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>,
@@ -264,6 +267,9 @@ const feedingInclusions = (
   serialize: () => storage.serialize(),
   gotPending: (entry) => storage.gotPending(entry),
   gotRejected: (entry) => storage.gotRejected(entry),
+  ...(storage.gotApplied !== undefined
+    ? { gotApplied: (entry) => storage.gotApplied?.(entry) ?? Promise.resolve() }
+    : {}),
   gotFinalized: async (entry) => {
     await storage.gotFinalized(entry);
     await Option.match(inclusionVerdictOf(entry.status), {
@@ -282,11 +288,16 @@ import {
  * Full entry schema for transaction history. The common entry data and wallet-specific sections (`shielded`,
  * `unshielded`, `dust`) live on every entry regardless of lifecycle; the `lifecycle` field is the only discriminator.
  * Pass this to `InMemoryTransactionHistoryStorage` to enable serialize/restore.
+ *
+ * `shieldedDetailsPending` / `dustDetailsPending` are `true` while that wallet has applied the transaction but not yet
+ * learnt its details from the indexer, and `false` once it has; an entry with either `true` is not finished yet.
  */
 export const WalletEntrySchema = TransactionHistoryStorage.extendEntrySchema({
   shielded: Schema.optional(ShieldedSectionSchema),
+  shieldedDetailsPending: Schema.optional(Schema.Boolean),
   unshielded: Schema.optional(UnshieldedSectionSchema),
   dust: Schema.optional(DustSectionSchema),
+  dustDetailsPending: Schema.optional(Schema.Boolean),
 });
 
 export type WalletEntry = Schema.Schema.Type<typeof WalletEntrySchema>;

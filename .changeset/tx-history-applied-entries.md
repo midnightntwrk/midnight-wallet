@@ -2,6 +2,7 @@
 '@midnightntwrk/wallet-sdk-abstractions': minor
 '@midnightntwrk/wallet-sdk-shielded': minor
 '@midnightntwrk/wallet-sdk-dust-wallet': minor
+'@midnightntwrk/wallet-sdk-facade': minor
 ---
 
 feat: store each shielded and Dust tx-history entry before the wallet state moves past it
@@ -17,3 +18,6 @@ the state that moves past the change is committed, so a snapshot is never ahead 
 `shieldedDetailsPending: true` (or `dustDetailsPending: true`) until the indexer has answered for it, and `false` once
 its details are filled in. Entries still pending when a wallet starts, for example after a restore from a snapshot taken
 mid-lookup, are completed in the background.
+
+The facade passes `gotApplied` through to the configured storage when it has it, and `WalletEntrySchema` declares both
+flags, so a facade history keeps them through serialize and restore. An entry with either flag `true` is not finished.
