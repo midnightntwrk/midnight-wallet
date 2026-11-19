@@ -15,6 +15,7 @@ import type * as ledger from '@midnightntwrk/ledger-v9';
 import { Duration, Array as EArray, Effect, Schedule, type Schema } from 'effect';
 import { TransactionHistoryDetail } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { BlocklessFinalizedEntryError, TransactionHistoryError } from './WalletError.js';
 
 import {
@@ -167,16 +168,16 @@ export const makeDefaultTransactionHistoryService = (
         // window — uncapped doubling would leave minute-long gaps and overshoot the window. Jitter the delays so a
         // batch of concurrent lookups that all hit the indexer-lag race don't retry in lockstep against an
         // already-behind indexer. Beyond the window we give up — the change is not re-processed, so the caller logs
-        // the loss. Only the typed "not yet indexed" failure is transient; anything else (bad URL, 4xx, schema
-        // mismatch) cannot succeed by waiting, so it fails fast instead of holding a fan-out slot for the whole
-        // window.
+        // the loss. Two failures are transient: the typed "not yet indexed" one, and a `ServerError` (indexer down,
+        // unreachable or 5xx), which clears once the indexer is back. Anything else (bad URL, 4xx, GraphQL or schema
+        // error) cannot succeed by waiting, so it fails fast instead of holding a fan-out slot for the whole window.
         Effect.retry({
           schedule: Schedule.exponential(Duration.seconds(1)).pipe(
             Schedule.either(Schedule.spaced(Duration.seconds(10))),
             Schedule.jittered,
             Schedule.upTo(retryWindow),
           ),
-          while: (error) => error instanceof TransactionHistoryError,
+          while: (error) => error instanceof TransactionHistoryError || error instanceof ServerError,
         }),
         // Let our own "not yet indexed" error through untouched; only wrap the indexer query's ClientError/ServerError.
         Effect.mapError((error) =>
