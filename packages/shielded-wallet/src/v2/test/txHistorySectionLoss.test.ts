@@ -128,9 +128,8 @@ const runVariant = (batches: readonly FakeSyncUpdate[], holdFor: Duration.Durati
   }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
 
 describe('RunningV2Variant.startSync tx-history sections', () => {
-  // Fails on main: the failed lookup is caught and logged (RunningV2Variant.ts, catchAllCause after the
-  // getTransactionDetails/put pair) and never attempted again, because applyUpdate has already moved the state past
-  // the change. `lookups` ends as ['kept', 'lost'] and `recorded` as ['kept'].
+  // The state moves past a change before its lookup finishes, so the sync never offers the change again: a lookup that
+  // fails must itself be tried again until the indexer answers, or the change's section never reaches the history.
   it('should record every applied change in the history once the indexer can answer, even when its first lookup failed', async () => {
     const result = await runVariant([['kept', 'lost']], Duration.seconds(1), Duration.hours(1));
 

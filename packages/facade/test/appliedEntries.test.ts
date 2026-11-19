@@ -18,8 +18,8 @@
  * @remarks
  *   The wallets write into the storage their factories are handed, which the facade wraps; the wrapper must pass the
  *   applied-entry write through, or the wallets fall back to writing only once the indexer answers. The facade's entry
- *   schema must declare each wallet's flag, or a saved history drops it and a restored wallet never completes the
- *   entry.
+ *   schema must declare each wallet's flag: a schema without it keeps the flag through a save and restore, but unread,
+ *   so no wallet ever finds the entry pending, it is never completed, and its stored flag stays `true`.
  */
 
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
@@ -80,8 +80,10 @@ describe('the storage the facade hands its wallets', () => {
     await facade?.stop();
   });
 
-  it('should record an applied entry in the configured history, so the wallets can store it before their state moves', async () => {
-    const configuration = configurationWith(historyStorage());
+  /** The storage the facade hands its wallets' factories, over a history configured as `configuration` says. */
+  const storageHandedToWallets = async (
+    configuration: ResolvedConfiguration,
+  ): Promise<TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry> | undefined> => {
     const seed = '0000000000000000000000000000000000000000000000000000000000000005';
     const keystore = createKeystore({ kind: 'schnorr', secret: getUnshieldedSeed(seed) }, configuration.networkId);
     // Real, shipped wallets, never started: this test writes what their sync would, through the storage they are handed.
@@ -103,7 +105,12 @@ describe('the storage the facade hands its wallets', () => {
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
     });
-    const [walletsStorage] = handed;
+    return handed[0];
+  };
+
+  it('should record an applied entry in the configured history, so the wallets can store it before their state moves', async () => {
+    const configuration = configurationWith(historyStorage());
+    const walletsStorage = await storageHandedToWallets(configuration);
 
     expect(walletsStorage !== undefined && 'gotApplied' in walletsStorage).toBe(true);
     await walletsStorage?.gotApplied?.(shieldedApplied);
@@ -112,6 +119,23 @@ describe('the storage the facade hands its wallets', () => {
       lifecycle: { status: 'finalized' },
       shieldedDetailsPending: true,
     });
+  });
+
+  it('should hand the wallets no gotApplied when the configured history has none, so they write only complete entries to it', async () => {
+    const backing = historyStorage();
+    const withoutGotApplied: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry> = {
+      getAll: () => backing.getAll(),
+      get: (hash) => backing.get(hash),
+      serialize: () => backing.serialize(),
+      gotPending: (entry) => backing.gotPending(entry),
+      gotFinalized: (entry) => backing.gotFinalized(entry),
+      gotRejected: (entry) => backing.gotRejected(entry),
+    };
+
+    const walletsStorage = await storageHandedToWallets(configurationWith(withoutGotApplied));
+
+    expect(walletsStorage).toBeDefined();
+    expect(walletsStorage !== undefined && 'gotApplied' in walletsStorage).toBe(false);
   });
 });
 

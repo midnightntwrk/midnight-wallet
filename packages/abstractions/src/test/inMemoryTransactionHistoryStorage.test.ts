@@ -233,21 +233,27 @@ describe('InMemoryTransactionHistoryStorage gotApplied', () => {
     expect(result?.walletADetailsPending).toBe(true);
   });
 
-  it('should keep the block, status and identifiers another write already recorded, so a lagging wallet never erases them', async () => {
+  it('should keep the block, status, identifiers, timestamp and fees another write already recorded, so a lagging wallet never erases them', async () => {
     const storage = storageOf();
+    const timestamp = new Date(1_700_000_000);
     await storage.gotFinalized({
       hash: 'tx',
       identifiers: ['id-a'],
       protocolVersion: 1,
       status: 'SUCCESS',
+      timestamp,
+      fees: 1234n,
       finalizedBlock: block,
       walletB: ['utxo'],
     });
 
+    // The lagging write carries values of its own, which must not replace the recorded ones.
     await storage.gotApplied({
       hash: 'tx',
       identifiers: [],
       protocolVersion: 1,
+      timestamp: new Date(0),
+      fees: 0n,
       walletA: ['coin'],
       walletADetailsPending: true,
     });
@@ -256,6 +262,8 @@ describe('InMemoryTransactionHistoryStorage gotApplied', () => {
     expect(result?.lifecycle).toEqual({ status: 'finalized', finalizedBlock: block });
     expect(result?.status).toBe('SUCCESS');
     expect(result?.identifiers).toEqual(['id-a']);
+    expect(result?.timestamp).toEqual(timestamp);
+    expect(result?.fees).toBe(1234n);
     expect(result?.walletB).toEqual(['utxo']);
     expect(result?.walletA).toEqual(['coin']);
     expect(result?.walletADetailsPending).toBe(true);

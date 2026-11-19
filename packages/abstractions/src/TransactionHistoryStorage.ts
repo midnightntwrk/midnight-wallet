@@ -43,10 +43,11 @@ export type FinalizedBlock = Schema.Schema.Type<typeof FinalizedBlockSchema>;
  * The optionality is a property of the format, not of that one path: the schema accepts a blockless finalized entry
  * from any writer and cannot tell an upgraded one from one a caller wrote that way, so `FinalizedEntryInput` requires
  * the block at the type level to keep the SDK's own writes whole. An entry `gotApplied` wrote is the exception: it is
- * missing its block only until the wallet that wrote it has looked the details up and written the complete entry.
- * Nothing backfills an upgraded blockless entry — every sync resumes after the position the snapshot recorded, so the
- * block that would fill it is never replayed. An entry restored without a block stays without one for the life of the
- * history.
+ * missing its block until the wallet that wrote it has looked the details up and written the complete entry. If that
+ * lookup fails in a way waiting cannot fix, the entry stays blockless, its pending flag still `true`, until a later
+ * start of the wallet tries the lookup again. Nothing backfills an upgraded blockless entry — every sync resumes after
+ * the position the snapshot recorded, so the block that would fill it is never replayed. An entry restored without a
+ * block stays without one for the life of the history.
  */
 export const FinalizedLifecycleSchema = Schema.Struct({
   status: Schema.Literal('finalized'),

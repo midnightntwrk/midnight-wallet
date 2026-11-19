@@ -21,6 +21,7 @@ import {
   Fiber,
   Layer,
   Logger,
+  Match,
   Ref,
   Scope,
   Stream,
@@ -69,20 +70,29 @@ type Storage = InMemoryTransactionHistoryStorage<
 
 type Entry = Awaited<ReturnType<Storage['getAll']>>[number];
 
-/** Whether the indexer can answer for `hash` at `nowMillis` on the (test) clock. */
-type Indexer = (hash: string, nowMillis: number) => boolean;
+/** What the indexer does when asked for a transaction's details. */
+type IndexerAnswer = 'answers' | 'not yet indexed' | 'refuses';
+
+/** How the indexer answers for `hash` at `nowMillis` on the (test) clock. */
+type Indexer = (hash: string, nowMillis: number) => IndexerAnswer;
 
 /** An indexer that cannot answer for any transaction until `from`, and answers for every one from then on. */
 const answersFrom =
   (from: Duration.Duration): Indexer =>
   (_hash, nowMillis) =>
-    nowMillis >= Duration.toMillis(from);
+    nowMillis >= Duration.toMillis(from) ? 'answers' : 'not yet indexed';
 
 /** An indexer that only ever answers for `hashes`. */
 const answersOnly =
   (hashes: readonly string[]): Indexer =>
   (hash) =>
-    hashes.includes(hash);
+    hashes.includes(hash) ? 'answers' : 'not yet indexed';
+
+/** An indexer that refuses every query outright, as it does a 4xx or GraphQL error: waiting cannot change that. */
+const refusesAll: Indexer = () => 'refuses';
+
+/** One indexer lookup: which transaction, and when on the (test) clock. */
+type Lookup = { readonly hash: string; readonly atMillis: number };
 
 /**
  * The default history service writing to `storage`, with its indexer lookup replaced by `indexer`; every lookup is
@@ -91,19 +101,31 @@ const answersOnly =
 const historyServiceOf = (
   storage: DustHistoryStorage,
   indexer: Indexer,
-  lookups: Ref.Ref<readonly string[]>,
+  lookups: Ref.Ref<readonly Lookup[]>,
 ): TransactionHistoryService => ({
   ...makeDefaultTransactionHistoryService(
     { txHistoryStorage: storage, indexerClientConnection: { indexerHttpUrl: 'http://localhost:9999/graphql' } },
     () => undefined,
   ),
   getTransactionDetails: (hash) =>
-    Ref.update(lookups, (all) => [...all, hash]).pipe(
-      Effect.zipRight(Clock.currentTimeMillis),
+    Clock.currentTimeMillis.pipe(
+      Effect.tap((atMillis) => Ref.update(lookups, (all) => [...all, { hash, atMillis }])),
       Effect.flatMap((now) =>
-        indexer(hash, now)
-          ? Effect.succeed(detailsOf(hash))
-          : Effect.fail(new TransactionHistoryError({ message: `Indexer has not yet indexed transaction ${hash}` })),
+        Match.value(indexer(hash, now)).pipe(
+          Match.when('answers', () => Effect.succeed(detailsOf(hash))),
+          Match.when('not yet indexed', () =>
+            Effect.fail(new TransactionHistoryError({ message: `Indexer has not yet indexed transaction ${hash}` })),
+          ),
+          Match.when('refuses', () =>
+            Effect.fail(
+              new TransactionHistoryError({
+                message: `The transaction metadata query for ${hash} failed and will not be retried`,
+                retryable: false,
+              }),
+            ),
+          ),
+          Match.exhaustive,
+        ),
       ),
     ),
 });
@@ -155,40 +177,32 @@ const storageWith = (storage: Storage, overrides: Partial<DustHistoryStorage>): 
   ...overrides,
 });
 
-type Run = {
-  /** The history the test seeds and inspects. */
-  readonly storage: Storage;
-  readonly batches?: readonly FakeSyncUpdate[];
-  readonly indexer: Indexer;
-  /** How long to let pass on the test clock once the sync has started. */
-  readonly settleFor: Duration.Duration;
-  /** How many times the sync is started, one after the other. */
-  readonly syncRuns?: number;
-  /** The storage the wallet writes through; `storage` itself unless a test makes some of its calls fail. */
-  readonly storageSeenByWallet?: (storage: Storage) => DustHistoryStorage;
+/** What a storage the wallet writes through can see of the wallet at the moment of a write. */
+type WalletView = {
+  /** The state the wallet has committed. */
+  readonly committed: () => CoreWallet;
+  /** The state the change for `hash` was applied over, once it has been. */
+  readonly appliedOver: (hash: string) => CoreWallet | undefined;
 };
 
-type LogLine = { readonly level: string; readonly message: string };
-
 /**
- * Runs a V2 variant over `batches` against `storage`, recording which hashes the history held each time the wallet
- * state changed, every indexer lookup and every log line, and lets `settleFor` pass on the test clock.
+ * A V2 variant syncing `batches`, its history going through the service `serviceFor` builds from the wallet's view.
+ * Each applied update yields a new state object, so a state the wallet has moved past is told apart by identity.
  */
-const runVariant = ({ storage, batches = [], indexer, settleFor, syncRuns = 1, storageSeenByWallet }: Run) => {
-  // Test setup: the logger is called synchronously, so its lines are collected outside the Effect.
-  const logs: LogLine[] = [];
-  const recordingLogger = Logger.make(({ logLevel, message }) => {
-    logs.push({
-      level: logLevel.label,
-      message: (Array.isArray(message) ? message : [message]).filter((m) => typeof m === 'string').join(' '),
-    });
-  });
-
-  return Effect.gen(function* () {
-    const pendingReads = yield* Ref.make(0);
-    const lookups = yield* Ref.make<readonly string[]>([]);
+const makeVariant = (
+  scope: Scope.Scope,
+  batches: readonly FakeSyncUpdate[],
+  serviceFor: (view: WalletView) => TransactionHistoryService,
+  changeFor: (source: string) => DustStateChanges = changeOf,
+) =>
+  Effect.gen(function* () {
+    // Test setup: the state each change was applied over, recorded synchronously as the wallet applies it.
+    const appliedOver = new Map<string, CoreWallet>();
     const syncCapability: SyncCapability<CoreWallet, FakeSyncUpdate, ChangesResult> = {
-      applyUpdate: (state, sources) => [state, { changes: sources.map(changeOf), protocolVersion: 1 }],
+      applyUpdate: (state, sources) => {
+        sources.forEach((source) => appliedOver.set(source, state));
+        return [{ ...state }, { changes: sources.map(changeFor), protocolVersion: 1 }];
+      },
     };
     const keysCapability = makeDefaultKeysCapability();
     const coinsAndBalancesCapability = makeDefaultCoinsAndBalancesCapability(undefined, () => ({ keysCapability }));
@@ -196,8 +210,10 @@ const runVariant = ({ storage, batches = [], indexer, settleFor, syncRuns = 1, s
     const stateRef = yield* SubscriptionRef.make(
       CoreWallet.initEmpty(LedgerParameters.initialParameters().dust, secretKey, networkId),
     );
-    const scope = yield* Scope.make();
-    const walletStorage = storageSeenByWallet?.(storage) ?? storage;
+    const view: WalletView = {
+      committed: () => Effect.runSync(SubscriptionRef.get(stateRef)),
+      appliedOver: (hash) => appliedOver.get(hash),
+    };
     const variant = new RunningV2Variant(
       scope,
       {
@@ -218,11 +234,64 @@ const runVariant = ({ storage, batches = [], indexer, settleFor, syncRuns = 1, s
         coinsAndBalancesCapability,
         keysCapability,
         coinSelection: chooseCoin,
-        transactionHistoryService: countingPendingReads(
-          historyServiceOf(walletStorage, indexer, lookups),
+        transactionHistoryService: serviceFor(view),
+      },
+    );
+    return { variant, stateRef };
+  });
+
+type Run = {
+  /** The history the test seeds and inspects. */
+  readonly storage: Storage;
+  readonly batches?: readonly FakeSyncUpdate[];
+  readonly indexer: Indexer;
+  /** How long to let pass on the test clock once the sync has started. */
+  readonly settleFor: Duration.Duration;
+  /** How many times the sync is started, one after the other. */
+  readonly syncRuns?: number;
+  /** The change each hash in a batch stands for; one with no coins unless a test gives it some. */
+  readonly changeFor?: (source: string) => DustStateChanges;
+  /** The storage the wallet writes through; `storage` itself unless a test watches or fails some of its calls. */
+  readonly storageSeenByWallet?: (storage: Storage, wallet: WalletView) => DustHistoryStorage;
+};
+
+type LogLine = { readonly level: string; readonly message: string };
+
+/**
+ * Runs a V2 variant over `batches` against `storage`, recording which hashes the history held each time the wallet
+ * state changed, every indexer lookup and every log line, and lets `settleFor` pass on the test clock.
+ */
+const runVariant = ({
+  storage,
+  batches = [],
+  indexer,
+  settleFor,
+  syncRuns = 1,
+  changeFor,
+  storageSeenByWallet,
+}: Run) => {
+  // Test setup: the logger is called synchronously, so its lines are collected outside the Effect.
+  const logs: LogLine[] = [];
+  const recordingLogger = Logger.make(({ logLevel, message }) => {
+    logs.push({
+      level: logLevel.label,
+      message: (Array.isArray(message) ? message : [message]).filter((m) => typeof m === 'string').join(' '),
+    });
+  });
+
+  return Effect.gen(function* () {
+    const pendingReads = yield* Ref.make(0);
+    const lookups = yield* Ref.make<readonly Lookup[]>([]);
+    const scope = yield* Scope.make();
+    const { variant, stateRef } = yield* makeVariant(
+      scope,
+      batches,
+      (view) =>
+        countingPendingReads(
+          historyServiceOf(storageSeenByWallet?.(storage, view) ?? storage, indexer, lookups),
           pendingReads,
         ),
-      },
+      changeFor,
     );
 
     // What a snapshot taken at each state change would be saved with: the hashes the history held at that moment.
@@ -374,7 +443,7 @@ describe('RunningV2Variant tx-history entries written before their details are k
     const result = await runVariant({
       storage: await storageWithPending(nineHashes),
       indexer: answersOnly(['tx-9']),
-      settleFor: Duration.hours(1),
+      settleFor: Duration.minutes(2),
     });
 
     expect(entryOf(result.entries, 'tx-9')?.lifecycle).toEqual(finalizedLifecycle);
@@ -386,7 +455,7 @@ describe('RunningV2Variant tx-history entries written before their details are k
       storage: emptyStorage(),
       batches: [nineHashes],
       indexer: answersOnly(['tx-9']),
-      settleFor: Duration.hours(1),
+      settleFor: Duration.minutes(2),
     });
 
     expect(entryOf(result.entries, 'tx-9')?.lifecycle).toEqual(finalizedLifecycle);
@@ -426,6 +495,147 @@ describe('RunningV2Variant tx-history entries written before their details are k
       settleFor: Duration.hours(1),
     });
 
-    expect([...result.lookups].sort()).toEqual(['tx-new', 'tx-restored']);
+    expect(result.lookups.map(({ hash }) => hash).sort()).toEqual(['tx-new', 'tx-restored']);
+  });
+
+  it('should store each applied change while the committed state is still the one the change was applied over', async () => {
+    // Test setup: each write is observed from inside the storage, synchronously with the wallet's own call.
+    const writes: { readonly hash: string; readonly stateMovedPast: boolean }[] = [];
+    await runVariant({
+      storage: emptyStorage(),
+      batches: [['tx-1'], ['tx-2']],
+      indexer: answersFrom(Duration.days(1)),
+      settleFor: Duration.millis(1),
+      storageSeenByWallet: (storage, wallet) =>
+        storageWith(storage, {
+          gotApplied: (entry) => {
+            writes.push({ hash: entry.hash, stateMovedPast: wallet.committed() !== wallet.appliedOver(entry.hash) });
+            return storage.gotApplied(entry);
+          },
+        }),
+    });
+
+    expect(writes).toEqual([
+      { hash: 'tx-1', stateMovedPast: false },
+      { hash: 'tx-2', stateMovedPast: false },
+    ]);
+  });
+
+  it('should store the incomplete entry with the Dust UTXOs the change received and spent', async () => {
+    const utxo = (initialValue: bigint, mtIndex: bigint) => ({
+      initialValue,
+      owner: 7n,
+      nonce: 11n,
+      seq: 2,
+      ctime: new Date(1_700_000_000),
+      backingNight: '02'.repeat(32),
+      mtIndex,
+    });
+    const stored = (initialValue: bigint, mtIndex: bigint) => ({
+      initialValue,
+      nonce: 11n,
+      seq: 2,
+      backingNight: '02'.repeat(32),
+      mtIndex,
+    });
+    const result = await runVariant({
+      storage: emptyStorage(),
+      batches: [['tx']],
+      indexer: answersFrom(Duration.days(1)),
+      settleFor: Duration.millis(1),
+      changeFor: (source) => ({ source, receivedUtxos: [utxo(10n, 3n)], spentUtxos: [utxo(4n, 1n)] }),
+    });
+
+    const entry = entryOf(result.entries, 'tx');
+    expect(entry?.dustDetailsPending).toBe(true);
+    expect(entry?.dust).toEqual({ receivedUtxos: [stored(10n, 3n)], spentUtxos: [stored(4n, 1n)] });
+  });
+
+  it('should try a lookup the indexer cannot answer yet again about a minute later, neither much sooner nor much later', async () => {
+    const result = await runVariant({
+      storage: emptyStorage(),
+      batches: [['tx']],
+      indexer: answersFrom(Duration.days(1)),
+      // A minute with jitter is 48 to 72 seconds.
+      settleFor: Duration.seconds(73),
+    });
+
+    const times = result.lookups.filter(({ hash }) => hash === 'tx').map(({ atMillis }) => atMillis);
+    expect(times).toHaveLength(2);
+    expect(times[1] - times[0]).toBeGreaterThanOrEqual(47_000);
+  });
+
+  it('should look a transaction up once when the indexer refuses the query, since waiting cannot change the answer', async () => {
+    const result = await runVariant({
+      storage: emptyStorage(),
+      batches: [['tx']],
+      indexer: refusesAll,
+      settleFor: Duration.hours(1),
+    });
+
+    expect(result.lookups.filter(({ hash }) => hash === 'tx')).toHaveLength(1);
+    expect(entryOf(result.entries, 'tx')?.dustDetailsPending).toBe(true);
+    expect(result.logs.some(({ level, message }) => level === 'ERROR' && message.includes('tx'))).toBe(true);
+  });
+
+  it('should complete, in a wallet restored from a saved history, an entry the saving wallet stored before its details were known', async () => {
+    const saving = emptyStorage();
+    await runVariant({
+      storage: saving,
+      batches: [['tx']],
+      indexer: answersFrom(Duration.days(1)),
+      settleFor: Duration.millis(1),
+    });
+    const restored = InMemoryTransactionHistoryStorage.restore(
+      await saving.serialize(),
+      DustTransactionHistoryEntrySchema,
+    );
+    expect((await restored.get('tx'))?.dustDetailsPending).toBe(true);
+
+    const result = await runVariant({
+      storage: restored,
+      indexer: answersFrom(Duration.zero),
+      settleFor: Duration.hours(1),
+    });
+
+    const entry = entryOf(result.entries, 'tx');
+    expect(entry?.lifecycle).toEqual(finalizedLifecycle);
+    expect(entry?.dustDetailsPending).toBe(false);
+  });
+
+  it('should stop the lookups of a variant whose scope closes, and let the next variant complete the entry it left pending', async () => {
+    const storage = emptyStorage();
+    const result = await Effect.gen(function* () {
+      const firstLookups = yield* Ref.make<readonly Lookup[]>([]);
+      const firstScope = yield* Scope.make();
+      const { variant: first } = yield* makeVariant(firstScope, [['tx']], () =>
+        historyServiceOf(storage, answersFrom(Duration.days(1)), firstLookups),
+      );
+      yield* first.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, firstScope));
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Scope.close(firstScope, Exit.void);
+      const firstLookupsAtHandOver = (yield* Ref.get(firstLookups)).length;
+
+      const secondLookups = yield* Ref.make<readonly Lookup[]>([]);
+      const secondScope = yield* Scope.make();
+      const { variant: second } = yield* makeVariant(secondScope, [], () =>
+        historyServiceOf(storage, answersFrom(Duration.zero), secondLookups),
+      );
+      yield* second.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, secondScope));
+      yield* TestClock.adjust(Duration.hours(1));
+      const observed = {
+        firstLookupsAtHandOver,
+        firstLookupsAfter: (yield* Ref.get(firstLookups)).length,
+        entry: yield* Effect.promise(() => storage.get('tx')),
+      };
+      yield* Scope.close(secondScope, Exit.void);
+      return observed;
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(result.firstLookupsAtHandOver).toBe(1);
+    // An hour on the shared clock would have brought the first variant's retry back about sixty times.
+    expect(result.firstLookupsAfter).toBe(1);
+    expect(result.entry?.lifecycle).toEqual(finalizedLifecycle);
+    expect(result.entry?.dustDetailsPending).toBe(false);
   });
 });
