@@ -80,6 +80,16 @@ const historyServiceOf = (storage: Storage, answersFrom: Duration.Duration): Tra
     ),
 });
 
+/** `service`, counting in `reads` each time it is asked which entries are still pending. */
+const countingPendingReads = (
+  service: TransactionHistoryService,
+  reads: Ref.Ref<number>,
+): TransactionHistoryService => ({
+  ...service,
+  pendingDetails: () =>
+    Ref.update(reads, (n) => n + 1).pipe(Effect.zipRight(service.pendingDetails?.() ?? Effect.succeed([]))),
+});
+
 /**
  * Runs a V2 variant over `batches` against `storage` and drains its sync, recording which hashes the history held each
  * time the wallet state changed, then lets `settleFor` pass on the test clock.
@@ -89,8 +99,10 @@ const runVariant = (
   batches: readonly FakeSyncUpdate[],
   answersFrom: Duration.Duration,
   settleFor: Duration.Duration,
+  syncRuns = 1,
 ) =>
   Effect.gen(function* () {
+    const pendingReads = yield* Ref.make(0);
     const syncService: SyncService<CoreWallet, null, FakeSyncUpdate> = { updates: () => Stream.fromIterable(batches) };
     const syncCapability: SyncCapability<CoreWallet, FakeSyncUpdate, ChangesResult> = {
       applyUpdate: (state, sources) => [state, { changes: sources.map(changeOf), protocolVersion: 1 }],
@@ -122,7 +134,7 @@ const runVariant = (
         coinsAndBalancesCapability,
         keysCapability,
         coinSelection,
-        transactionHistoryService: historyServiceOf(storage, answersFrom),
+        transactionHistoryService: countingPendingReads(historyServiceOf(storage, answersFrom), pendingReads),
       },
     );
 
@@ -141,11 +153,14 @@ const runVariant = (
     // Sync only once the watcher has seen the starting state, so it observes every state the sync moves to.
     yield* Deferred.await(watching);
 
-    yield* variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope));
+    yield* variant
+      .startSync(null)
+      .pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope), Effect.repeatN(syncRuns - 1));
     yield* TestClock.adjust(settleFor);
     const observed = {
       historyAtEachState: yield* Ref.get(historyAtEachState),
       entry: yield* Effect.promise(() => storage.get('tx')),
+      pendingReads: yield* Ref.get(pendingReads),
     };
 
     yield* Fiber.interrupt(watcher);
@@ -156,6 +171,12 @@ const runVariant = (
 const emptyStorage = (): Storage => new InMemoryTransactionHistoryStorage(ShieldedTransactionHistoryEntrySchema);
 
 describe('RunningV2Variant tx-history entries written before their details are known', () => {
+  it('should look for pending entries once per wallet, however often its sync is started', async () => {
+    const result = await runVariant(emptyStorage(), [], Duration.zero, Duration.minutes(1), 2);
+
+    expect(result.pendingReads).toBe(1);
+  });
+
   it('should store an applied change as an incomplete entry before the state moves past it, so no snapshot is ahead of its history', async () => {
     // The indexer never answers within the test, so nothing but the applied-change write can put the entry there.
     const result = await runVariant(emptyStorage(), [['tx']], Duration.days(1), Duration.millis(1));

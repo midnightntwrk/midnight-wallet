@@ -25,7 +25,11 @@ import {
   type DefaultTransactionHistoryConfiguration,
   type DustHistoryStorage,
 } from '../TransactionHistory.js';
-import { BlocklessFinalizedEntryError, TransactionHistoryError } from '../WalletError.js';
+import {
+  BlocklessFinalizedEntryError,
+  TransactionDetailsRejectedError,
+  TransactionHistoryError,
+} from '../WalletError.js';
 
 const hash = 'c0a46613b653a5c6f14a369f3799cdb122a57c3ec83a9f1358717fa8a2221204';
 
@@ -96,7 +100,7 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails (dust)', ()
     }
   });
 
-  it('fails fast on errors other than the not-yet-indexed case, instead of retrying through the window', async () => {
+  it('fails fast on a client error (4xx or GraphQL), with an error of its own, instead of retrying through the window', async () => {
     const service = makeDefaultTransactionHistoryService(config, () => undefined);
     // A permanent failure (bad URL, 4xx, schema mismatch): waiting cannot turn it into a success, so the
     // retry-for-indexer-lag schedule must not engage for it.
@@ -125,8 +129,9 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails (dust)', ()
         const failure = Cause.failureOption(exit.cause);
         expect(Option.isSome(failure)).toBe(true);
         if (Option.isSome(failure)) {
-          expect(failure.value).toBeInstanceOf(TransactionHistoryError);
-          expect(failure.value.cause).toBe(clientError);
+          // Its own tag, so a caller's retry policy cannot mistake it for a failure that clears by waiting.
+          expect(failure.value).toBeInstanceOf(TransactionDetailsRejectedError);
+          expect(failure.value).toMatchObject({ hash, cause: clientError });
         }
       }
     }
@@ -289,5 +294,33 @@ describe('makeSimulatorTransactionHistoryService.getTransactionDetails (dust)', 
     if (Exit.isSuccess(exit)) {
       expect(exit.value.hash).toBe(hash);
     }
+  });
+});
+
+describe('makeDefaultTransactionHistoryService.pendingDetails (dust)', () => {
+  it('should not read the history from a storage without gotApplied, since no entry in it can be pending', async () => {
+    const backing = new InMemoryTransactionHistoryStorage(DustTransactionHistoryEntrySchema);
+    // Test setup: the storage is promise-based, so its reads are collected outside the Effect.
+    const reads: string[] = [];
+    const withoutGotApplied: DustHistoryStorage = {
+      getAll: () => {
+        reads.push('getAll');
+        return backing.getAll();
+      },
+      get: (txHash) => backing.get(txHash),
+      serialize: () => backing.serialize(),
+      gotPending: (entry) => backing.gotPending(entry),
+      gotFinalized: (entry) => backing.gotFinalized(entry),
+      gotRejected: (entry) => backing.gotRejected(entry),
+    };
+    const service = makeDefaultTransactionHistoryService(
+      { ...config, txHistoryStorage: withoutGotApplied },
+      () => undefined,
+    );
+
+    const pending = await Effect.runPromise(service.pendingDetails?.() ?? Effect.succeed([]));
+
+    expect(pending).toEqual([]);
+    expect(reads).toEqual([]);
   });
 });

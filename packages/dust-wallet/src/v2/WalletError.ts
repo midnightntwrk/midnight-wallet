@@ -63,6 +63,25 @@ export class BlocklessFinalizedEntryError extends Data.TaggedError('Wallet.Block
 }> {}
 
 /**
+ * The indexer refused a transaction-details query outright (a 4xx response or a GraphQL error), as opposed to not
+ * having indexed the transaction yet or being unreachable.
+ *
+ * @remarks
+ *   Waiting cannot turn this into an answer, so it is never retried. Its own tag, rather than a message on
+ *   {@link TransactionHistoryError}, lets a retry policy tell it apart from the failures that do clear by waiting.
+ * @example
+ *   ```ts
+ *   if (error._tag === 'Wallet.TransactionDetailsRejected') reportIndexerMisconfiguration(error.hash);
+ *   ```;
+ */
+export class TransactionDetailsRejectedError extends Data.TaggedError('Wallet.TransactionDetailsRejected')<{
+  readonly message: string;
+  /** The transaction whose details were asked for. */
+  readonly hash: string;
+  readonly cause?: unknown;
+}> {}
+
+/**
  * A batch of dust ledger events was not in ascending id order: an event arrived at or below the one before it.
  *
  * @remarks
