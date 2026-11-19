@@ -5,7 +5,9 @@
     "enabled": true
   },
   "extends": ["config:best-practices", "schedule:weekly", ":disableRateLimiting"],
-  "dependencyDashboard": true,
+  "dependencyDashboard": {
+    "enabled": true
+  },
   "semanticCommits": "enabled",
   "rebaseWhen": "conflicted",
   "minimumReleaseAge": "7 days",
