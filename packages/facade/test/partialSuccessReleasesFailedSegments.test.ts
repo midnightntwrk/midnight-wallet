@@ -219,6 +219,50 @@ describe('what a rejected transaction releases', () => {
     ]);
   });
 
+  /**
+   * Sync has applied `tx`'s changes but not yet looked its details up, so its entry is finalized with no status: an
+   * entry still pending details says nothing about how the chain ran the transaction.
+   */
+  const appliedWithDetailsPending = async (): Promise<void> => {
+    const [entry] = await facade.getAllFromTxHistory();
+    await configuration.txHistoryStorage.gotApplied?.({
+      hash: entry.hash,
+      identifiers: [],
+      protocolVersion: Number(v8Version),
+      shielded: { receivedCoins: [], spentCoins: [] },
+      shieldedDetailsPending: true,
+    });
+    const [applied] = await facade.getAllFromTxHistory();
+    expect(applied).toMatchObject({ lifecycle: { status: 'finalized' }, shieldedDetailsPending: true });
+    expect(applied.status).toBeUndefined();
+  };
+
+  it('should release only the failed segments of a partial success that sync has applied but not yet learned the outcome of, because the entry records no status yet', async () => {
+    const tx = await submitted();
+    await appliedWithDetailsPending();
+    const reverts = spyOnReverts();
+
+    await verdictArrives(partialSuccess);
+
+    expect(reverts.shieldedSegments).toHaveBeenCalledWith(tx, [2]);
+    expect(reverts.unshieldedSegments).toHaveBeenCalledWith(tx, [2]);
+    expect(reverts.shielded).not.toHaveBeenCalled();
+    expect(reverts.unshielded).not.toHaveBeenCalled();
+    expect(reverts.dust).not.toHaveBeenCalled();
+  });
+
+  it('should release everything a failed transaction booked when sync has applied it but not yet learned the outcome, because the entry records no status yet', async () => {
+    const tx = await submitted();
+    await appliedWithDetailsPending();
+    const reverts = spyOnReverts();
+
+    await verdictArrives({ status: 'FAILURE', segments: [] });
+
+    expect(reverts.shielded).toHaveBeenCalledWith(tx);
+    expect(reverts.unshielded).toHaveBeenCalledWith(tx);
+    expect(reverts.dust).toHaveBeenCalledWith(tx);
+  });
+
   it('should release everything a transaction that failed outright booked, because the chain applied none of it', async () => {
     const tx = await submitted();
     const reverts = spyOnReverts();
