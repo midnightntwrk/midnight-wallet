@@ -46,6 +46,7 @@ import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { BackgroundRepeat, type ChangesResult, type SyncCapability, type SyncService } from '../Sync.js';
 import { makeDefaultTransactingCapability } from '../Transacting.js';
 import { type TransactionHistoryService } from '../TransactionHistory.js';
+import { TransactionHistoryError } from '../WalletError.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -192,6 +193,67 @@ describe('RunningV1Variant.startSync tx-history fan-out', () => {
     expect(result.maxInFlight).toBe(8);
     // The cap only queues work, it never drops it.
     expect(result.recorded).toBe(12);
+  });
+});
+
+/**
+ * A tx-history service whose FIRST lookup of `lost` fails the way the default service fails once its retry window is
+ * exhausted (an indexer outage longer than the window); every later lookup of it succeeds (the indexer has caught up).
+ * Every lookup holds for a second before it answers.
+ */
+const firstLookupOfLostFails = (
+  lookups: Ref.Ref<readonly string[]>,
+  recorded: Ref.Ref<readonly string[]>,
+): TransactionHistoryService => ({
+  getTransactionDetails: (hash) =>
+    Effect.gen(function* () {
+      const earlier = (yield* Ref.getAndUpdate(lookups, (all) => [...all, hash])).filter((h) => h === hash);
+      yield* Effect.sleep(Duration.seconds(1));
+      return hash === 'lost' && earlier.length === 0
+        ? yield* new TransactionHistoryError({ message: `Indexer has not yet indexed transaction ${hash}` })
+        : {
+            hash,
+            block: { hash: 'block-hash', height: 1, timestamp: 1_700_000_000 },
+            status: 'SUCCESS' as const,
+            identifiers: [],
+            fees: null,
+          };
+    }),
+  put: (changes) => Ref.update(recorded, (all) => [...all, changes.source]),
+});
+
+describe('RunningV1Variant.startSync tx-history sections', () => {
+  it('should record every applied change in the history once the indexer can answer, even when its first lookup failed', async () => {
+    const result = await Effect.gen(function* () {
+      const lookups = yield* Ref.make<readonly string[]>([]);
+      const recorded = yield* Ref.make<readonly string[]>([]);
+      const secretKey = DustSecretKey.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.initEmpty(LedgerParameters.initialParameters().dust, secretKey, networkId),
+      );
+      const scope = yield* Scope.make();
+      const variant = new RunningV1Variant(
+        scope,
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+        },
+        variantContextOf([['kept', 'lost']], firstLookupOfLostFails(lookups, recorded)),
+      );
+
+      yield* variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope));
+      // Give every lookup, and any later attempt at one, far longer than any retry window to land.
+      yield* TestClock.adjust(Duration.hours(1));
+      const observed = { lookups: yield* Ref.get(lookups), recorded: yield* Ref.get(recorded) };
+
+      yield* Scope.close(scope, Exit.void);
+      return observed;
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(result.recorded).toEqual(expect.arrayContaining(['kept', 'lost']));
   });
 });
 

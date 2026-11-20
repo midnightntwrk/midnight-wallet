@@ -38,6 +38,12 @@ const keys = {
 const dustWallet = await DustWallet(configuration).startWithKeys(keys);
 await dustWallet.start(keys);
 
+// Save the state first, then the transaction history (or both at one point between sync updates): the wallet stores
+// each transaction's history entry before its state moves past it, so a history saved after the state holds every
+// transaction that state has applied
+const serializedState = await dustWallet.serializeState();
+const serializedHistory = await configuration.txHistoryStorage.serialize();
+
 // A wallet restored from a snapshot carries no key material, so it is started with its keys again
 const restored = DustWallet(configuration).restore(serializedState);
 await restored.start(keys);

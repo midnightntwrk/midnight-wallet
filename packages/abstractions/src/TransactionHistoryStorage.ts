@@ -42,9 +42,12 @@ export type FinalizedBlock = Schema.Schema.Type<typeof FinalizedBlockSchema>;
  *
  * The optionality is a property of the format, not of that one path: the schema accepts a blockless finalized entry
  * from any writer and cannot tell an upgraded one from one a caller wrote that way, so `FinalizedEntryInput` requires
- * the block at the type level to keep the SDK's own writes whole. Nothing backfills a blockless entry afterwards either
- * — every sync resumes after the position the snapshot recorded, so the block that would fill it is never replayed. An
- * entry restored without a block stays without one for the life of the history.
+ * the block at the type level to keep the SDK's own writes whole. An entry `gotApplied` wrote is the exception: it is
+ * missing its block until the wallet that wrote it has looked the details up and written the complete entry. If that
+ * lookup fails in a way waiting cannot fix, the entry stays blockless, its pending flag still `true`, until a later
+ * start of the wallet tries the lookup again. Nothing backfills an upgraded blockless entry — every sync resumes after
+ * the position the snapshot recorded, so the block that would fill it is never replayed. An entry restored without a
+ * block stays without one for the life of the history.
  */
 export const FinalizedLifecycleSchema = Schema.Struct({
   status: Schema.Literal('finalized'),
@@ -171,15 +174,31 @@ export type PendingEntryInput<T extends TransactionHistoryEntryCommon = Transact
  * `finalizedBlock` directly so callers don't construct the lifecycle object. `T` is the entry shape including any
  * wallet-specific extensions (e.g. `shielded`, `dust`).
  *
- * `finalizedBlock` is required here even though it is optional on {@link FinalizedLifecycleSchema}: the SDK always knows
- * the block when it writes a finalized entry, because the only writer runs from the sync path after the indexer
- * returned the transaction inside one. The sole source of a blockless finalized entry is the v1-to-v2 upgrade of a
- * history written before the lifecycle field existed, which invents no block it cannot prove.
+ * `finalizedBlock` is required here even though it is optional on {@link FinalizedLifecycleSchema}: a `gotFinalized`
+ * write always knows the block, because it runs from the sync path after the indexer returned the transaction inside
+ * one. A blockless finalized entry comes from elsewhere: the v1-to-v2 upgrade of a history written before the lifecycle
+ * field existed, which invents no block it cannot prove, and `gotApplied`, which records a transaction before its block
+ * is known and is completed by a later `gotFinalized`.
  */
 export type FinalizedEntryInput<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon> = Omit<
   T,
   'lifecycle'
 > & { readonly finalizedBlock: FinalizedBlock };
+
+/**
+ * Input for `gotApplied` — the entry minus its `lifecycle` field, which the storage attaches itself. Carries no block:
+ * a wallet writes it when it applies a transaction's effects, before the indexer has told it which block the
+ * transaction landed in.
+ *
+ * @example
+ *   ```ts
+ *   const applied: AppliedEntryInput = { hash: 'tx-hash', identifiers: [], protocolVersion: 1 };
+ *   ```;
+ */
+export type AppliedEntryInput<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon> = Omit<
+  T,
+  'lifecycle'
+>;
 
 /**
  * Input for `gotRejected` — the entry minus its `lifecycle` field, which the storage attaches itself. Carries
@@ -227,6 +246,25 @@ export interface TransactionHistoryWriter<T extends TransactionHistoryEntryCommo
    * `pending` or `rejected` entry this entry {@link coversTransaction covers} under another hash.
    */
   gotFinalized(entry: FinalizedEntryInput<T>): Promise<void>;
+  /**
+   * Record that a wallet has applied a transaction whose details (block, status, identifiers) it does not know yet.
+   * Optional: a storage without it gets only the complete entry, once the wallet has looked the details up.
+   *
+   * The entry is stored as `finalized` with no `finalizedBlock`; a later `gotFinalized` for the same transaction fills
+   * the block in. It never erases a finalized lifecycle, `status`, `timestamp`, `fees` or identifiers that another
+   * write already recorded under the hash.
+   *
+   * @example
+   *   ```ts
+   *   const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema);
+   *   await storage.gotApplied({ hash: 'tx-hash', identifiers: [], protocolVersion: 1 });
+   *   (await storage.get('tx-hash'))?.lifecycle; // { status: 'finalized' }
+   *   ```;
+   *
+   * @param entry - The entry without its lifecycle; the storage attaches a blockless `finalized` one.
+   * @returns A promise that resolves once the entry is recorded.
+   */
+  gotApplied?(entry: AppliedEntryInput<T>): Promise<void>;
   /**
    * Record that a tx will not land — failed, partial-success, TTL-expired, or otherwise reverted. Keyed the same way as
    * `gotPending` so the lifecycle transition is in-place. Writes nothing when a `finalized` entry already covers the

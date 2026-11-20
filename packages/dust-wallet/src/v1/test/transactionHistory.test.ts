@@ -15,7 +15,7 @@ import {
   type TransactionHistoryStorage,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { TransactionHistoryDetail, type TransactionHistoryDetailQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
-import { ClientError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Cause, Clock, Duration, Effect, Exit, Fiber, Option, Ref, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
@@ -96,7 +96,7 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails (dust)', ()
     }
   });
 
-  it('fails fast on errors other than the not-yet-indexed case, instead of retrying through the window', async () => {
+  it('fails fast on a client error (4xx or GraphQL), marked not retryable, instead of retrying through the window', async () => {
     const service = makeDefaultTransactionHistoryService(config, () => undefined);
     // A permanent failure (bad URL, 4xx, schema mismatch): waiting cannot turn it into a success, so the
     // retry-for-indexer-lag schedule must not engage for it.
@@ -125,9 +125,46 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails (dust)', ()
         const failure = Cause.failureOption(exit.cause);
         expect(Option.isSome(failure)).toBe(true);
         if (Option.isSome(failure)) {
+          // The same tag as every other history failure, marked so a caller's retry policy cannot mistake it for a
+          // failure that clears by waiting.
           expect(failure.value).toBeInstanceOf(TransactionHistoryError);
-          expect(failure.value.cause).toBe(clientError);
+          expect(failure.value).toMatchObject({ retryable: false, cause: clientError });
         }
+      }
+    }
+  });
+
+  it('retries a server error (indexer down, unreachable or 5xx) within the window, since it can clear by waiting', async () => {
+    const service = makeDefaultTransactionHistoryService(config, () => undefined);
+    // A transient failure: the indexer is briefly down. Waiting can turn it into a success, so the retry schedule
+    // must engage for it exactly as it does for a transaction the indexer has not yet ingested.
+    const serverError = new ServerError({ message: 'HTTP 503: Service Unavailable' });
+
+    const program = Effect.gen(function* () {
+      const callCount = yield* Ref.make(0);
+      const fakeQuery = () =>
+        Ref.getAndUpdate(callCount, (n) => n + 1).pipe(
+          Effect.flatMap((n) => (n < 2 ? Effect.fail(serverError) : Effect.succeed(populatedResponse))),
+        );
+      const exit = yield* service
+        .getTransactionDetails(hash)
+        .pipe(Effect.provideService(TransactionHistoryDetail.tag, fakeQuery), Effect.exit);
+      const calls = yield* Ref.get(callCount);
+      return { exit, calls };
+    });
+
+    const result = await runToExit(program);
+
+    expect(Exit.isSuccess(result)).toBe(true);
+    if (Exit.isSuccess(result)) {
+      const { exit, calls } = result.value;
+      // Two failed queries while the indexer is down, then the one that succeeds once it is back.
+      expect(calls).toBe(3);
+      expect(Exit.isSuccess(exit)).toBe(true);
+      if (Exit.isSuccess(exit)) {
+        expect(exit.value.hash).toBe(hash);
+        expect(exit.value.fees).toBe(1234n);
+        expect(exit.value.block).toEqual({ hash: 'block-hash', height: 42, timestamp: 1_700_000_000 });
       }
     }
   });
@@ -179,6 +216,23 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails (dust)', ()
         expect(failure.value).toBeInstanceOf(TransactionHistoryError);
       }
     }
+  });
+
+  it('fails with a retryable TransactionHistoryError when a server error outlasts the window, so the caller tries again later', async () => {
+    const service = makeDefaultTransactionHistoryService(config, () => undefined);
+    const serverError = new ServerError({ message: 'HTTP 503: Service Unavailable' });
+
+    const program = service
+      .getTransactionDetails(hash)
+      // The indexer stays down for longer than the retry window.
+      .pipe(Effect.provideService(TransactionHistoryDetail.tag, () => Effect.fail(serverError)));
+
+    const exit = await runToExit(program);
+
+    const failure = failureOf(exit);
+    expect(failure).toBeInstanceOf(TransactionHistoryError);
+    expect(failure).toMatchObject({ cause: serverError });
+    expect(failure).not.toHaveProperty('retryable', false);
   });
 });
 
@@ -237,7 +291,7 @@ describe('makeSimulatorTransactionHistoryService.getTransactionDetails (dust)', 
     // landed in was not recorded. Collapsing them into one message sends a caller looking for the wrong problem.
     expect(missing).toBe(`No transaction found in storage for hash: ${hash}`);
     expect(blockless).toBe(
-      `Transaction ${hash} is finalized but its history entry records no block (restored from a pre-lifecycle history)`,
+      `Transaction ${hash} is finalized but its history entry records no block (restored from a pre-lifecycle history, or not yet completed: details pending)`,
     );
     expect(blockless).not.toBe(missing);
 
@@ -247,6 +301,13 @@ describe('makeSimulatorTransactionHistoryService.getTransactionDetails (dust)', 
     expect(failureOf(await simulatorDetails(blocklessFinalizedEntry))).toMatchObject({ hash });
   });
 
+  it('marks a transaction missing from storage not retryable, since storage is the only source and waiting cannot add it', async () => {
+    const missing = failureOf(await simulatorDetails(undefined));
+
+    expect(missing).toBeInstanceOf(TransactionHistoryError);
+    expect(missing).toMatchObject({ retryable: false });
+  });
+
   it('returns the details when the finalized entry does record a block', async () => {
     const exit = await simulatorDetails(blockFinalizedEntry);
 
@@ -254,5 +315,64 @@ describe('makeSimulatorTransactionHistoryService.getTransactionDetails (dust)', 
     if (Exit.isSuccess(exit)) {
       expect(exit.value.hash).toBe(hash);
     }
+  });
+});
+
+describe('makeDefaultTransactionHistoryService.appliedEntries (dust)', () => {
+  it('is absent for a storage without gotApplied, so the history is never read for pending entries', () => {
+    const backing = new InMemoryTransactionHistoryStorage(DustTransactionHistoryEntrySchema);
+    // Test setup: the storage is promise-based, so its reads are collected outside the Effect.
+    const reads: string[] = [];
+    const withoutGotApplied: DustHistoryStorage = {
+      getAll: () => {
+        reads.push('getAll');
+        return backing.getAll();
+      },
+      get: (txHash) => backing.get(txHash),
+      serialize: () => backing.serialize(),
+      gotPending: (entry) => backing.gotPending(entry),
+      gotFinalized: (entry) => backing.gotFinalized(entry),
+      gotRejected: (entry) => backing.gotRejected(entry),
+    };
+    const service = makeDefaultTransactionHistoryService(
+      { ...config, txHistoryStorage: withoutGotApplied },
+      () => undefined,
+    );
+
+    expect(service.appliedEntries).toBeUndefined();
+    expect(reads).toEqual([]);
+  });
+
+  it('lists only the entries this wallet still marks pending, not finished ones or those another wallet marks pending', async () => {
+    const storage = new InMemoryTransactionHistoryStorage(DustTransactionHistoryEntrySchema);
+    const section = { receivedUtxos: [], spentUtxos: [] };
+    await storage.gotApplied({
+      hash: 'pending-here',
+      identifiers: [],
+      protocolVersion: 1,
+      dust: section,
+      dustDetailsPending: true,
+    });
+    await storage.gotApplied({ hash: 'finished', identifiers: [], protocolVersion: 1, dust: section });
+    await storage.gotFinalized({
+      hash: 'finished',
+      identifiers: ['id'],
+      status: 'SUCCESS',
+      fees: 1234n,
+      finalizedBlock: { hash: 'block-hash', height: 42, timestamp: new Date(1_700_000_000) },
+      dustDetailsPending: false,
+    });
+    // Another wallet's flag, which this reader keeps unread rather than drops.
+    await storage.gotApplied({
+      hash: 'pending-elsewhere',
+      identifiers: [],
+      protocolVersion: 1,
+      ...{ shieldedDetailsPending: true },
+    });
+    const service = makeDefaultTransactionHistoryService({ ...config, txHistoryStorage: storage }, () => undefined);
+
+    const pending = await Effect.runPromise(service.appliedEntries?.pending() ?? Effect.succeed(['no appliedEntries']));
+
+    expect(pending).toEqual(['pending-here']);
   });
 });

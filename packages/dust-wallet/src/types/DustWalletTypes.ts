@@ -233,9 +233,14 @@ export const mergeDustSections = (existing: DustSection, incoming: DustSection):
 /**
  * Dust entry schema. Extends the common entry shape with an optional `dust` section. Tightening — required `dust` plus
  * required `protocolVersion`/`status`/`fees` — happens at the writer-input type, not on the stored shape.
+ *
+ * `dustDetailsPending` is `true` while the Dust wallet has applied the transaction but not yet learnt its details
+ * (block, status, identifiers, fees) from the indexer, and `false` once it has. An entry without it was written
+ * complete.
  */
 export const DustTransactionHistoryEntrySchema = TransactionHistoryStorage.extendEntrySchema({
   dust: Schema.optional(DustSectionSchema),
+  dustDetailsPending: Schema.optional(Schema.Boolean),
 });
 
 export type DustTransactionHistoryEntry = Schema.Schema.Type<typeof DustTransactionHistoryEntrySchema>;
