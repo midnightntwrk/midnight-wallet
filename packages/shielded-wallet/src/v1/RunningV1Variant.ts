@@ -110,9 +110,10 @@ export declare namespace RunningV1Variant {
 /**
  * How often a change's history entry is attempted again after an attempt gave up: its lookup outlasted
  * `getTransactionDetails`' own retry window, or the write failed. The state has already moved past the change, so this
- * is the only path by which its entry still reaches the history; it keeps going for as long as the variant runs. An
- * attempt holds a lookup permit for the whole lookup, its own retry window included, and releases it between attempts,
- * so a change the indexer cannot answer for yet holds none while it waits here.
+ * is the only path by which its entry still reaches the history; it keeps going until the wallet stops, past a
+ * hand-over to the next variant, since these attempts run in the runtime's scope. An attempt holds a lookup permit for
+ * the whole lookup, its own retry window included, and releases it between attempts, so a change the indexer cannot
+ * answer for yet holds none while it waits here.
  */
 const recordRetrySchedule = Schedule.spaced(Duration.minutes(1)).pipe(Schedule.jittered);
 
@@ -153,6 +154,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
 > {
   readonly __polyTag__: typeof V1Tag = V1Tag;
   readonly #scope: Scope.Scope;
+  /**
+   * Where history writes run: the runtime's scope, shared by every variant, so a write still running when this variant
+   * hands over to the next one finishes. Stopping the wallet interrupts them; each interrupted write is logged.
+   */
+  readonly #historyScope: Scope.Scope;
   readonly #context: Variant.VariantContext<CoreWallet>;
   readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>;
   // This variant's cap on concurrent tx-history writes. Each sync batch forks its own fan-out fiber, so a per-batch
@@ -175,6 +181,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>,
   ) {
     this.#scope = scope;
+    this.#historyScope = context.runtimeScope ?? scope;
     this.#context = context;
     this.#v1Context = v1Context;
     this.#completePendingDetailsOnce = Effect.runSync(Effect.once(this.#completePendingDetails()));
@@ -229,8 +236,6 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   }
 
   #syncUpdates(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
-    const historyScope = this.#context.runtimeScope ?? this.#scope;
-
     return pipe(
       SubscriptionRef.get(this.#context.stateRef),
       Stream.fromEffect,
@@ -292,7 +297,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                     // them again, and the update that hands over to the next variant closes this variant's scope while
                     // its own writes are still running. Stopping the wallet interrupts them rather than waiting: a
                     // write it interrupts is logged and not recorded.
-                    Effect.forkIn(historyScope),
+                    Effect.forkIn(this.#historyScope),
                   ),
             ),
           ),
@@ -371,11 +376,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     return pipe(
       readPending,
       Effect.matchEffect({
-        onSuccess: (hashes) => Effect.forkIn(complete(hashes), this.#scope),
+        onSuccess: (hashes) => Effect.forkIn(complete(hashes), this.#historyScope),
         onFailure: () =>
           Effect.forkIn(
             pipe(readPending, Effect.retry({ schedule: recordRetrySchedule }), Effect.flatMap(complete)),
-            this.#scope,
+            this.#historyScope,
           ),
       }),
       Effect.asVoid,
