@@ -14,7 +14,6 @@
 import * as ledger from '@midnightntwrk/ledger-v8';
 import {
   Array as Arr,
-  Chunk,
   Clock,
   Duration,
   Effect,
@@ -26,6 +25,7 @@ import {
   Schedule,
   Schema,
   type Scope,
+  Sink,
   Stream,
 } from 'effect';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
@@ -328,8 +328,10 @@ const EventsSyncUpdatePayload = Schema.Struct({
  *   different version — and after a hand-over the inclusive cursor re-delivers an event of the version that preceded
  *   it, which it equally cannot. Both are ordinary, and neither is an error: they belong to the variant either side.
  *
- *   So the bytes travel undecoded and only the capability, which knows the activation range, reads the ones it is about
- *   to apply — see {@link readEvent}. Decoding here would fail the whole batch on an event nobody intended to apply.
+ *   So the bytes travel undecoded, and only the capability, which knows the activation range, decides what to apply and
+ *   reads it — see {@link readEvent}. The source decodes each event too, but leniently and only to find the transaction
+ *   it belongs to: an event it cannot decode ends a transaction there rather than failing the batch. Each applied event
+ *   is therefore decoded twice, once by each.
  */
 export const EventsSyncUpdate = Schema.TaggedStruct('EventsSyncUpdate', {
   id: Schema.Number,
@@ -393,6 +395,91 @@ const stamped = (
   secretKeys: ledger.ZswapSecretKeys,
 ): Effect.Effect<EventsWalletSyncUpdate> =>
   Effect.map(Clock.currentTimeMillis, (millis) => WalletSyncUpdate.create(updates, secretKeys, new Date(millis)));
+
+/**
+ * The transaction an event came from, or nothing for an event this ledger version cannot read.
+ *
+ * @remarks
+ *   An event that does not decode — normally one of another ledger version, which no transaction of this one spans, and
+ *   otherwise corrupt bytes — stands as a transaction of its own. Decoding here only names an event's transaction: the
+ *   capability decodes again what it applies, and fails loudly on anything it cannot read.
+ */
+const transactionOf = (update: EventsSyncUpdate): Option.Option<string> =>
+  Option.map(
+    Either.getRight(Schema.decodeEither(HexedLedgerEvent)(update.raw)),
+    (event) => event.source.transactionHash,
+  );
+
+/** The events of one transaction, in timeline order. */
+type Transaction = Arr.NonEmptyReadonlyArray<EventsSyncUpdate>;
+
+/** The transaction the timeline is in the middle of, if any: its hash and the events of it seen so far. */
+type OpenTransaction = Option.Option<Readonly<{ hash: string; events: Transaction }>>;
+
+const noOpenTransaction: OpenTransaction = Option.none();
+
+/**
+ * Adds the next event of the timeline to the open transaction, and returns the transactions now complete.
+ *
+ * @remarks
+ *   A transaction is complete once an event of another transaction follows it, or once its last event is the last the
+ *   source holds (`maxId`). The second rule rests on a guarantee of the indexer: it stores a block, with every event of
+ *   its transactions, in one database transaction (`save_block` in `chain-indexer/src/infra/storage.rs`), and reads
+ *   `maxId` as the highest stored id (a `MAX(id)` subquery in `indexer-api/src/infra/storage/ledger_events.rs`). So
+ *   `maxId` always ends a block, never a transaction part-way.
+ */
+const closeCompletedTransactions = (
+  open: OpenTransaction,
+  update: EventsSyncUpdate,
+): readonly [OpenTransaction, readonly Transaction[]] => {
+  const hash = transactionOf(update);
+  const [completed, events]: readonly [readonly Transaction[], Transaction] = Option.match(
+    Option.filter(open, (current) => Option.contains(hash, current.hash)),
+    {
+      onSome: (current) => [[], Arr.append(current.events, update)],
+      onNone: () => [Option.toArray(Option.map(open, (current) => current.events)), Arr.of(update)],
+    },
+  );
+  const ends = Option.isNone(hash) || update.id >= update.maxId;
+
+  return ends
+    ? [noOpenTransaction, [...completed, events]]
+    : [Option.map(hash, (transactionHash) => ({ hash: transactionHash, events })), completed];
+};
+
+/**
+ * The timeline's events gathered into whole transactions, in order.
+ *
+ * @remarks
+ *   A transaction stays open until it is known to be whole, so a timeline that stops, fails or ends part-way through one
+ *   delivers none of it: the cursor stays in front of it and the next run fetches it again, whole.
+ */
+const wholeTransactions = <E, R>(events: Stream.Stream<EventsSyncUpdate, E, R>): Stream.Stream<Transaction, E, R> =>
+  pipe(events, Stream.mapAccum(noOpenTransaction, closeCompletedTransactions), Stream.mapConcat(identity));
+
+/**
+ * The timeline's events in batches of whole transactions, each delivered as soon as it holds `size` events or more.
+ *
+ * @remarks
+ *   The capability writes tx history per batch, so a transaction cut across two batches would be written in two parts. A
+ *   transaction is therefore never cut: the one that fills a batch goes in whole, so a batch can exceed `size` by the
+ *   rest of that transaction. The timeout closes a batch that is not yet full, and since a batch only ever holds whole
+ *   transactions, it closes one only between transactions.
+ */
+const batchedByTransaction =
+  (size: number, timeout: Duration.Duration) =>
+  <E, R>(events: Stream.Stream<EventsSyncUpdate, E, R>): Stream.Stream<EventsSyncUpdate[], E, R> =>
+    pipe(
+      wholeTransactions(events),
+      Stream.aggregateWithin(
+        Sink.fold(
+          Arr.empty<EventsSyncUpdate>(),
+          (batch) => batch.length < size,
+          (batch, transaction: Transaction) => [...batch, ...transaction],
+        ),
+        Schedule.spaced(timeout),
+      ),
+    );
 
 /**
  * How long one event-id probe is given to produce its single answer.
@@ -574,6 +661,11 @@ export const makeEventsSyncService = (
 
       const indexerWsUrl = indexerWsUrlResult.right;
       const appliedIndex = state.progress?.appliedIndex ?? 0n;
+      const highestRelevantWalletIndex = state.progress?.highestRelevantWalletIndex ?? 0n;
+      // How far this wallet knows the timeline to go: the highest id an event has told it of, and never less than its
+      // own cursor, because the event it last applied exists. The cursor is all a restored wallet has, since a
+      // snapshot saves the position and not the highest id.
+      const knownTip = highestRelevantWalletIndex > appliedIndex ? highestRelevantWalletIndex : appliedIndex;
 
       // The boundary is load-bearing, not waste: this subscription emits only events (no tip/progress
       // sentinel), and `isConnected`/the tip (`maxId`) are set only when an event is received — bar a
@@ -593,6 +685,7 @@ export const makeEventsSyncService = (
       const batchSpacing = config.batchUpdates?.spacing ?? 4;
       const bufferSize = config.indexerClientConnection.bufferSize ?? 10000;
       const resumeThreshold = config.indexerClientConnection.resumeThreshold ?? 100;
+      const { stallTimeout } = config.indexerClientConnection;
 
       const eventsStream = pipe(
         // Backpressure caps the in-flight queue between the WS push and the
@@ -607,6 +700,18 @@ export const makeEventsSyncService = (
           // start, rather than relying on `id: 0` sorting below the first real event id.
           variables: (cursor) => ({ id: cursor < 0n ? null : Number(cursor) }),
           key: (r) => BigInt(r.zswapLedgerEvents.id),
+          // An indexer that stops writing to this subscription while its socket stays open raises nothing, so the
+          // subscription is told how to recognise it: every event names the highest id the timeline holds, and a
+          // session behind that id that goes silent is given up on, which fails the stream into the retry that
+          // reconnects. `knownTip` covers a session that is silent from its first event. A wallet that has applied
+          // no event holds zero for it, which is no tip: named as one it would count as an event owed, and a chain
+          // with no zswap events would never let the wallet rest.
+          stall: {
+            tip: (r) => BigInt(r.zswapLedgerEvents.maxId),
+            ...(knownTip > 0n ? { knownTip } : {}),
+            // Named only when configured, so that the default stays the subscription's to hold.
+            ...(stallTimeout === undefined ? {} : { timeout: Duration.millis(stallTimeout) }),
+          },
         }),
         Stream.provideLayer(
           WsSubscriptionClient.layer({ url: indexerWsUrl, keepAlive: config.indexerClientConnection.keepAlive }),
@@ -620,9 +725,8 @@ export const makeEventsSyncService = (
             EitherOps.toEffect,
           ),
         ),
-        Stream.groupedWithin(batchSize, batchTimeout),
-        Stream.map(Chunk.toArray),
-        Stream.mapEffect((data) => stamped(data, secretKeys)),
+        batchedByTransaction(batchSize, batchTimeout),
+        Stream.mapEffect((batch) => stamped(batch, secretKeys)),
       );
 
       const timeline =
@@ -758,8 +862,8 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
         activeRange,
       );
 
-      // Read here and nowhere earlier: `applied` is exactly the slice this variant owns, so nothing outside its
-      // activation range — nor anything below its cursor — is ever handed to this ledger version's deserializer.
+      // Read strictly here: `applied` is exactly the slice this variant owns, so nothing outside its activation range —
+      // nor anything below its cursor — is ever applied, and an event of it that cannot be read fails the update.
       const [newState, newChanges]: [CoreWallet, ledger.ZswapStateChanges[]] =
         applied.length === 0
           ? [state, []]
