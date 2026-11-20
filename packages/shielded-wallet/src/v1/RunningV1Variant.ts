@@ -263,8 +263,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
             }).pipe(
               // Each change's entry is stored before the state that moves past it is committed, so a snapshot taken at
               // any moment is never ahead of its history. A failed write is logged and the update still commits: the
-              // entry is written in full once its details are known, and the balances never wait on the history.
-              Effect.tap(([changesResult]) => this.#recordApplied(changesResult)),
+              // entry is written in full once its details are known, and the balances never wait on the history. The
+              // write stays interruptible, so a storage that never answers cannot hold up a stop: an interrupted write
+              // abandons the whole update, which then neither commits nor records anything.
+              Effect.tap(([changesResult]) => restore(this.#recordApplied(changesResult))),
             ),
           ).pipe(
             Effect.flatMap(({ changes, protocolVersion }) =>
