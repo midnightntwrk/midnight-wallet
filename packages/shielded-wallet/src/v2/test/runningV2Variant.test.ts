@@ -203,6 +203,58 @@ describe('RunningV2Variant.startSync tx-history fan-out', () => {
 
     expect(recorded).toBe(sources.length);
   });
+
+  it("should keep completing entries a previous run left pending after the variant's own scope closes, when the runtime gives it a longer-lived scope", async () => {
+    const pendingHashes = ['p1', 'p2', 'p3'];
+
+    const completed = await Effect.gen(function* () {
+      const counters: FanOutCounters = {
+        inFlight: yield* Ref.make(0),
+        maxInFlight: yield* Ref.make(0),
+        recorded: yield* Ref.make(0),
+      };
+      const completedRef = yield* Ref.make(0);
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.init(new ledger.ZswapLocalState(), secretKeys, networkId),
+      );
+      const variantScope = yield* Scope.make();
+      const runtimeScope = yield* Scope.make();
+      const historyService: TransactionHistoryService = {
+        ...trackingHistoryService(counters),
+        appliedEntries: {
+          record: () => Effect.void,
+          pending: () => Effect.succeed(pendingHashes),
+          complete: () => Ref.update(completedRef, (n) => n + 1),
+        },
+      };
+      const variant = new RunningV2Variant(
+        variantScope,
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+          runtimeScope,
+        },
+        variantContextOf([], historyService),
+      );
+
+      yield* variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, variantScope));
+      // Every lookup has started and is parked for 10s on the clock when the variant's scope closes, as it does when
+      // the wallet hands over to the next variant.
+      yield* TestClock.adjust(Duration.millis(1));
+      yield* Scope.close(variantScope, Exit.void);
+      yield* TestClock.adjust(Duration.minutes(1));
+      const completedAfterClose = yield* Ref.get(completedRef);
+
+      yield* Scope.close(runtimeScope, Exit.void);
+      return completedAfterClose;
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(completed).toBe(pendingHashes.length);
+  });
 });
 
 describe('RunningV2Variant.state protocol version signalling', () => {
