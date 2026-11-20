@@ -22,9 +22,11 @@ first can miss an update that lands before the state is. The entry carries `shie
 `dustDetailsPending: true`) until the indexer has answered for it, and `false` once its details are filled in. Entries
 still pending when a wallet starts, for example after a restore from a snapshot taken mid-lookup, are completed in the
 background. If the storage fails to record an applied entry, the failure is logged and sync carries on: the wallet
-writes the complete entry once the indexer answers. An entry whose lookup fails in a way waiting cannot fix (a 4xx
-response, 429 included, a GraphQL error, or an invalid indexer URL) is not tried again in that run; it keeps its flag
-`true` and is looked up again the next time the wallet starts.
+writes the complete entry once the indexer answers. Stopping the wallet does not wait for a storage write still in
+progress: the update it belongs to is abandoned, neither committed nor recorded, and applied again on the next start.
+An entry whose lookup fails in a way waiting cannot fix (a 4xx response, 429 included, a GraphQL error, or an invalid
+indexer URL) is not tried again in that run; it keeps its flag `true` and is looked up again the next time the wallet
+starts.
 
 A custom `TransactionHistoryService` gains one optional member, `appliedEntries` (`record`, `pending`, `complete`); the
 default service provides it exactly when the storage implements `gotApplied`.
