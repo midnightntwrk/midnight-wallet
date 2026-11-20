@@ -45,24 +45,34 @@ await restored.start(keys);
 
 ### Starting a New Wallet Without the Ledger-v8 Dust History
 
-On a chain that crossed `forks.v9` with ledger-v8 history behind it, a new wallet can skip that history:
+On a chain that crossed `forks.v9` with ledger-v8 history behind it, a new wallet skips that history by default. A
+wallet that crosses the boundary discards the state it built from that history, so replaying it only costs time.
+
+A fresh start searches the indexer for the last dust event below `forks.v9` and starts the V2 variant there, with the
+empty state a wallet crossing the boundary is handed. From there it syncs by event replay as usual.
+
+To replay the ledger-v8 dust history anyway, set `skipLedgerV8DustHistory` to `false`:
 
 ```typescript
-const dustWallet = await DustWallet({ ...configuration, skipLedgerV8DustHistory: true }).startWithSeed(seed);
+const dustWallet = await DustWallet({ ...configuration, skipLedgerV8DustHistory: false }).startWithSeed(seed);
 await dustWallet.start(keys);
 ```
 
-A fresh start then searches the indexer for the last dust event below `forks.v9` and starts the V2 variant there, with
-the empty state a wallet crossing the boundary is handed. From there it syncs by event replay as usual.
-
-- **The wallet's ledger-v8 dust transaction history will be missing**, because no event below the boundary is applied.
+- **The wallet's ledger-v8 dust transaction history will be missing** when the history is skipped, because no event
+  below the boundary is applied.
 - Fresh starts only: a restored wallet resumes from the cursor its snapshot carries.
 - Its dust is valued against the configured `dustParameters`, as a wallet crossing the boundary values it, and not
   against dust parameters passed to the start.
-- Best-effort: a chain still below `forks.v9`, one born on ledger-v9, or an indexer that cannot be searched leaves the
-  start as it is without the option.
+- Best-effort: on a chain still below `forks.v9`, one born on ledger-v9, or with an indexer that cannot be searched, the
+  wallet starts where it would with the option set to `false`, after the search. So does a search that takes longer than
+  `dustTimelineStartTimeout` (2 minutes by default; zero skips the search). A search that times out is not cancelled: it
+  finishes in the background and its answer is ignored.
+- The search runs before every fresh start: two indexer lookups on a chain born on ledger-v9, ten seconds on a chain
+  with no dust event yet, and up to `dustTimelineStartTimeout` with a slow indexer. A local chain that starts many
+  wallets before it has any dust is better off with `skipLedgerV8DustHistory: false`.
 - Dust only. The shielded and unshielded wallets have to read ledger-v8 to find the coins they hold from it.
-- A `CustomForkingDustWallet` composition opts in by setting `dustTimelineStartProbe`, for example to
+- A `CustomForkingDustWallet` composition does not search unless it sets `dustTimelineStartProbe`, either by spreading
+  `dustWalletProbes(configuration)` into its configuration or directly, for example to
   `() => Effect.runPromise(SyncService.findDustTimelineStart(configuration, configuration.forks.v9))`, with
   `SyncService` from `/v2`; the answer is a `DustWalletTypes.DustTimelineStart`. The start builds its state with the
   composition's own V2 migration, so it is valued against the dust parameters that migration is built on, as a wallet

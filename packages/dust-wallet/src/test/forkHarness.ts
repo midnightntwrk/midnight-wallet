@@ -48,7 +48,7 @@ import {
 import { type NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { Deferred, Effect, FiberId, Option, Stream, pipe } from 'effect';
+import { Deferred, type Duration, Effect, FiberId, Option, Stream, pipe } from 'effect';
 import {
   CustomForkingDustWallet,
   type DustTimelineStartProbe,
@@ -347,9 +347,11 @@ export type ForkWalletConfig = Readonly<{
   /**
    * Where a fresh start is told the chain's dust event timeline reaches the boundary.
    *
-   * Absent means it is not told, which is every wallet built without `skipLedgerV8DustHistory`.
+   * Absent means it is not told, which is every wallet built with `skipLedgerV8DustHistory: false`.
    */
   dustTimelineStartProbe?: DustTimelineStartProbe;
+  /** How long a fresh start waits for {@link dustTimelineStartProbe}. Absent means the wallet's default. */
+  dustTimelineStartTimeout?: Duration.DurationInput;
 }>;
 
 /** A state emission, whichever variant produced it. */
@@ -413,6 +415,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     syncTime,
     chainVersionProbe,
     dustTimelineStartProbe,
+    dustTimelineStartTimeout,
   } = config;
 
   const v8Key = V8SecretKey.fromSeed(seed);
@@ -439,6 +442,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
       forks: { v9: forkVersion },
       ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}),
       ...(dustTimelineStartProbe !== undefined ? { dustTimelineStartProbe } : {}),
+      ...(dustTimelineStartTimeout !== undefined ? { dustTimelineStartTimeout } : {}),
     },
     {
       builder: v1Builder,

@@ -63,6 +63,7 @@ describe('DefaultDustConfiguration', () => {
           forks: ProtocolVersion.ForkSchedule;
           chainVersionProbe?: ChainVersionProbe;
           skipLedgerV8DustHistory?: boolean;
+          dustTimelineStartTimeout?: Duration.DurationInput;
         }
       >
     >;
@@ -102,6 +103,41 @@ describe('CustomForkingDustWallet', () => {
     // A builder implementing `VariantBuilder` is configured with whatever it asks for, and may build its cross-ledger
     // migration on dust parameters it supplies itself; the wallet layer only hands each builder its configuration.
     type _1 = typeof CustomForkingDustWallet<V1SyncUpdate, V2SyncUpdate, object, { endpoint: string }>;
+  });
+});
+
+describe('dustTimelineStartTimeout', () => {
+  const configuration: DefaultDustConfiguration = {
+    networkId: Networks.NetworkId.Undeployed,
+    indexerClientConnection: { indexerHttpUrl: 'http://localhost:8088/api/v4/graphql' },
+    txHistoryStorage: new InMemoryTransactionHistoryStorage(V2TransactionHistory.DustTransactionHistoryEntrySchema),
+    costParameters: { feeBlocksMargin: 0 },
+    forks: { v9: ProtocolVersion.ProtocolVersion(7n) },
+  };
+
+  // Type cast required because: the type admits durations only, and the subject is a value from outside the type
+  // system, such as one an application read from its environment.
+  const notADuration = 'soon' as Duration.DurationInput;
+  const seed = Buffer.alloc(32, 3);
+  // A chain past forks.v9, answered without an indexer.
+  const chainVersionProbe: ChainVersionProbe = () => Promise.resolve(ProtocolVersion.ProtocolVersion(7n));
+
+  it('fails a fresh start that searches when it is not a duration', async () => {
+    const Wallet = DustWallet({ ...configuration, chainVersionProbe, dustTimelineStartTimeout: notADuration });
+
+    await expect(Wallet.startWithSeed(seed)).rejects.toThrow('Invalid DurationInput');
+  });
+
+  it('is never read by a fresh start that does not search, nor by a restore', async () => {
+    const withoutSearch = { ...configuration, chainVersionProbe, skipLedgerV8DustHistory: false };
+    const started = await DustWallet({ ...withoutSearch, dustTimelineStartTimeout: notADuration }).startWithSeed(seed);
+    const snapshot = await started.serializeState();
+    await started.stop();
+
+    const restored = DustWallet({ ...configuration, dustTimelineStartTimeout: notADuration }).restore(snapshot);
+
+    expect((await rx.firstValueFrom(restored.state)).protocolVersion).toBe(ProtocolVersion.ProtocolVersion(7n));
+    await restored.stop();
   });
 });
 
@@ -190,7 +226,12 @@ describe('a dust wallet configured with dust rates', () => {
     dustGracePeriodSeconds,
   });
 
-  /** The wallet's configuration, with the given way of asking the chain where it is. */
+  /**
+   * The wallet's configuration, with the given way of asking the chain where it is.
+   *
+   * Without the timeline search, which is on by default and would ask the indexer: the chain probe alone decides where
+   * these starts begin.
+   */
   const configuredWith = (chainVersionProbe: ChainVersionProbe): DefaultDustConfiguration => ({
     networkId,
     indexerClientConnection: { indexerHttpUrl: 'http://localhost:8088/api/v4/graphql' },
@@ -199,6 +240,7 @@ describe('a dust wallet configured with dust rates', () => {
     forks: { v9 },
     dustParameters: rates,
     chainVersionProbe,
+    skipLedgerV8DustHistory: false,
   });
 
   /** A chain that answers it is at `version`, so a start picks its variant without reaching an indexer. */
