@@ -14,7 +14,9 @@ not have yet.
 
 What apps need to know:
 
-- A snapshot is never ahead of its history, as long as the wallet state is serialized before the history.
+- **Save the wallet state before the transaction history** (or both between sync updates). Saved in that order, a
+  snapshot is never ahead of its history; saved the other way round, it can still miss entries. Apps that waited for
+  the history to settle before saving can drop that delay.
 - Custom history storages opt in by implementing the new optional `TransactionHistoryWriter.gotApplied`; without it they
   work as before.
 - An app restoring its history with its own entry schema must declare both flags.

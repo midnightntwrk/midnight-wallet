@@ -188,6 +188,21 @@ export class InMemoryTransactionHistoryStorage<
     this.#envelopeUnknownFields = {};
   }
 
+  /**
+   * Serializes every entry, to save and later hand to `restore`.
+   *
+   * @remarks
+   *   Saved beside a wallet snapshot, the history is serialized after the snapshot, or both at one point between sync
+   *   updates: the wallets store each entry before their state moves past it, so a history serialized after the
+   *   snapshot holds every transaction the snapshot has applied.
+   * @example
+   *   ```ts
+   *   const snapshot = await wallet.serializeState();
+   *   const history = await txHistoryStorage.serialize();
+   *   ```;
+   *
+   * @returns The serialized history.
+   */
   serialize(): Promise<SerializedTransactionHistory> {
     const allEntries = [...this.#storage.values()];
     const encoded = Schema.encodeSync(Schema.Array(this.#schema))(allEntries);

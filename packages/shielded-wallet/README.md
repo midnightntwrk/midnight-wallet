@@ -67,6 +67,17 @@ const shieldedWallet = await ShieldedWallet(configuration).startWithSeed(seed);
 await shieldedWallet.start(keys);
 ```
 
+### Saving State and History
+
+Save the wallet state first, then the transaction history (or both at one point between sync updates). The wallet stores
+each transaction's history entry before its state moves past it, so a history saved after the state holds every
+transaction that state has applied. Saved the other way round, the state can include a transaction the history misses.
+
+```typescript
+const serializedState = await shieldedWallet.serializeState();
+const serializedHistory = await configuration.txHistoryStorage.serialize();
+```
+
 ### Restoring from Serialized State
 
 ```typescript
