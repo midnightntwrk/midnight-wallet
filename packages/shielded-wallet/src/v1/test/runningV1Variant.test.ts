@@ -18,6 +18,8 @@ import {
   Effect,
   Exit,
   Fiber,
+  Option,
+  pipe,
   Ref,
   Scope,
   Stream,
@@ -35,6 +37,7 @@ import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { type ChangesResult, type SyncCapability, type SyncService } from '../Sync.js';
 import { makeDefaultTransactingCapability } from '../Transacting.js';
 import { type TransactionHistoryService } from '../TransactionHistory.js';
+import { TransactionHistoryError } from '../WalletError.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -254,6 +257,120 @@ describe('RunningV1Variant.startSync tx-history fan-out', () => {
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
 
     expect(completed).toBe(pendingHashes.length);
+  });
+
+  it("should keep completing entries after the variant's own scope closes when the first read of pending entries failed, because the retried read runs in the runtime's longer-lived scope", async () => {
+    const pendingHashes = ['p1', 'p2', 'p3'];
+
+    const completed = await Effect.gen(function* () {
+      const counters: FanOutCounters = {
+        inFlight: yield* Ref.make(0),
+        maxInFlight: yield* Ref.make(0),
+        recorded: yield* Ref.make(0),
+      };
+      const reads = yield* Ref.make(0);
+      const completedRef = yield* Ref.make(0);
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.init(new ledger.ZswapLocalState(), secretKeys, networkId),
+      );
+      const variantScope = yield* Scope.make();
+      const runtimeScope = yield* Scope.make();
+      const historyService: TransactionHistoryService = {
+        ...trackingHistoryService(counters),
+        appliedEntries: {
+          record: () => Effect.void,
+          // The first read fails, as a storage that cannot be read at start does; every later read succeeds.
+          pending: () =>
+            Ref.getAndUpdate(reads, (n) => n + 1).pipe(
+              Effect.flatMap((read) =>
+                read === 0
+                  ? Effect.fail(new TransactionHistoryError({ message: 'storage not readable yet' }))
+                  : Effect.succeed(pendingHashes),
+              ),
+            ),
+          complete: () => Ref.update(completedRef, (n) => n + 1),
+        },
+      };
+      const variant = new RunningV1Variant(
+        variantScope,
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+          runtimeScope,
+        },
+        variantContextOf([], historyService),
+      );
+
+      yield* variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, variantScope));
+      // The variant's scope closes while the failed read waits to be tried again, as it does when the wallet hands over
+      // to the next variant; the retried read and the lookups it starts then run on the clock.
+      yield* TestClock.adjust(Duration.millis(1));
+      yield* Scope.close(variantScope, Exit.void);
+      yield* TestClock.adjust(Duration.minutes(3));
+      const completedAfterClose = yield* Ref.get(completedRef);
+
+      yield* Scope.close(runtimeScope, Exit.void);
+      return completedAfterClose;
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(completed).toBe(pendingHashes.length);
+  });
+
+  it('should let the wallet stop while the storage is still writing an applied entry, so a storage that never answers cannot hang stop', async () => {
+    const stopped = await Effect.gen(function* () {
+      const counters: FanOutCounters = {
+        inFlight: yield* Ref.make(0),
+        maxInFlight: yield* Ref.make(0),
+        recorded: yield* Ref.make(0),
+      };
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.init(new ledger.ZswapLocalState(), secretKeys, networkId),
+      );
+      const variantScope = yield* Scope.make();
+      const runtimeScope = yield* Scope.make();
+      const historyService: TransactionHistoryService = {
+        ...trackingHistoryService(counters),
+        appliedEntries: {
+          // A storage write that never settles.
+          record: () => Effect.never,
+          pending: () => Effect.succeed([]),
+          complete: () => Effect.void,
+        },
+      };
+      const variant = new RunningV1Variant(
+        variantScope,
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+          runtimeScope,
+        },
+        variantContextOf([['a1']], historyService),
+      );
+
+      yield* variant.startSyncInBackground(null);
+      yield* TestClock.adjust(Duration.millis(1));
+      // Stopping closes both scopes. Disconnected, so a close that never finishes shows up as the timeout rather than
+      // hanging the test.
+      const closing = yield* pipe(
+        Scope.close(variantScope, Exit.void),
+        Effect.zipRight(Scope.close(runtimeScope, Exit.void)),
+        Effect.disconnect,
+        Effect.timeoutOption(Duration.seconds(5)),
+        Effect.fork,
+      );
+      yield* TestClock.adjust(Duration.seconds(5));
+      return Option.isSome(yield* Fiber.join(closing));
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(stopped).toBe(true);
   });
 });
 
