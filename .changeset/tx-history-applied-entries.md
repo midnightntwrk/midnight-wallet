@@ -7,36 +7,29 @@
 
 feat: store each shielded and Dust tx-history entry before the wallet state moves past it
 
-`TransactionHistoryWriter.gotApplied` records a transaction a wallet has applied before it knows the block it landed
-in: the entry is stored as `finalized` with no `finalizedBlock`, and a later `gotFinalized` fills the block in. On an
-entry already under the hash it never erases a finalized lifecycle, `status`, `timestamp`, `fees` or identifiers
-another write recorded. `InMemoryTransactionHistoryStorage` implements it and `NoOpTransactionHistoryStorage` ignores
-it. The method is optional: a custom storage without it keeps working, but gets only complete entries, written once
-the indexer has answered — so with such a storage a snapshot can still be saved ahead of its history, and an entry
-whose lookup is cut short by the wallet stopping is still lost. Implement `gotApplied` to close both.
+**Storage.** New optional `TransactionHistoryWriter.gotApplied` stores a transaction the wallet has applied before its
+block is known: `finalized`, no `finalizedBlock` (a later `gotFinalized` fills it in). It never erases a lifecycle,
+`status`, `timestamp`, `fees` or identifiers already recorded under the hash. `InMemoryTransactionHistoryStorage`
+implements it; `NoOpTransactionHistoryStorage` ignores it. A custom storage without it keeps working with complete
+entries only, but then a snapshot can still be ahead of its history, and a lookup cut short by a stop still loses its
+entry.
 
-With a storage that implements it, the shielded and Dust wallets store every change they apply as such an entry before
-the state that moves past the change is committed, so a snapshot is never ahead of its history — provided the
-application serializes the wallet state before the history, or both at one point between updates; a history serialized
-first can miss an update that lands before the state is. The entry carries `shieldedDetailsPending: true` (or
-`dustDetailsPending: true`) until the indexer has answered for it, and `false` once its details are filled in. Entries
-still pending when a wallet starts, for example after a restore from a snapshot taken mid-lookup, are completed in the
-background. If the storage fails to record an applied entry, the failure is logged and sync carries on: the wallet
-writes the complete entry once the indexer answers. Stopping the wallet does not wait for a storage write still in
-progress: the update it belongs to is abandoned, neither committed nor recorded, and applied again on the next start.
-An entry whose lookup fails in a way waiting cannot fix (a 4xx response, 429 included, a GraphQL error, or an invalid
-indexer URL) is not tried again in that run; it keeps its flag `true` and is looked up again the next time the wallet
-starts.
+**Wallets.** With `gotApplied`, the shielded and Dust wallets store each applied change before committing the state
+that moves past it, so a snapshot is never ahead of its history, provided the app serializes the wallet state before
+the history (or both between updates).
 
-A custom `TransactionHistoryService` gains one optional member, `appliedEntries` (`record`, `pending`, `complete`); the
-default service provides it exactly when the storage implements `gotApplied`.
+- The entry carries `shieldedDetailsPending` / `dustDetailsPending: true` until the indexer answers, then `false`.
+- Entries still pending at start (for example after a restore) are completed in the background.
+- A failed `gotApplied` is logged and sync carries on; the full entry is written once the indexer answers.
+- A stop does not wait for a storage write in progress: that update is abandoned and applied again on the next start.
+- A lookup that fails in a way waiting cannot fix (4xx, 429, GraphQL error, invalid indexer URL) keeps the flag `true`
+  and is looked up again on the next start.
+- `TransactionHistoryService` gains optional `appliedEntries` (`record`, `pending`, `complete`), present exactly when
+  the storage implements `gotApplied`.
 
-The facade passes `gotApplied` through to the configured storage when it has it, and `WalletEntrySchema` declares both
-flags, so a facade history keeps them through serialize and restore. An entry with either flag `true` is not finished:
-it is `finalized` but may record no status, block or identifiers yet, so a missing status there does not mean success.
-The facade still counts it as proof the chain included the transaction: when the transaction's verdict arrives, a
-partial success releases the failed segments' bookings, a failure releases all of them, and an orphaning releases
-nothing, since sync already owns the coins. An application that restores its history with its own entry schema must
-declare the flag of each wallet it runs (`shieldedDetailsPending`, `dustDetailsPending`); a schema without them keeps
-them through serialize and restore, but unread, so the restored wallet never finds those entries pending, never
-completes them, and their stored flag stays `true`.
+**Facade.** Passes `gotApplied` through to the configured storage, and `WalletEntrySchema` declares both flags so they
+survive serialize and restore. A flagged entry is `finalized` but may lack status, block or identifiers, so a missing
+status does not mean success. It still counts as proof of inclusion when the transaction's verdict arrives: a partial
+success releases the failed segments' bookings, a failure releases all of them, an orphaning releases nothing. An app
+restoring its history with its own entry schema must declare both flags; otherwise they are kept but unread, and those
+entries are never completed.
