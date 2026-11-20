@@ -151,6 +151,15 @@ describe('Wallet serialization and restoration', () => {
     await wallet.start(shieldedKeysFromSeed(seed));
     try {
       await wallet.waitForSyncedState();
+      // A synced wallet has stored every entry, but may still be looking up the details of some: the history is
+      // compared once it holds all it will hold.
+      await vi.waitFor(
+        async () => {
+          const entries = await shieldedConfiguration.txHistoryStorage.getAll();
+          expect(entries.filter((entry) => entry['shieldedDetailsPending'] === true)).toEqual([]);
+        },
+        { timeout: 60_000, interval: 500 },
+      );
 
       const initialTxHistory = await shieldedConfiguration.txHistoryStorage.getAll();
       const serializedTxHistory = await shieldedConfiguration.txHistoryStorage.serialize();
