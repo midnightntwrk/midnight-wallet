@@ -701,16 +701,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@effect/platform@npm:0.97.3, @effect/platform@npm:^0.97.0":
-  version: 0.97.3
-  resolution: "@effect/platform@npm:0.97.3"
+"@effect/platform@npm:0.97.4, @effect/platform@npm:^0.97.4":
+  version: 0.97.4
+  resolution: "@effect/platform@npm:0.97.4"
   dependencies:
     find-my-way-ts: "npm:^0.1.6"
     msgpackr: "npm:^1.11.10"
     multipasta: "npm:^0.2.9"
   peerDependencies:
-    effect: ^3.22.4
-  checksum: 10c0/0726a7e5db21091724a5f782454eaf272c8af0971ce5bf5e6e105610a3206b92915bc7c1c5ada001afb2bb38f1cddcc84c2e3f88ac10bc5b48ef2021d857a2b1
+    effect: ^3.22.5
+  checksum: 10c0/e9cb340522ff7f556363c193efee3d39d8eeeeb25d936a2d328d0f4ed410159612e8e7464bbc24e29080c64618a131c1327cea08e686924afc9d6868e75c68cd
   languageName: node
   linkType: hard
 
@@ -2215,7 +2215,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "npm:^4.0.1"
     "@midnightntwrk/wallet-sdk-utilities": "npm:^1.3.1"
     "@types/node": "npm:^24.13.2"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     pure-rand: "npm:^7.0.1"
     rxjs: "npm:^7.8.2"
   languageName: unknown
@@ -2290,7 +2290,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-shielded": "workspace:^"
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "workspace:^"
     "@midnightntwrk/wallet-sdk-utilities": "workspace:*"
-    effect: "npm:3.22.4"
+    effect: "npm:4.1.4"
     typescript: "npm:5.9.3"
     wallet-sdk-abstractions-2.1.0: "npm:@midnightntwrk/wallet-sdk-abstractions@2.1.0"
     wallet-sdk-capabilities-3.3.1: "npm:@midnightntwrk/wallet-sdk-capabilities@3.3.1"
@@ -2316,7 +2316,7 @@ __metadata:
   resolution: "@midnightntwrk/wallet-sdk-abstractions@workspace:packages/abstractions"
   dependencies:
     "@midnightntwrk/wallet-sdk-utilities": "workspace:*"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
   languageName: unknown
   linkType: soft
 
@@ -2345,7 +2345,7 @@ __metadata:
   dependencies:
     "@effect/cluster": "npm:0.60.5"
     "@effect/experimental": "npm:0.61.2"
-    "@effect/platform": "npm:0.97.3"
+    "@effect/platform": "npm:0.97.4"
     "@effect/platform-node": "npm:0.108.4"
     "@effect/rpc": "npm:0.76.4"
     "@effect/sql": "npm:0.52.2"
@@ -2359,7 +2359,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-state-translation": "workspace:^"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.3.1"
     "@midnightntwrk/zkir-v2": "npm:^2.2.0"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
@@ -2389,7 +2389,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-indexer-client": "npm:2.0.1"
     "@midnightntwrk/wallet-sdk-runtime": "npm:2.0.1"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.3.1"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
@@ -2411,7 +2411,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "npm:4.0.1"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.3.1"
     "@polkadot/rpc-provider": "npm:16.5.6"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
@@ -2432,7 +2432,7 @@ __metadata:
   dependencies:
     "@effect/cluster": "npm:0.60.5"
     "@effect/experimental": "npm:0.61.2"
-    "@effect/platform": "npm:0.97.3"
+    "@effect/platform": "npm:0.97.4"
     "@effect/platform-node": "npm:0.108.4"
     "@effect/rpc": "npm:0.76.4"
     "@effect/sql": "npm:0.52.2"
@@ -2441,7 +2441,7 @@ __metadata:
     "@graphql-codegen/client-preset": "npm:6.2.3"
     "@graphql-typed-document-node/core": "npm:^3.2.0"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.3.1"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     fflate: "npm:^0.8.2"
     graphql: "npm:^17.0.0"
     graphql-http: "npm:^1.22.4"
@@ -2502,7 +2502,7 @@ __metadata:
   dependencies:
     "@effect/cluster": "npm:0.60.5"
     "@effect/experimental": "npm:0.61.2"
-    "@effect/platform": "npm:0.97.3"
+    "@effect/platform": "npm:0.97.4"
     "@effect/platform-node": "npm:0.108.4"
     "@effect/rpc": "npm:0.76.4"
     "@effect/sql": "npm:0.52.2"
@@ -2516,7 +2516,7 @@ __metadata:
     "@polkadot/util": "npm:^14.0.1"
     "@types/bn.js": "npm:^5.2.0"
     bn.js: "npm:^5.2.3"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     tar-stream: "npm:3.2.2"
     testcontainers: "npm:11.14.0"
     tsx: "npm:4.23.15"
@@ -2568,13 +2568,13 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-prover-client@workspace:packages/prover-client"
   dependencies:
-    "@effect/platform": "npm:^0.97.0"
+    "@effect/platform": "npm:^0.97.4"
     "@midnightntwrk/ledger-v8": "npm:^8.1.3"
     "@midnightntwrk/ledger-v9": "npm:1.0.2"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.3.1"
     "@midnightntwrk/zkir-v2": "npm:^2.2.0"
     "@midnightntwrk/zkir-v3": "npm:^3.2.1"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     web-worker: "npm:^1.5.0"
   languageName: unknown
   linkType: soft
@@ -2599,7 +2599,7 @@ __metadata:
   dependencies:
     "@midnightntwrk/wallet-sdk-abstractions": "npm:3.0.0"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.3.1"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
@@ -2617,7 +2617,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-runtime": "npm:2.0.1"
     "@midnightntwrk/wallet-sdk-state-translation": "workspace:^"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.3.1"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
@@ -2661,7 +2661,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-shielded": "npm:4.0.1"
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "npm:4.0.1"
     "@midnightntwrk/wallet-sdk-utilities": "workspace:^"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     pino: "npm:^10.3.1"
     pino-pretty: "npm:^13.1.3"
     rimraf: "npm:6.1.4"
@@ -2696,7 +2696,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.3.1"
     "@noble/curves": "npm:1.9.7"
     "@noble/hashes": "npm:1.8.0"
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
@@ -2705,7 +2705,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-utilities@workspace:packages/utilities"
   dependencies:
-    effect: "npm:^3.19.19"
+    effect: "npm:^4.1.4"
     portfinder: "npm:1.0.38"
     rxjs: "npm:^7.8.2"
   languageName: unknown
@@ -5761,7 +5761,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"effect@npm:3.22.4, effect@npm:^3.19.19":
+"effect@npm:4.1.4, effect@npm:^4.1.4":
+  version: 4.1.4
+  resolution: "effect@npm:4.1.4"
+  checksum: 10c0/9c4bccc29274428209f630ea2393f0d60104a2a54a4d6ba638b4277550c6e698c6e1a87072b6c977ab8b55addaf68ef016d3ec7a7fd525ea8919ae3c23178bae
+  languageName: node
+  linkType: hard
+
+"effect@npm:^3.19.19":
   version: 3.22.4
   resolution: "effect@npm:3.22.4"
   dependencies:
@@ -6615,13 +6622,13 @@ __metadata:
   linkType: hard
 
 "glob@npm:^14.0.0, glob@npm:^14.0.3":
-  version: 14.0.5
-  resolution: "glob@npm:14.0.5"
+  version: 14.0.6
+  resolution: "glob@npm:14.0.6"
   dependencies:
     minimatch: "npm:^11.0.5"
     minipass: "npm:^7.1.3"
     path-scurry: "npm:^3.0.0"
-  checksum: 10c0/42a3400ab2e6877ee0353496dcb2b60eaa6b02e7b7733264557f285372ad692611c3cbb363b856f38d9a6401f8ed56daa960143ba26083a58e8cb95d6c617363
+  checksum: 10c0/5b8621a6a363abc630de0a542f0f8d0a919a0a5e154626b5fdf1e97425e8709783b0b27cc1eb9d65a5ce097db84e904fe50f8f1dc8c0579c49583c0ac30f8ac7
   languageName: node
   linkType: hard
 
