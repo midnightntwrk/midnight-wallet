@@ -7,6 +7,6 @@
     "generate": "node generate.mjs"
   },
   "dependencies": {
-    "@midnightntwrk/wallet-sdk": "1.2.0"
+    "@midnightntwrk/wallet-sdk": "2.0.0"
   }
 }
