@@ -5,8 +5,8 @@ This directory contains per-release notes for the Midnight Wallet SDK.
 ## Versioning convention
 
 Files are named `v<major>.<minor>.<patch>.md` and the version tracks
-[`@midnight-ntwrk/wallet-sdk`](../packages/wallet-sdk) — the barrel package that re-exports every other wallet SDK
-package. That is the version a consumer sees when they `npm install @midnight-ntwrk/wallet-sdk`, so aligning the
+[`@midnightntwrk/wallet-sdk`](../packages/wallet-sdk) — the barrel package that re-exports every other wallet SDK
+package. That is the version a consumer sees when they `npm install @midnightntwrk/wallet-sdk`, so aligning the
 release-note filename with it keeps the two easy to correlate.
 
 Individual package versions (facade, shielded, dust, etc.) are enumerated inside each release note's **Packages** table
