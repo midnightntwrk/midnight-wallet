@@ -1,6 +1,6 @@
 # npmjs Trusted Publishing and scope rename to `@midnightntwrk`
 
-- Status: accepted
+- Status: accepted; the `@midnight-ntwrk` alias was retired on 2026-11-23 (see the last amendment)
 - Deciders: Agron Murtezi, SRE team
 - Date: 2026-06-18 (updated 2026-06-22)
 
@@ -136,15 +136,22 @@ for upstream dashed dependencies above no longer holds:
 
 ## Amendment (2026-11-23): the `@midnight-ntwrk` alias is retired
 
-The `@midnight-ntwrk` scope is deprecated, which ends the migration window this decision set up. The SDK now publishes
-to `@midnightntwrk` only, for every release type: stable, release candidate and canary.
+The `@midnight-ntwrk` scope is deprecated, which ends the migration window this decision set up. Releases from `main`
+now publish to `@midnightntwrk` only, for every release type: stable, release candidate and canary.
 
 - **`scripts/publish-alias.mjs` is deleted**, and the `publish-stable` and `canary` jobs in `.github/workflows/cd.yml`
   no longer run it. `changeset publish` to `@midnightntwrk` is the only publish.
-- **The canary dist-tag guard went with it.** The check that skipped any version without a snapshot prerelease under a
-  `--tag` lived in the alias script and guarded only the alias. The canonical canary publish never relied on it.
-- **Versions already published as `@midnight-ntwrk/wallet-sdk-*` stay on npm** and get no further releases. Consumers
-  move to the matching `@midnightntwrk/wallet-sdk-*` package.
+- **The prerelease dist-tag guard went with it.** The deleted script skipped any version without a prerelease suffix
+  when publishing under a dist-tag other than `latest` (a canary `--tag`, or the tag of changesets pre mode), and it
+  guarded only the alias. The rule that a canonical version never reaches a `canary*` tag now rests on
+  `scripts/write-canary-changeset.mjs` snapshot-bumping every non-private workspace, which holds while every package in
+  the `ignore` list of `.changeset/config.json` is private.
+- **Versions already published as `@midnight-ntwrk/wallet-sdk-*` stay on npm** and get no further releases from `main`.
+  Consumers move to the matching `@midnightntwrk/wallet-sdk-*` package.
+- **The retired `v1` branch is kept as it was.** 1.x gets no more releases. Its own `.github/workflows/cd.yml` still
+  publishes on a push to `v1`, including the alias, so nothing is pushed to it.
+- **The registry side is the npm org owner's:** deprecating the published `@midnight-ntwrk/wallet-sdk-*` packages
+  (`npm deprecate`) and removing the dashed scope's Trusted Publishers, after which no workflow can publish to it.
 - **The private workspaces move too:** `@midnightntwrk/wallet-integration-tests` and
   `@midnightntwrk/wallet-test-website`, so no workspace is named on the old scope.
 - **Out of scope:** upstream `@midnight-ntwrk/*` packages still reached transitively (see the 2026-11-05 amendment).
