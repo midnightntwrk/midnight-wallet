@@ -9,9 +9,9 @@
   "updateInternalDependencies": "patch",
   "ignore": [
     "@midnight/wallet-e2e-tests",
-    "@midnight-ntwrk/wallet-integration-tests",
+    "@midnightntwrk/wallet-integration-tests",
     "@midnightntwrk/wallet-sdk-docs-snippets",
-    "@midnight-ntwrk/wallet-test-website",
+    "@midnightntwrk/wallet-test-website",
     "@midnightntwrk/wallet-sdk-spec-reference",
     "@midnightntwrk/wallet-sdk-state-translation"
   ],

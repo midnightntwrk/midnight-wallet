@@ -1,5 +1,5 @@
 {
-  "name": "@midnight-ntwrk/wallet-test-website",
+  "name": "@midnightntwrk/wallet-test-website",
   "description": "A browser target for testing the wallet SDK behavior",
   "version": "1.0.0-beta.0",
   "type": "module",
