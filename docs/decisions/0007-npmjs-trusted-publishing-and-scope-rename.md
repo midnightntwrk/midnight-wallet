@@ -133,3 +133,19 @@ for upstream dashed dependencies above no longer holds:
   `serialization-tests` restores from, resolve from npmjs, where the ledger mirrors the same builds.
 - **The alias is unaffected.** `scripts/publish-alias.mjs` rewrites only `@midnightntwrk/wallet-sdk*`, so the
   `@midnight-ntwrk` alias packages depend on the same `@midnightntwrk` ledger packages as the canonical ones.
+
+## Amendment (2026-11-23): the `@midnight-ntwrk` alias is retired
+
+The `@midnight-ntwrk` scope is deprecated, which ends the migration window this decision set up. The SDK now publishes
+to `@midnightntwrk` only, for every release type: stable, release candidate and canary.
+
+- **`scripts/publish-alias.mjs` is deleted**, and the `publish-stable` and `canary` jobs in `.github/workflows/cd.yml`
+  no longer run it. `changeset publish` to `@midnightntwrk` is the only publish.
+- **The canary dist-tag guard went with it.** The check that skipped any version without a snapshot prerelease under a
+  `--tag` lived in the alias script and guarded only the alias. The canonical canary publish never relied on it.
+- **Versions already published as `@midnight-ntwrk/wallet-sdk-*` stay on npm** and get no further releases. Consumers
+  move to the matching `@midnightntwrk/wallet-sdk-*` package.
+- **The private workspaces move too:** `@midnightntwrk/wallet-integration-tests` and
+  `@midnightntwrk/wallet-test-website`, so no workspace is named on the old scope.
+- **Out of scope:** upstream `@midnight-ntwrk/*` packages still reached transitively (see the 2026-11-05 amendment).
+  This repo does not publish them.

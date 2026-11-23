@@ -124,8 +124,8 @@ How the two lines work:
 - `v1` is the 1.x maintenance branch, cut from the last 1.x commit on `main`. Its branch-local `.changeset/config.json`
   sets `baseBranch: "v1"`, and its automated release PR lives on `changeset-release/v1`. Its `publish-stable` job in
   `.github/workflows/cd.yml` passes no dist-tag, and `changeset publish` tags `latest` by default, so a 1.x release
-  would take `latest` back from 2.x. Before a stable 1.x release, add `--tag v1` to `yarn changeset publish` and to
-  `node scripts/publish-alias.mjs` in that job.
+  would take `latest` back from 2.x. Before a stable 1.x release, add `--tag v1` to `yarn changeset publish` in that
+  job.
 - 2.x work targets `main`; 1.x fixes target `v1`. A fix both lines need lands on each of them.
 
 ## Known Install Warnings
@@ -337,7 +337,7 @@ Packages that are private or explicitly ignored in the .changeset/config.json wi
 currently ignore test-related packages:
 
 ```json
-"ignore": ["@midnight/wallet-e2e-tests", "@midnight-ntwrk/wallet-integration-tests"],
+"ignore": ["@midnight/wallet-e2e-tests", "@midnightntwrk/wallet-integration-tests"],
 ```
 
 ---
