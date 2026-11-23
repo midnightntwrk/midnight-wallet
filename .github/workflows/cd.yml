@@ -22,7 +22,7 @@ jobs:
       # can ever fire. Resolved by the "Resolve publish mode" step from two
       # internal signals (hasChangesets from changesets/action, hasReleases from
       # the detect step below):
-      #   'stable' → release PR merged: no changesets left → publish canonical
+      #   'stable' → release PR merged: no changesets left → publish stable
       #   'canary' → pending package-bumping changeset(s) → publish snapshot
       #   'none'   → docs/CI-only (empty changeset): publish nothing
       mode: ${{ steps.mode.outputs.mode }}
@@ -175,7 +175,7 @@ jobs:
       - name: Build packages
         run: yarn dist:publish
 
-      # Publish the canonical @midnightntwrk scope via changesets. The action
+      # Publish to @midnightntwrk via changesets. The action
       # runs `changeset publish` (OIDC Trusted Publishing — no token; provenance
       # via NPM_CONFIG_PROVENANCE), then pushes the release tags and creates one
       # GitHub Release per package from its CHANGELOG. This restores the Releases
@@ -291,7 +291,7 @@ jobs:
             CANARY_TAG="canary-$REF_NAME"
           fi
 
-          # Canonical @midnightntwrk scope: `changeset publish` (OIDC +
+          # Publish to @midnightntwrk: `changeset publish` (OIDC +
           # provenance via NPM_CONFIG_PROVENANCE), the same mechanism the stable
           # job uses. --no-git-tag so canary snapshots leave no git tags (and
           # no GitHub Releases — that is the action's job, not the CLI's).

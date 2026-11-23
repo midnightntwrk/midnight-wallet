@@ -29,8 +29,8 @@ import { resolve } from 'node:path';
 const config = JSON.parse(readFileSync('.changeset/config.json', 'utf8'));
 const ignore = new Set(config.ignore ?? []);
 
-// The publishable set: non-private workspaces,
-// minus changeset-ignored names so `changeset version` doesn't choke on them.
+// The publishable set: non-private workspaces minus changeset-ignored names, so
+// `changeset version` doesn't choke on them.
 const names = execFileSync('yarn', ['workspaces', 'list', '--json'], { encoding: 'utf8' })
   .trim()
   .split('\n')
