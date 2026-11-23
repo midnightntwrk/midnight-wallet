@@ -203,6 +203,147 @@ describe('InMemoryTransactionHistoryStorage gotPending / gotRejected', () => {
   });
 });
 
+describe('InMemoryTransactionHistoryStorage gotApplied', () => {
+  // Two wallets sharing one storage, each writing its own section and its own "details pending" flag under the same
+  // transaction hash, the way the shielded and Dust wallets share the facade's history.
+  const AppliedSchema = extendEntrySchema({
+    walletA: Schema.optional(Schema.Array(Schema.String)),
+    walletADetailsPending: Schema.optional(Schema.Boolean),
+    walletB: Schema.optional(Schema.Array(Schema.String)),
+    walletBDetailsPending: Schema.optional(Schema.Boolean),
+  });
+  type AppliedEntry = Schema.Schema.Type<typeof AppliedSchema>;
+  const storageOf = () => new InMemoryTransactionHistoryStorage(AppliedSchema);
+  const block = { hash: 'block-hash', height: 7, timestamp: new Date(1_700_000_000_000) };
+
+  it('should store an applied entry as finalized with no block, carrying its section and pending flag', async () => {
+    const storage = storageOf();
+
+    await storage.gotApplied({
+      hash: 'tx',
+      identifiers: [],
+      protocolVersion: 1,
+      walletA: ['coin'],
+      walletADetailsPending: true,
+    });
+
+    const result = await storage.get('tx');
+    expect(result?.lifecycle).toEqual({ status: 'finalized' });
+    expect(result?.walletA).toEqual(['coin']);
+    expect(result?.walletADetailsPending).toBe(true);
+  });
+
+  it('should keep the block, status, identifiers, timestamp and fees another write already recorded, so a lagging wallet never erases them', async () => {
+    const storage = storageOf();
+    const timestamp = new Date(1_700_000_000);
+    await storage.gotFinalized({
+      hash: 'tx',
+      identifiers: ['id-a'],
+      protocolVersion: 1,
+      status: 'SUCCESS',
+      timestamp,
+      fees: 1234n,
+      finalizedBlock: block,
+      walletB: ['utxo'],
+    });
+
+    // The lagging write carries values of its own, which must not replace the recorded ones.
+    await storage.gotApplied({
+      hash: 'tx',
+      identifiers: [],
+      protocolVersion: 1,
+      timestamp: new Date(0),
+      fees: 0n,
+      walletA: ['coin'],
+      walletADetailsPending: true,
+    });
+
+    const result = await storage.get('tx');
+    expect(result?.lifecycle).toEqual({ status: 'finalized', finalizedBlock: block });
+    expect(result?.status).toBe('SUCCESS');
+    expect(result?.identifiers).toEqual(['id-a']);
+    expect(result?.timestamp).toEqual(timestamp);
+    expect(result?.fees).toBe(1234n);
+    expect(result?.walletB).toEqual(['utxo']);
+    expect(result?.walletA).toEqual(['coin']);
+    expect(result?.walletADetailsPending).toBe(true);
+  });
+
+  it('should fill in the block and clear the flag once the complete entry arrives, keeping the other wallet’s flag', async () => {
+    const storage = storageOf();
+    await storage.gotApplied({
+      hash: 'tx',
+      identifiers: [],
+      protocolVersion: 1,
+      walletA: ['coin'],
+      walletADetailsPending: true,
+    });
+    await storage.gotApplied({
+      hash: 'tx',
+      identifiers: [],
+      protocolVersion: 1,
+      walletB: ['utxo'],
+      walletBDetailsPending: true,
+    });
+
+    await storage.gotFinalized({
+      hash: 'tx',
+      identifiers: ['id-a'],
+      protocolVersion: 1,
+      status: 'SUCCESS',
+      finalizedBlock: block,
+      walletA: ['coin'],
+      walletADetailsPending: false,
+    });
+
+    const result = await storage.get('tx');
+    expect(result?.lifecycle).toEqual({ status: 'finalized', finalizedBlock: block });
+    expect(result?.walletADetailsPending).toBe(false);
+    expect(result?.walletBDetailsPending).toBe(true);
+    expect(result?.walletB).toEqual(['utxo']);
+  });
+
+  it('should turn a pending entry under the same hash into a finalized one, since the transaction has been applied', async () => {
+    const storage = storageOf();
+    await storage.gotPending({ hash: 'tx', identifiers: ['id-a'], submittedAt: new Date(0) });
+
+    await storage.gotApplied({
+      hash: 'tx',
+      identifiers: [],
+      protocolVersion: 1,
+      walletA: ['coin'],
+      walletADetailsPending: true,
+    });
+
+    const result = await storage.get('tx');
+    expect(result?.lifecycle).toEqual({ status: 'finalized' });
+    expect(result?.identifiers).toEqual(['id-a']);
+  });
+
+  it('should round-trip an applied entry through serialize and restore, flag and missing block included', async () => {
+    const storage = storageOf();
+    await storage.gotApplied({
+      hash: 'tx',
+      identifiers: [],
+      protocolVersion: 1,
+      walletA: ['coin'],
+      walletADetailsPending: true,
+    });
+
+    const restored = InMemoryTransactionHistoryStorage.restore(await storage.serialize(), AppliedSchema);
+
+    const expected: AppliedEntry = {
+      hash: 'tx',
+      identifiers: [],
+      protocolVersion: 1,
+      walletA: ['coin'],
+      walletADetailsPending: true,
+      lifecycle: { status: 'finalized' },
+    };
+    expect(await restored.get('tx')).toEqual(expected);
+  });
+});
+
 describe('InMemoryTransactionHistoryStorage clears pending entries precisely', () => {
   // gotFinalized clears a prior pending entry only when ALL of these hold: the finalized entry has identifiers, the
   // pending entry has identifiers, the pending entry's identifiers are a SUBSET of the finalized set, and the entry is

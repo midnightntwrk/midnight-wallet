@@ -279,6 +279,22 @@ export type ShieldedWalletAPI<TKeys = never, TSerialized = string> = {
     ttl?: Date,
   ): Promise<UnprovenTx>;
 
+  /**
+   * Serializes the wallet's state, to save and later hand to `restore`.
+   *
+   * @remarks
+   *   An application that also saves the transaction history saves it after this snapshot, or saves both at one point
+   *   between sync updates. The wallet stores each transaction's history entry before its state moves past it, so a
+   *   history serialized after the snapshot holds every transaction the snapshot has applied; one serialized before it
+   *   can miss a transaction the wallet applies in between.
+   * @example
+   *   ```ts
+   *   const snapshot = await shieldedWallet.serializeState();
+   *   const history = await txHistoryStorage.serialize();
+   *   ```;
+   *
+   * @returns The serialized state.
+   */
   serializeState(): Promise<TSerialized>;
 
   waitForSyncedState(allowedGap?: bigint): Promise<ShieldedWalletState<TSerialized>>;

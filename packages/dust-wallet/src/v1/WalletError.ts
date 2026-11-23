@@ -38,19 +38,34 @@ export class InsufficientFundsError extends Data.TaggedError('Wallet.Insufficien
   tokenType: string;
 }> {}
 
+/**
+ * Reading, looking up or writing a transaction-history entry failed.
+ *
+ * @remarks
+ *   Most such failures can clear by waiting: the indexer has not ingested the transaction yet, or is down or unreachable.
+ *   One marked `retryable: false` cannot: the indexer refused the query outright (a 4xx response or a GraphQL error),
+ *   the indexer URL is invalid, or the only source holds no such transaction. Absent means it may clear by waiting.
+ * @example
+ *   ```ts
+ *   Effect.retry(lookup, { schedule, while: (error) => error.retryable !== false });
+ *   ```;
+ */
 export class TransactionHistoryError extends Data.TaggedError('Wallet.TransactionHistory')<{
   message: string;
   cause?: unknown;
+  /** `false` when waiting cannot turn the failure into a success; absent when it may. */
+  readonly retryable?: false;
 }> {}
 
 /**
  * A finalized history entry that records no block, met where a block is needed.
  *
  * @remarks
- *   Only an entry restored from a history written before the lifecycle field existed looks like this: it is known to have
- *   been finalized, but the block it landed in was never recorded, and none is invented. It is its own error rather
- *   than a message on {@link TransactionHistoryError} so that a caller which can fetch the block by hash matches on the
- *   tag.
+ *   Two entries look like this: one restored from a history written before the lifecycle field existed, known to have
+ *   been finalized but with the block it landed in never recorded; and one stored when the wallet applied the
+ *   transaction, whose details (block included) are still pending. No block is invented for either. It is its own error
+ *   rather than a message on {@link TransactionHistoryError} so that a caller which can fetch the block by hash matches
+ *   on the tag.
  * @example
  *   ```ts
  *   if (error._tag === 'Wallet.BlocklessFinalizedEntry') fetchBlockFor(error.hash);

@@ -356,6 +356,22 @@ export type DustWalletAPI<TKeys = never, TSerialized = string> = {
     currentTime?: Date,
   ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData<unknown> }>;
 
+  /**
+   * Serializes the wallet's state, to save and later hand to `restore`.
+   *
+   * @remarks
+   *   An application that also saves the transaction history saves it after this snapshot, or saves both at one point
+   *   between sync updates. The wallet stores each transaction's history entry before its state moves past it, so a
+   *   history serialized after the snapshot holds every transaction the snapshot has applied; one serialized before it
+   *   can miss a transaction the wallet applies in between.
+   * @example
+   *   ```ts
+   *   const snapshot = await dustWallet.serializeState();
+   *   const history = await txHistoryStorage.serialize();
+   *   ```;
+   *
+   * @returns The serialized state.
+   */
   serializeState(): Promise<TSerialized>;
 
   waitForSyncedState(allowedGap?: bigint): Promise<DustWalletState<TSerialized>>;

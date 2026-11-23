@@ -31,6 +31,14 @@ import { logger } from '../logger.js';
 import { carried } from './transactions.js';
 import { type FinalizedTx } from '@midnightntwrk/wallet-sdk';
 
+/**
+ * Whether a finalized entry holds all it will hold. The shielded and Dust wallets store an entry as soon as they apply
+ * its transaction and fill in its details (status, block, coins) once the indexer answers; until then the entry is
+ * `finalized` but flagged `shieldedDetailsPending` or `dustDetailsPending`.
+ */
+const isCompleteFinalizedEntry = (entry: WalletEntry): entry is FinalizedWalletEntry =>
+  isFinalizedWalletEntry(entry) && entry.shieldedDetailsPending !== true && entry.dustDetailsPending !== true;
+
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
   rx.firstValueFrom(
     wallet.state.pipe(
@@ -138,7 +146,7 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
 
         return {
           state,
-          txFound: txInHistory !== undefined && isFinalizedWalletEntry(txInHistory),
+          txFound: txInHistory !== undefined && isCompleteFinalizedEntry(txInHistory),
         };
       }),
       rx.filter(({ state, txFound }) => txFound && state.isSynced && state.dust.availableCoins.length > 0),
@@ -290,14 +298,15 @@ export async function waitForTxInHistory(
   // A finalized target additionally demands a SUCCESS outcome; rejected/pending match on lifecycle alone.
   const matchesTarget = (entry: WalletEntry): boolean =>
     until === 'finalized'
-      ? isFinalizedWalletEntry(entry) && entry.status === 'SUCCESS'
+      ? isCompleteFinalizedEntry(entry) && entry.status === 'SUCCESS'
       : until === 'rejected'
         ? entry.lifecycle.status === 'rejected'
         : isPendingWalletEntry(entry);
 
-  // A lifecycle is *terminal* once it can no longer change (finalized or rejected); pending is transient.
+  // A lifecycle is *terminal* once it can no longer change (finalized or rejected); pending is transient. A finalized
+  // entry whose details are still being looked up has no status yet, so it is not terminal until they arrive.
   const isTerminal = (entry: WalletEntry): boolean =>
-    isFinalizedWalletEntry(entry) || entry.lifecycle.status === 'rejected';
+    isCompleteFinalizedEntry(entry) || entry.lifecycle.status === 'rejected';
 
   const describeSections = (e: WalletEntry): string =>
     (['shielded', 'unshielded', 'dust'] as const).filter((k) => e[k] !== undefined).join(',');
@@ -374,7 +383,8 @@ export async function waitForTxInHistory(
  * it, so a wallet can report itself synced with its history still empty.
  *
  * @param wallet - The wallet whose transaction history is polled.
- * @param matches - Predicate selecting the entries of interest, applied only to finalized entries.
+ * @param matches - Predicate selecting the entries of interest, applied only to finalized entries whose details have
+ *   arrived (no `shieldedDetailsPending` or `dustDetailsPending` flag).
  * @param description - Included in the progress logs, so a stalled wait says what it was waiting for.
  */
 export async function waitForFinalizedTxHistoryEntries(
@@ -386,7 +396,7 @@ export async function waitForFinalizedTxHistoryEntries(
     rx.merge(wallet.state().pipe(rx.filter((state) => state.isSynced)), rx.interval(500)).pipe(
       rx.mergeMap(async () => {
         const all = await wallet.getAllFromTxHistory();
-        const found = all.filter(isFinalizedWalletEntry).filter(matches);
+        const found = all.filter(isCompleteFinalizedEntry).filter(matches);
         logger.info(
           `Waiting for ${description} in tx history: ${found.length} match of ${all.length} entries ` +
             `(${all.filter(isPendingWalletEntry).length} still pending)`,

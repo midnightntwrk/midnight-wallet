@@ -25,6 +25,7 @@ import {
   type TransactionHistoryEntryCommon,
   type PendingEntryInput,
   type FinalizedEntryInput,
+  type AppliedEntryInput,
   type RejectedEntryInput,
   type SerializedTransactionHistory,
   coversTransaction,
@@ -59,6 +60,19 @@ const parseJson = (serialized: string): Either.Either<unknown, TransactionHistor
  */
 const entryUnknownFieldsOf = (raw: unknown, encoded: unknown): UnknownFields =>
   isJsonObject(raw) ? unknownFieldsOf(raw, (key) => isJsonObject(encoded) && Object.hasOwn(encoded, key)) : {};
+
+/**
+ * `merged`, with every detail `recorded` already holds put back: its identifiers joined with the merged ones, its
+ * `status`, `timestamp` and `fees` where it has them, and its lifecycle when that is already `finalized`.
+ */
+const keepRecordedDetails = <T extends TransactionHistoryEntryCommon>(recorded: T, merged: T): T => ({
+  ...merged,
+  identifiers: [...new Set([...recorded.identifiers, ...merged.identifiers])],
+  ...(recorded.status !== undefined ? { status: recorded.status } : {}),
+  ...(recorded.timestamp !== undefined ? { timestamp: recorded.timestamp } : {}),
+  ...(recorded.fees !== undefined ? { fees: recorded.fees } : {}),
+  lifecycle: recorded.lifecycle.status === 'finalized' ? recorded.lifecycle : merged.lifecycle,
+});
 
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
@@ -117,6 +131,35 @@ export class InMemoryTransactionHistoryStorage<
     this.#clearUnfinalizedCoveredBy(entry);
   }
 
+  /**
+   * Records a transaction a wallet has applied before it knows the block it landed in, as a `finalized` entry with no
+   * block. An entry already under the hash takes the incoming fields through the merge function, but keeps every detail
+   * it already records — a finalized lifecycle (and its block), `status`, `timestamp`, `fees` and its identifiers — so
+   * a wallet whose sync lags another's never erases what that wallet's complete write recorded.
+   *
+   * @example
+   *   ```ts
+   *   const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema);
+   *   await storage.gotApplied({ hash: 'tx-hash', identifiers: [], protocolVersion: 1 });
+   *   (await storage.get('tx-hash'))?.lifecycle; // { status: 'finalized' }
+   *   ```;
+   *
+   * @param input - The entry without its lifecycle; the storage attaches a blockless `finalized` one.
+   * @returns A promise that resolves once the entry is recorded.
+   */
+  gotApplied(input: AppliedEntryInput<T>): Promise<void> {
+    // Type cast required because: `T` is an open generic, so TypeScript cannot see that `Omit<T, 'lifecycle'>` plus a
+    // `lifecycle` reconstitutes exactly `T`. The input type guarantees it — `AppliedEntryInput<T>` is that `Omit` — but
+    // the compiler has no rule that puts a spread of a generic's `Omit` back together.
+    const incoming = { ...input, lifecycle: { status: 'finalized' } } as unknown as T;
+    const existing = this.#storage.get(incoming.hash);
+    this.#storage.set(
+      incoming.hash,
+      existing === undefined ? incoming : keepRecordedDetails(existing, this.#merge(existing, incoming)),
+    );
+    return Promise.resolve();
+  }
+
   async gotRejected(input: RejectedEntryInput<T>): Promise<void> {
     if (this.#inclusionRecorded(input)) return;
     const { rejectedAt, reason, ...rest } = input;
@@ -145,6 +188,21 @@ export class InMemoryTransactionHistoryStorage<
     this.#envelopeUnknownFields = {};
   }
 
+  /**
+   * Serializes every entry, to save and later hand to `restore`.
+   *
+   * @remarks
+   *   Saved beside a wallet snapshot, the history is serialized after the snapshot, or both at one point between sync
+   *   updates: the wallets store each entry before their state moves past it, so a history serialized after the
+   *   snapshot holds every transaction the snapshot has applied.
+   * @example
+   *   ```ts
+   *   const snapshot = await wallet.serializeState();
+   *   const history = await txHistoryStorage.serialize();
+   *   ```;
+   *
+   * @returns The serialized history.
+   */
   serialize(): Promise<SerializedTransactionHistory> {
     const allEntries = [...this.#storage.values()];
     const encoded = Schema.encodeSync(Schema.Array(this.#schema))(allEntries);
