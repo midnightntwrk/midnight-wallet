@@ -48,7 +48,19 @@ import {
 } from '@midnightntwrk/wallet-sdk-address-format';
 import { ForkSimulator, V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Deferred, Duration, Effect, Option, Ref, Schedule, Stream, SubscriptionRef, pipe, type Scope } from 'effect';
+import {
+  Deferred,
+  Duration,
+  Effect,
+  Fiber,
+  Option,
+  Ref,
+  Schedule,
+  Stream,
+  SubscriptionRef,
+  pipe,
+  type Scope,
+} from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import { type TransactionHistory as V1TransactionHistory, V1Tag } from '../v1/index.js';
 import { CoreWallet, PublicKeys, Sync, type TransactionHistory, V2Tag, WalletError } from '../v2/index.js';
@@ -877,6 +889,56 @@ describe('a stop while history writes are about to land', () => {
         { received: [900n], spent: [] },
       ]);
       expect(logs.filter((line) => /not recorded/.test(line))).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+describe('a stop after a hand-over, while writes from both variants are still running', () => {
+  it('should finish within one grace period, because the grace is the wallet’s, not each variant’s', async () =>
+    Effect.gen(function* () {
+      yield* capturedConsole;
+      const started = yield* Ref.make<readonly string[]>([]);
+      const neverLands = { put: (changes: { source: string }) => writeThatNeverLands(started, changes.source) };
+
+      const { v9, wallet } = yield* crossTheFork(chainCoins(), undefined, {
+        v1History: { ...noOpV1History, ...neverLands },
+        v2History: { ...noOpV2History, ...neverLands },
+      });
+      yield* settled(wallet);
+      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
+      yield* v9.submitTransaction(v9Payment(networkId, late));
+      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+      // The premise: a write per ledger-v8 payment, carried past the hand-over, and one for the ledger-v9 payment.
+      expect(yield* startedAtLeast(started, walletValues.length + 1)).toHaveLength(walletValues.length + 1);
+
+      // One second of grace, and a margin well short of a second one.
+      const stopped = yield* wallet.stop.pipe(Effect.timeoutOption(Duration.millis(1500)));
+      expect(Option.isSome(stopped)).toBe(true);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should apply no sync update once stop() is called, because the grace lets writes land, not the wallet go on syncing', async () =>
+    Effect.gen(function* () {
+      yield* capturedConsole;
+      const started = yield* Ref.make<readonly string[]>([]);
+
+      const { v9, wallet } = yield* crossTheFork(chainCoins(), undefined, {
+        v2History: { ...noOpV2History, put: (changes) => writeThatNeverLands(started, changes.source) },
+      });
+      yield* settled(wallet);
+      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
+      yield* v9.submitTransaction(v9Payment(networkId, late));
+      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+      // The premise: the write for that payment is running, so the stop waits out the whole grace.
+      expect(yield* startedAtLeast(started, 1)).toHaveLength(1);
+
+      // A payment the chain carries a moment after the wallet is asked to stop.
+      const stopping = yield* Effect.fork(wallet.stop);
+      yield* Effect.sleep(Duration.millis(100));
+      const afterStop = mintable(ledgerV9.shieldedToken().raw, 50n, walletRecipient());
+      yield* v9.submitTransaction(v9Payment(networkId, afterStop));
+      yield* Fiber.join(stopping);
+
+      // Applying it would have started a write for it.
+      expect(yield* Ref.get(started)).toHaveLength(1);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
