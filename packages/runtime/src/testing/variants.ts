@@ -220,11 +220,9 @@ export class InterceptingVariant<TTag extends string | symbol, TState> implement
   ): Effect.Effect<InterceptingRunningVariant<TTag, TState>, WalletRuntimeError, Scope.Scope> {
     this.receivedContext = context;
     const tag = this.__polyTag__;
-    const onStop = this.#options.onStop;
+    const onStop = this.#options.onStop ?? Effect.void;
     return Effect.gen(this, function* () {
-      if (onStop !== undefined) {
-        yield* Effect.addFinalizer(() => onStop);
-      }
+      yield* Effect.addFinalizer(() => onStop);
       const pubsub = yield* PubSub.bounded<StateChange.StateChange<TState>>({
         capacity: 1,
         replay: 1,

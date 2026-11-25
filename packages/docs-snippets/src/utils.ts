@@ -20,6 +20,7 @@ import {
   createKeystore,
   PublicKey as UnshieldedPublicKey,
   UnshieldedWallet,
+  type ResolvedConfiguration,
   type UnshieldedKeystore,
   type TransactionIdentifier,
   type WalletEntry,
@@ -40,26 +41,29 @@ const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
 // Resolved up front rather than left to `WalletFacade.init`, which does the same for the factories it calls: the
 // snippets read `forks` back to choose which ledger version authors a transaction, and `init` takes the resolved
-// configuration as it is.
-export const configuration = WalletFacade.resolveConfiguration({
-  networkId: 'undeployed',
-  costParameters: {
-    feeBlocksMargin: 5,
-  },
-  relayURL: new URL(`ws://localhost:${NODE_PORT}`),
-  // One proof server per ledger version, keyed the way `forks` is: `v8` answers below `forks.v9`, `v9` from it. A
-  // transaction is proved by the backend for the ledger version that authored its bytes, so the wallet proves on either
-  // side of the fork and across it. `hard-fork-support.ts` explains the shape in full.
-  provers: {
-    v8: { kind: 'server', url: new URL(`http://localhost:${V8_PROOF_SERVER_PORT}`) },
-    v9: { kind: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
-  },
-  indexerClientConnection: {
-    indexerHttpUrl: INDEXER_HTTP_URL,
-    indexerWsUrl: INDEXER_WS_URL,
-  },
-  txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-});
+// configuration as it is. A function rather than one shared value, so each wallet gets its own history: a store shared
+// between two wallets merges what each recorded about a transaction into one entry, so neither could tell whether its
+// own record had landed.
+export const makeConfiguration = (): ResolvedConfiguration =>
+  WalletFacade.resolveConfiguration({
+    networkId: 'undeployed',
+    costParameters: {
+      feeBlocksMargin: 5,
+    },
+    relayURL: new URL(`ws://localhost:${NODE_PORT}`),
+    // One proof server per ledger version, keyed the way `forks` is: `v8` answers below `forks.v9`, `v9` from it. A
+    // transaction is proved by the backend for the ledger version that authored its bytes, so the wallet proves on either
+    // side of the fork and across it. `hard-fork-support.ts` explains the shape in full.
+    provers: {
+      v8: { kind: 'server', url: new URL(`http://localhost:${V8_PROOF_SERVER_PORT}`) },
+      v9: { kind: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
+    },
+    indexerClientConnection: {
+      indexerHttpUrl: INDEXER_HTTP_URL,
+      indexerWsUrl: INDEXER_WS_URL,
+    },
+    txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+  });
 
 export const initWalletWithSeed = async (
   seed: Buffer,
@@ -72,15 +76,11 @@ export const initWalletWithSeed = async (
   // what lets one wallet follow the chain through a fork.
   const seeds = WalletSeeds.fromMasterSeed(seed);
 
+  const configuration = makeConfiguration();
   const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, configuration.networkId);
 
   const wallet: WalletFacade = await WalletFacade.init({
-    // Each wallet keeps its own history, as an application would: a store shared between two wallets merges what each
-    // recorded about a transaction into one entry, so neither could tell whether its own record had landed.
-    configuration: {
-      ...configuration,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-    },
+    configuration,
     shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
     unshielded: (config) =>
       UnshieldedWallet(config).startWithPublicKey(UnshieldedPublicKey.fromKeyStore(unshieldedKeystore)),
@@ -112,7 +112,8 @@ export const waitForShieldedHistory = (
 ): Promise<WalletEntry> =>
   rx.firstValueFrom(
     rx.timer(0, 250).pipe(
-      rx.switchMap(() => wallet.getAllFromTxHistory()),
+      // Each read finishes before the next starts: a slow store must not have every read cancelled by the next tick.
+      rx.exhaustMap(() => wallet.getAllFromTxHistory()),
       rx.map((entries) =>
         entries.find((entry) => entry.identifiers.includes(identifier) && entry.shielded !== undefined),
       ),

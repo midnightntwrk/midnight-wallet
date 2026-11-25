@@ -211,6 +211,12 @@ const settled = (wallet: ForkWallet) =>
       state.state.progress.appliedIndex > forkBlock,
   );
 
+/** Pays the wallet 900n on the ledger-v9 chain once it has handed over, and waits until it holds that payment. */
+const receiveLatePayment = (v9: V9.Simulator, wallet: ForkWallet) =>
+  v9
+    .submitTransaction(v9Payment(networkId, mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient())))
+    .pipe(Effect.zipRight(wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n)));
+
 /** A wallet that has synced the ledger-v8 chain, crossed the boundary, and the chain it now reads. */
 type Crossing = Readonly<{
   v9: V9.Simulator;
@@ -575,9 +581,7 @@ describe('a shielded wallet crossing a hard fork', () => {
       yield* settled(wallet);
       expect(yield* wallet.activeTag).toBe(V2Tag);
 
-      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
-      yield* v9.submitTransaction(v9Payment(networkId, late));
-      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+      yield* receiveLatePayment(v9, wallet);
 
       const sections = yield* writtenAtLeast(written, 1);
       expect(sections.map(({ received, spent }) => ({ received, spent }))).toEqual([{ received: [900n], spent: [] }]);
@@ -826,9 +830,7 @@ describe('a stop while history writes are still running', () => {
         v2History: { ...noOpV2History, put: (changes) => writeThatNeverLands(started, changes.source) },
       });
       yield* settled(wallet);
-      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
-      yield* v9.submitTransaction(v9Payment(networkId, late));
-      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+      yield* receiveLatePayment(v9, wallet);
       // The premise: the V2 variant's write for that payment is running.
       const running = yield* startedAtLeast(started, 1);
       expect(running).toHaveLength(1);
@@ -874,9 +876,7 @@ describe('a stop while history writes are about to land', () => {
         v2History: { ...noOpV2History, put: (changes) => writeLandingOn(release, started, written, changes) },
       });
       yield* settled(wallet);
-      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
-      yield* v9.submitTransaction(v9Payment(networkId, late));
-      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+      yield* receiveLatePayment(v9, wallet);
       // The premise: the V2 variant's write for that payment is running and has not landed.
       expect(yield* startedAtLeast(started, 1)).toHaveLength(1);
       expect(yield* Ref.get(written)).toEqual([]);
@@ -893,7 +893,7 @@ describe('a stop while history writes are about to land', () => {
 });
 
 describe('a stop after a hand-over, while writes from both variants are still running', () => {
-  it('should finish within one grace period, because the grace is the wallet’s, not each variant’s', async () =>
+  it('should finish within one grace period, because the grace belongs to the wallet, not to each variant', async () =>
     Effect.gen(function* () {
       yield* capturedConsole;
       const started = yield* Ref.make<readonly string[]>([]);
@@ -904,9 +904,7 @@ describe('a stop after a hand-over, while writes from both variants are still ru
         v2History: { ...noOpV2History, ...neverLands },
       });
       yield* settled(wallet);
-      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
-      yield* v9.submitTransaction(v9Payment(networkId, late));
-      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+      yield* receiveLatePayment(v9, wallet);
       // The premise: a write per ledger-v8 payment, carried past the hand-over, and one for the ledger-v9 payment.
       expect(yield* startedAtLeast(started, walletValues.length + 1)).toHaveLength(walletValues.length + 1);
 
@@ -925,9 +923,7 @@ describe('a stop after a hand-over, while writes from both variants are still ru
         v2History: { ...noOpV2History, put: (changes) => writeThatNeverLands(started, changes.source) },
       });
       yield* settled(wallet);
-      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
-      yield* v9.submitTransaction(v9Payment(networkId, late));
-      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+      yield* receiveLatePayment(v9, wallet);
       // The premise: the write for that payment is running, so the stop waits out the whole grace.
       expect(yield* startedAtLeast(started, 1)).toHaveLength(1);
 

@@ -749,7 +749,7 @@ describe('Variant activation and context', () => {
         expect(yield* Deferred.isDone(finished)).toBe(true);
       }).pipe(Effect.scoped, Effect.runPromise));
 
-    it('should interrupt the work of every variant still running after one grace, because the grace is the wallet’s, not each variant’s', () =>
+    it('should interrupt the work of every variant still running after one grace, because the grace belongs to the wallet, not to each variant', () =>
       Effect.gen(function* () {
         const secondBuilder = new InterceptingVariantBuilder<typeof Second, number>(Second);
         const { Wallet, firstBuilder } = makeTwoVariantWallet(secondBuilder);
@@ -794,7 +794,7 @@ describe('Variant activation and context', () => {
           Deferred.await(variantStopped).pipe(Effect.zipRight(Deferred.succeed(finished, undefined))),
         );
         const stopped = yield* Effect.promise(() => wallet.stop()).pipe(
-          Effect.timeoutOption(Duration.divide(Variant.BACKGROUND_WORK_GRACE, 2).pipe(Option.getOrThrow)),
+          Effect.timeoutOption(Duration.unsafeDivide(Variant.BACKGROUND_WORK_GRACE, 2)),
         );
 
         expect(Option.isSome(stopped)).toBe(true);
