@@ -136,6 +136,17 @@ const maskProtocolVersion = (output: string): string =>
 const maskVolatile = (output: string | null): string | null =>
   output === null ? null : maskProtocolVersion(maskChainHeight(output));
 
+// The pull-request smoke lane selects tests by `@smoke` in their name; every other snippet runs only in the nightly run.
+// A shielded transfer is in it because its output shows whether a wallet stopped straight after a transaction has still
+// recorded that transaction in history, which changes to a wallet's sync or stop could otherwise break unseen until the
+// nightly run.
+const SMOKE_SNIPPETS: ReadonlySet<string> = new Set(['shielded-transfer']);
+
+const titled = (snippet: Snippet): Snippet & { title: string } => ({
+  ...snippet,
+  title: SMOKE_SNIPPETS.has(snippet.name) ? `${snippet.name} @smoke` : snippet.name,
+});
+
 const testSnippet = async (snippet: Snippet, envExtension: Record<string, string> = {}) => {
   const result = await runSnippet(snippet, envExtension);
   expect(result.map(maskVolatile)).toMatchSnapshot();
@@ -181,7 +192,7 @@ describe('Snippet outputs', () => {
       await startedEnvironment?.down({ timeout: 10_000 });
     });
 
-    it.each(snippetFiles.net)('should output the correct result for $name', (snippet) =>
+    it.each(snippetFiles.net.map(titled))('should output the correct result for $title', (snippet) =>
       testSnippet(snippet, envExtension),
     );
   });
