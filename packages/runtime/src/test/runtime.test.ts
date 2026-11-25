@@ -736,6 +736,7 @@ describe('Variant activation and context', () => {
       Effect.gen(function* () {
         const { Wallet, firstBuilder } = makeTwoVariantWallet();
         const wallet = Wallet.startEmpty(Wallet);
+        yield* Effect.addFinalizer(() => Effect.promise(() => wallet.stop()));
         yield* firstStateWhere(wallet.rawState);
         const release = yield* Deferred.make<void>();
         const finished = yield* Deferred.make<void>();
@@ -754,6 +755,7 @@ describe('Variant activation and context', () => {
         const secondBuilder = new InterceptingVariantBuilder<typeof Second, number>(Second);
         const { Wallet, firstBuilder } = makeTwoVariantWallet(secondBuilder);
         const wallet = Wallet.startEmpty(Wallet);
+        yield* Effect.addFinalizer(() => Effect.promise(() => wallet.stop()));
         yield* firstStateWhere(wallet.rawState);
         const firstWork = yield* runUntilInterrupted(yield* runnerOf(firstBuilder));
 
@@ -786,6 +788,7 @@ describe('Variant activation and context', () => {
         });
         const Wallet = WalletBuilder.init().withVariant(ProtocolVersion.MinSupportedVersion, firstBuilder).build();
         const wallet = Wallet.startEmpty(Wallet);
+        yield* Effect.addFinalizer(() => Effect.promise(() => wallet.stop()));
         yield* firstStateWhere(wallet.rawState);
         const finished = yield* Deferred.make<void>();
 
@@ -819,8 +822,10 @@ describe('Variant activation and context', () => {
 
     it('should let work that finishes just inside the grace finish, because the whole grace is given, not part of it', () =>
       Effect.gen(function* () {
+        const lines = yield* capturedConsole;
         const { Wallet, firstBuilder } = makeTwoVariantWallet();
         const wallet = Wallet.startEmpty(Wallet);
+        yield* Effect.addFinalizer(() => Effect.promise(() => wallet.stop()));
         yield* firstStateWhere(wallet.rawState);
         const release = yield* Deferred.make<void>();
         const finished = yield* Deferred.make<void>();
@@ -835,12 +840,15 @@ describe('Variant activation and context', () => {
         yield* Effect.promise(() => wallet.stop());
 
         expect(yield* Deferred.isDone(finished)).toBe(true);
+        // Nothing was cut off, so nothing may say it was.
+        expect(lines.filter((line) => /level=WARN/.test(line))).toEqual([]);
       }).pipe(Effect.scoped, Effect.runPromise));
 
     it('should interrupt work as soon as the grace runs out, because the grace bounds the stop, not only the work', () =>
       Effect.gen(function* () {
         const { Wallet, firstBuilder } = makeTwoVariantWallet();
         const wallet = Wallet.startEmpty(Wallet);
+        yield* Effect.addFinalizer(() => Effect.promise(() => wallet.stop()));
         yield* firstStateWhere(wallet.rawState);
         const work = yield* runUntilInterrupted(yield* runnerOf(firstBuilder));
 
@@ -857,6 +865,7 @@ describe('Variant activation and context', () => {
         const secondBuilder = new InterceptingVariantBuilder<typeof Second, number>(Second);
         const { Wallet } = makeTwoVariantWallet(secondBuilder);
         const wallet = Wallet.startEmpty(Wallet);
+        yield* Effect.addFinalizer(() => Effect.promise(() => wallet.stop()));
         yield* firstStateWhere(wallet.rawState);
         yield* handOverToSecond(wallet);
         const release = yield* Deferred.make<void>();
@@ -875,6 +884,7 @@ describe('Variant activation and context', () => {
       Effect.gen(function* () {
         const { Wallet, firstBuilder } = makeTwoVariantWallet();
         const wallet = Wallet.startEmpty(Wallet);
+        yield* Effect.addFinalizer(() => Effect.promise(() => wallet.stop()));
         yield* firstStateWhere(wallet.rawState);
         const release = yield* Deferred.make<void>();
         const finished = yield* Deferred.make<void>();
@@ -900,6 +910,7 @@ describe('Variant activation and context', () => {
         const lines = yield* capturedConsole;
         const { Wallet, firstBuilder } = makeTwoVariantWallet();
         const wallet = Wallet.startEmpty(Wallet);
+        yield* Effect.addFinalizer(() => Effect.promise(() => wallet.stop()));
         yield* firstStateWhere(wallet.rawState);
         const work = yield* runUntilInterrupted(yield* runnerOf(firstBuilder));
 

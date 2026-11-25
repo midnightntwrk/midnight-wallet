@@ -13,7 +13,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { SMOKE_SNIPPETS } from './smokeSnippets.js';
+import { SMOKE_SNIPPETS, withSmokeTag } from './smokeSnippets.js';
 
 const snippetsDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'snippets');
 
@@ -26,5 +26,13 @@ describe('the snippets the pull-request smoke lane runs', () => {
       .map(([name]) => name);
 
     expect([...SMOKE_SNIPPETS].filter((name) => !networked.includes(name))).toEqual([]);
+  });
+
+  it('should tag at least one snippet, and each listed snippet only, @smoke, because the lane selects by that tag alone', () => {
+    expect(SMOKE_SNIPPETS.size).toBeGreaterThan(0);
+    expect([...SMOKE_SNIPPETS].map((name) => withSmokeTag({ name }).title)).toEqual(
+      [...SMOKE_SNIPPETS].map((name) => `${name} @smoke`),
+    );
+    expect(withSmokeTag({ name: 'not-a-smoke-snippet' }).title).toBe('not-a-smoke-snippet');
   });
 });
