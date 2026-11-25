@@ -23,6 +23,7 @@ import {
   Duration,
   Sink,
   Console,
+  FiberSet,
 } from 'effect';
 import { ProtocolVersion, VariantState } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
@@ -133,6 +134,25 @@ export type DefaultRunningV2 = RunningV2Variant<
   ledger.ZswapSecretKeys
 >;
 
+/** How long stopping the wallet waits for tx-history writes already running before it interrupts them. */
+const HISTORY_WRITE_GRACE = Duration.seconds(1);
+
+/**
+ * The set the variant's tx-history writes run in, kept open by `scope`.
+ *
+ * @remarks
+ *   Closing `scope` first waits up to {@link HISTORY_WRITE_GRACE} for the writes already running, then interrupts any
+ *   left. A write is the only record of changes the wallet has already applied, so one that is about to land is let
+ *   finish rather than lost; the bound keeps a write that never lands from holding up the stop. The wait is a finalizer
+ *   added after the set's own, and a scope runs its finalizers last-added first, so it runs before the set interrupts.
+ */
+const historyWritesIn = (scope: Scope.Scope): Effect.Effect<FiberSet.FiberSet<void, never>> =>
+  Effect.gen(function* () {
+    const writes = yield* Scope.extend(FiberSet.make<void, never>(), scope);
+    yield* Scope.addFinalizer(scope, FiberSet.awaitEmpty(writes).pipe(Effect.timeoutOption(HISTORY_WRITE_GRACE)));
+    return writes;
+  });
+
 export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux> implements Variant.RunningVariant<
   typeof V2Tag,
   CoreWallet
@@ -147,6 +167,9 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   // of this variant. Each variant has its own, so while the writes a hand-over carries are still finishing, the wallet
   // briefly runs up to twice as many.
   readonly #txHistoryPermits = Effect.makeSemaphore(8).pipe(Effect.runSync);
+  // Where the variant's tx-history writes run: in the runtime's scope, which outlives a hand-over, so a write the
+  // hand-over carries is not cut short; in the variant's own where there is no runtime.
+  readonly #historyWrites: FiberSet.FiberSet<void, never>;
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
 
@@ -157,6 +180,7 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   ) {
     this.#scope = scope;
     this.#context = context;
+    this.#historyWrites = historyWritesIn(context.runtimeScope ?? scope).pipe(Effect.runSync);
     this.#v2Context = v2Context;
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
@@ -201,7 +225,7 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     const { stateRef, activationRange } = this.#context;
     const { syncService, syncCapability, transactionHistoryService } = this.#v2Context;
     const txHistoryPermits = this.#txHistoryPermits;
-    const historyScope = this.#context.runtimeScope ?? this.#scope;
+    const historyWrites = this.#historyWrites;
 
     return pipe(
       SubscriptionRef.get(stateRef),
@@ -265,9 +289,9 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                     restore,
                     // Into the runtime's scope, not this variant's: these changes are applied, so nothing will record
                     // them again, and the update that hands over to the next variant closes this variant's scope while
-                    // its own writes are still running. Stopping the wallet interrupts them rather than waiting: a
-                    // write it interrupts is logged and not recorded.
-                    Effect.forkIn(historyScope),
+                    // its own writes are still running. Stopping the wallet gives them a short grace to land, then
+                    // interrupts the rest: a write it interrupts is logged and not recorded.
+                    (write) => FiberSet.run(historyWrites, write),
                   ),
             ),
           ),
