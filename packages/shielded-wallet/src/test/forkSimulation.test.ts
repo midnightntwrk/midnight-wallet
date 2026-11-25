@@ -48,7 +48,19 @@ import {
 } from '@midnightntwrk/wallet-sdk-address-format';
 import { ForkSimulator, V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Deferred, Duration, Effect, Option, Ref, Schedule, Stream, SubscriptionRef, pipe, type Scope } from 'effect';
+import {
+  Deferred,
+  Duration,
+  Effect,
+  Fiber,
+  Option,
+  Ref,
+  Schedule,
+  Stream,
+  SubscriptionRef,
+  pipe,
+  type Scope,
+} from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import { type TransactionHistory as V1TransactionHistory, V1Tag } from '../v1/index.js';
 import { CoreWallet, PublicKeys, Sync, type TransactionHistory, V2Tag, WalletError } from '../v2/index.js';
@@ -198,6 +210,12 @@ const settled = (wallet: ForkWallet) =>
       totalValue(state.state) === walletTotal &&
       state.state.progress.appliedIndex > forkBlock,
   );
+
+/** Pays the wallet 900n on the ledger-v9 chain once it has handed over, and waits until it holds that payment. */
+const receiveLatePayment = (v9: V9.Simulator, wallet: ForkWallet) =>
+  v9
+    .submitTransaction(v9Payment(networkId, mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient())))
+    .pipe(Effect.zipRight(wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n)));
 
 /** A wallet that has synced the ledger-v8 chain, crossed the boundary, and the chain it now reads. */
 type Crossing = Readonly<{
@@ -535,7 +553,7 @@ describe('a shielded wallet crossing a hard fork', () => {
       expectEachPaymentOnce(yield* writtenAtLeast(written, walletValues.length));
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should stop promptly, interrupting history writes still running from before the hand-over, because a write must neither hold up nor outlive the wallet', async () =>
+  it('should stop within the grace, interrupting history writes still running from before the hand-over, because a write must not hold up the stop past the grace nor outlive the wallet', async () =>
     Effect.gen(function* () {
       // Writes that never finish, carried past the hand-over: the V1 variant is gone, so nothing but the wallet's own
       // lifetime bounds them.
@@ -563,9 +581,7 @@ describe('a shielded wallet crossing a hard fork', () => {
       yield* settled(wallet);
       expect(yield* wallet.activeTag).toBe(V2Tag);
 
-      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
-      yield* v9.submitTransaction(v9Payment(networkId, late));
-      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+      yield* receiveLatePayment(v9, wallet);
 
       const sections = yield* writtenAtLeast(written, 1);
       expect(sections.map(({ received, spent }) => ({ received, spent }))).toEqual([{ received: [900n], spent: [] }]);
@@ -787,7 +803,7 @@ describe('a migration that leaves the wallet’s state behind', () => {
 });
 
 describe('a stop while history writes are still running', () => {
-  it('should log each V1 write it interrupts, naming its transaction, because that section is never recorded', async () =>
+  it('should log each V1 write it interrupts, naming its transaction, because that section may never be recorded', async () =>
     Effect.gen(function* () {
       const logs = yield* capturedConsole;
       const started = yield* Ref.make<readonly string[]>([]);
@@ -805,7 +821,7 @@ describe('a stop while history writes are still running', () => {
       expect(running.filter((source) => !loggedAsNotRecorded(logs, source))).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should log each V2 write it interrupts, naming its transaction, because that section is never recorded', async () =>
+  it('should log each V2 write it interrupts, naming its transaction, because that section may never be recorded', async () =>
     Effect.gen(function* () {
       const logs = yield* capturedConsole;
       const started = yield* Ref.make<readonly string[]>([]);
@@ -814,9 +830,7 @@ describe('a stop while history writes are still running', () => {
         v2History: { ...noOpV2History, put: (changes) => writeThatNeverLands(started, changes.source) },
       });
       yield* settled(wallet);
-      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
-      yield* v9.submitTransaction(v9Payment(networkId, late));
-      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+      yield* receiveLatePayment(v9, wallet);
       // The premise: the V2 variant's write for that payment is running.
       const running = yield* startedAtLeast(started, 1);
       expect(running).toHaveLength(1);
@@ -826,6 +840,118 @@ describe('a stop while history writes are still running', () => {
       expect(running.filter((source) => !loggedAsNotRecorded(logs, source))).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
+
+describe('a stop while history writes are about to land', () => {
+  it('should let each V1 write that lands shortly after stop() is called finish, because a section stop() cuts off is never recorded', async () =>
+    Effect.gen(function* () {
+      const logs = yield* capturedConsole;
+      const started = yield* Ref.make<readonly string[]>([]);
+      const written = yield* Ref.make<readonly WrittenSection[]>([]);
+      const release = yield* Deferred.make<void>();
+
+      const { wallet } = yield* crossTheFork(chainCoins(), undefined, {
+        v1History: { ...noOpV1History, put: (changes) => writeLandingOn(release, started, written, changes) },
+      });
+      yield* settled(wallet);
+      // The premise: one write per payment is running, carried past the hand-over, and none has landed.
+      expect(yield* startedAtLeast(started, walletValues.length)).toHaveLength(walletValues.length);
+      expect(yield* Ref.get(written)).toEqual([]);
+
+      // The writes land a moment after the wallet is asked to stop, as an indexer round trip would.
+      yield* Deferred.succeed(release, undefined).pipe(Effect.delay(Duration.millis(300)), Effect.forkDaemon);
+      yield* wallet.stop;
+
+      expectEachPaymentOnce(yield* Ref.get(written));
+      expect(logs.filter((line) => /not recorded/.test(line))).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should let a V2 write that lands shortly after stop() is called finish, because a section stop() cuts off is never recorded', async () =>
+    Effect.gen(function* () {
+      const logs = yield* capturedConsole;
+      const started = yield* Ref.make<readonly string[]>([]);
+      const written = yield* Ref.make<readonly WrittenSection[]>([]);
+      const release = yield* Deferred.make<void>();
+
+      const { v9, wallet } = yield* crossTheFork(chainCoins(), undefined, {
+        v2History: { ...noOpV2History, put: (changes) => writeLandingOn(release, started, written, changes) },
+      });
+      yield* settled(wallet);
+      yield* receiveLatePayment(v9, wallet);
+      // The premise: the V2 variant's write for that payment is running and has not landed.
+      expect(yield* startedAtLeast(started, 1)).toHaveLength(1);
+      expect(yield* Ref.get(written)).toEqual([]);
+
+      // The write lands a moment after the wallet is asked to stop, as an indexer round trip would.
+      yield* Deferred.succeed(release, undefined).pipe(Effect.delay(Duration.millis(300)), Effect.forkDaemon);
+      yield* wallet.stop;
+
+      expect((yield* Ref.get(written)).map(({ received, spent }) => ({ received, spent }))).toEqual([
+        { received: [900n], spent: [] },
+      ]);
+      expect(logs.filter((line) => /not recorded/.test(line))).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+describe('a stop after a hand-over, while writes from both variants are still running', () => {
+  it('should finish within one grace period, because the grace belongs to the wallet, not to each variant', async () =>
+    Effect.gen(function* () {
+      yield* capturedConsole;
+      const started = yield* Ref.make<readonly string[]>([]);
+      const neverLands = { put: (changes: { source: string }) => writeThatNeverLands(started, changes.source) };
+
+      const { v9, wallet } = yield* crossTheFork(chainCoins(), undefined, {
+        v1History: { ...noOpV1History, ...neverLands },
+        v2History: { ...noOpV2History, ...neverLands },
+      });
+      yield* settled(wallet);
+      yield* receiveLatePayment(v9, wallet);
+      // The premise: a write per ledger-v8 payment, carried past the hand-over, and one for the ledger-v9 payment.
+      expect(yield* startedAtLeast(started, walletValues.length + 1)).toHaveLength(walletValues.length + 1);
+
+      // A fixed bound, not one derived from the grace: one grace and the wallet's teardown fit under it, while a grace
+      // taken per variant (about two seconds here) does not.
+      const stopped = yield* wallet.stop.pipe(Effect.timeoutOption(Duration.millis(1800)));
+      expect(Option.isSome(stopped)).toBe(true);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should apply no sync update once stop() is called, because the grace lets writes land, not the wallet go on syncing', async () =>
+    Effect.gen(function* () {
+      yield* capturedConsole;
+      const started = yield* Ref.make<readonly string[]>([]);
+
+      const { v9, wallet } = yield* crossTheFork(chainCoins(), undefined, {
+        v2History: { ...noOpV2History, put: (changes) => writeThatNeverLands(started, changes.source) },
+      });
+      yield* settled(wallet);
+      yield* receiveLatePayment(v9, wallet);
+      // The premise: the write for that payment is running, so the stop waits out the whole grace.
+      expect(yield* startedAtLeast(started, 1)).toHaveLength(1);
+
+      // A payment the chain carries a moment after the wallet is asked to stop.
+      const stopping = yield* Effect.fork(wallet.stop);
+      yield* Effect.sleep(Duration.millis(100));
+      // The premise: the wallet is still stopping when the payment arrives.
+      expect(Option.isNone(yield* Fiber.poll(stopping))).toBe(true);
+      const afterStop = mintable(ledgerV9.shieldedToken().raw, 50n, walletRecipient());
+      yield* v9.submitTransaction(v9Payment(networkId, afterStop));
+      yield* Fiber.join(stopping);
+
+      // Applying it would have started a write for it.
+      expect(yield* Ref.get(started)).toHaveLength(1);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/** A history write that records the transaction it was started for, waits for `release`, then lands in `written`. */
+const writeLandingOn = (
+  release: Deferred.Deferred<void>,
+  started: Ref.Ref<readonly string[]>,
+  written: Ref.Ref<readonly WrittenSection[]>,
+  changes: Parameters<typeof sectionOf>[0],
+): Effect.Effect<void> =>
+  Ref.update(started, (sources) => [...sources, changes.source]).pipe(
+    Effect.zipRight(Deferred.await(release)),
+    Effect.zipRight(Ref.update(written, (sections) => [...sections, sectionOf(changes)])),
+  );
 
 /** A history write that records the transaction it was started for, then never finishes. */
 const writeThatNeverLands = (started: Ref.Ref<readonly string[]>, source: string): Effect.Effect<void> =>

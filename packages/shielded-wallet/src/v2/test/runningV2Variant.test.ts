@@ -161,7 +161,7 @@ describe('RunningV2Variant.startSync tx-history fan-out', () => {
     expect(result.recorded).toBe(12);
   });
 
-  it("should keep recording history after the variant's own scope closes, when the runtime gives it a longer-lived scope", async () => {
+  it("should keep recording history after the variant's own scope closes, when the runtime runs it beyond the variant", async () => {
     const sources = ['a1', 'a2', 'a3'];
 
     const recorded = await Effect.gen(function* () {
@@ -175,6 +175,7 @@ describe('RunningV2Variant.startSync tx-history fan-out', () => {
         CoreWallet.init(new ledger.ZswapLocalState(), secretKeys, networkId),
       );
       const variantScope = yield* Scope.make();
+      // Stands in for the runtime, which runs such work in a scope of its own that outlives the variant.
       const runtimeScope = yield* Scope.make();
       const variant = new RunningV2Variant(
         variantScope,
@@ -184,7 +185,7 @@ describe('RunningV2Variant.startSync tx-history fan-out', () => {
             ProtocolVersion.MinSupportedVersion,
             ProtocolVersion.MaxSupportedVersion,
           ),
-          runtimeScope,
+          runBeyondVariant: (work) => Effect.forkIn(work, runtimeScope).pipe(Effect.asVoid),
         },
         variantContextOf([sources], trackingHistoryService(counters)),
       );
@@ -202,6 +203,44 @@ describe('RunningV2Variant.startSync tx-history fan-out', () => {
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
 
     expect(recorded).toBe(sources.length);
+  });
+
+  it("should stop recording history when the variant's own scope closes, when no runtime runs it beyond the variant", async () => {
+    const sources = ['a1', 'a2', 'a3'];
+
+    const recorded = await Effect.gen(function* () {
+      const counters: FanOutCounters = {
+        inFlight: yield* Ref.make(0),
+        maxInFlight: yield* Ref.make(0),
+        recorded: yield* Ref.make(0),
+      };
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.init(new ledger.ZswapLocalState(), secretKeys, networkId),
+      );
+      const variantScope = yield* Scope.make();
+      const variant = new RunningV2Variant(
+        variantScope,
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+        },
+        variantContextOf([sources], trackingHistoryService(counters)),
+      );
+
+      yield* variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, variantScope));
+      // Every recording has started and is parked for 10s on the clock when the variant's scope closes: with nothing
+      // outliving the variant, that scope is all that bounds them.
+      yield* TestClock.adjust(Duration.millis(1));
+      yield* Scope.close(variantScope, Exit.void);
+      yield* TestClock.adjust(Duration.minutes(1));
+      return yield* Ref.get(counters.recorded);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(recorded).toBe(0);
   });
 });
 

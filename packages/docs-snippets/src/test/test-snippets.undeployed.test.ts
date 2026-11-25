@@ -18,6 +18,7 @@ import * as path from 'node:path';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk/testing';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { withSmokeTag } from './smokeSnippets.js';
 
 vi.setConfig({ testTimeout: 900_000, hookTimeout: 200_000 });
 
@@ -181,7 +182,7 @@ describe('Snippet outputs', () => {
       await startedEnvironment?.down({ timeout: 10_000 });
     });
 
-    it.each(snippetFiles.net)('should output the correct result for $name', (snippet) =>
+    it.each(snippetFiles.net.map(withSmokeTag))('should output the correct result for $title', (snippet) =>
       testSnippet(snippet, envExtension),
     );
   });

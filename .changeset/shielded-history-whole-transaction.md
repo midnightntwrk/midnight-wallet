@@ -16,7 +16,6 @@ ends part-way, fetches it again from the start. A batch is emitted as soon as it
 more, and may exceed `size` by the rest of the transaction that filled it, since a transaction is never split. A batch
 ends only between transactions, so a transaction still arriving is held past `batchUpdates.timeout`.
 
-History writes for a batch the variant has applied now run in the runtime's scope rather than the variant's, so a
-hand-over to the next variant no longer cuts them off, and wallet calls go to the next variant at once while they
-finish. `stop()` interrupts them rather than waiting for them; a write it interrupts is logged, with its transaction
-hash, and not recorded.
+History writes for a batch the variant has applied now run beyond the variant, so a hand-over to the next variant no
+longer cuts them off, and wallet calls go to the next variant at once while they finish. `stop()` gives them a short
+grace to land, then interrupts the rest; a write it interrupts is logged, with its transaction hash.

@@ -186,6 +186,8 @@ export type InterceptingVariantOptions<TState> = {
    * {@link ProtocolVersion.MinSupportedVersion}, which is what a state carrying no version of its own amounts to.
    */
   protocolVersionOf?: (state: TState) => ProtocolVersion.ProtocolVersion;
+  /** Run when the variant's own scope closes: at its hand-over, or when the wallet stops while it is running. */
+  onStop?: Effect.Effect<void>;
 };
 export class InterceptingVariant<TTag extends string | symbol, TState> implements Variant.Variant<
   TTag,
@@ -218,7 +220,9 @@ export class InterceptingVariant<TTag extends string | symbol, TState> implement
   ): Effect.Effect<InterceptingRunningVariant<TTag, TState>, WalletRuntimeError, Scope.Scope> {
     this.receivedContext = context;
     const tag = this.__polyTag__;
+    const onStop = this.#options.onStop ?? Effect.void;
     return Effect.gen(this, function* () {
+      yield* Effect.addFinalizer(() => onStop);
       const pubsub = yield* PubSub.bounded<StateChange.StateChange<TState>>({
         capacity: 1,
         replay: 1,

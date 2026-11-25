@@ -201,7 +201,12 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     const { stateRef, activationRange } = this.#context;
     const { syncService, syncCapability, transactionHistoryService } = this.#v1Context;
     const txHistoryPermits = this.#txHistoryPermits;
-    const historyScope = this.#context.runtimeScope ?? this.#scope;
+    // Starts a tx-history write: beyond this variant, through the runtime, so a write a hand-over carries is not cut
+    // short. A context built outside the runtime does not offer that, and falls back to the variant's own scope.
+    const scope = this.#scope;
+    const startHistoryWrite =
+      this.#context.runBeyondVariant ??
+      ((write: Effect.Effect<void>) => Effect.forkIn(write, scope).pipe(Effect.asVoid));
 
     return pipe(
       SubscriptionRef.get(stateRef),
@@ -247,7 +252,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                           ),
                           Effect.onInterrupt(() =>
                             Effect.logWarning(
-                              `Shielded tx-history section for ${change.source} not recorded: wallet stopped`,
+                              `Shielded tx-history section for ${change.source} not recorded when the wallet stopped; the write was cut off and may still land`,
                             ),
                           ),
                           Effect.catchAllCause((cause) =>
@@ -263,11 +268,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                       { discard: true, concurrency: 8 },
                     ),
                     restore,
-                    // Into the runtime's scope, not this variant's: these changes are applied, so nothing will record
-                    // them again, and the update that hands over to the next variant closes this variant's scope while
-                    // its own writes are still running. Stopping the wallet interrupts them rather than waiting: a
-                    // write it interrupts is logged and not recorded.
-                    Effect.forkIn(historyScope),
+                    // Beyond this variant: these changes are applied, so nothing will record them again, and the
+                    // update that hands over to the next variant closes this variant's scope while its own writes are
+                    // still running. Stopping the wallet gives them a short grace to land when the runtime runs them,
+                    // then interrupts the rest: a write it interrupts is logged, and may not be recorded.
+                    startHistoryWrite,
                   ),
             ),
           ),

@@ -22,7 +22,9 @@ import {
 } from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
-import { aFakeProvingProvider, configuration, initWalletWithSeed } from '../utils.ts';
+import { aFakeProvingProvider, makeConfiguration, initWalletWithSeed } from '../utils.ts';
+
+const configuration = makeConfiguration();
 
 /*
  * This file demonstrates the flow for "Dust sponsorship" - where the user's wallet is only used
