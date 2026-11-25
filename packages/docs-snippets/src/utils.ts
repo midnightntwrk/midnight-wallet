@@ -95,9 +95,10 @@ export const initWalletWithSeed = async (
 /**
  * Waits until `wallet`'s transaction history holds its shielded record of the transaction `identifier` names.
  *
- * The wallet records a transaction's shielded coins in the background, after it has synced the transaction, and
- * `stop()` cuts off a record still being written. A program that stops straight after a shielded transaction, as these
- * snippets do, therefore waits for the record first, or the transaction never reaches its history.
+ * The wallet records a transaction's shielded coins in the background, after it has synced the transaction. `stop()`
+ * gives a record still being written up to a second to land, then cuts it off. A program that stops straight after a
+ * shielded transaction, as these snippets do, therefore waits for the record first, or a slow write never reaches its
+ * history.
  *
  * @param wallet The wallet whose history to read.
  * @param identifier An identifier of the transaction, such as the one `submitTransaction` returns.

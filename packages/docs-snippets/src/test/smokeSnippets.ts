@@ -12,9 +12,10 @@
 // limitations under the License.
 
 // The pull-request smoke lane selects tests by `@smoke` in their name; every other snippet runs only in the nightly run.
-// A shielded transfer is in it because it shows that a shielded transaction lands and that both wallets record it in
-// their history, and that nothing the wallet logs on the way, such as a warning about a history write cut off, leaks into
-// a snippet's output: changes to a wallet's sync or stop could otherwise break that unseen until the nightly run.
+// A shielded transfer is in it because it shows that a shielded transaction lands, that both wallets record it in their
+// history, and that nothing the wallet logs on the way leaks into a snippet's output: a change to a wallet's sync could
+// otherwise break that unseen until the nightly run. It does not guard what `stop()` does with a write still running,
+// since the snippet waits for its history before stopping; unit tests in the runtime and the shielded wallet do that.
 export const SMOKE_SNIPPETS: ReadonlySet<string> = new Set(['shielded-transfer']);
 
 /** The snippet with the title its test runs under: its name, tagged `@smoke` when the smoke lane runs it. */

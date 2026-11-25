@@ -44,15 +44,40 @@ export interface VariantContext<TState> {
    *   For work that must finish even though the variant that started it closes, such as recording the changes of a sync
    *   update the variant has already applied, which nothing will apply again. Stopping the wallet first stops the
    *   running variant, so nothing starts more of it, then gives the work already running {@link BACKGROUND_WORK_GRACE}
-   *   to finish, and only then interrupts what is left. The grace is the wallet's, not each variant's: work carried
-   *   over from every variant that has run shares it. Absent only in a context built outside the runtime.
+   *   to finish, and only then interrupts what is left, logging how many it interrupts. The grace is the wallet's, not
+   *   each variant's: work carried over from every variant that has run shares it.
+   *
+   *   Work handed over after the wallet has stopped is not run. A defect in the work is logged; anything else the work
+   *   wants reported when it is interrupted, such as which record it was writing, it logs itself. Absent only in a
+   *   context built outside the runtime, where the variant's own scope is all there is.
+   * @example
+   *   ```ts
+   *   // Record an applied update's changes without holding up the variant, and without losing them at a hand-over.
+   *   const startRecording = context.runBeyondVariant ?? ((work: Effect.Effect<void>) => Effect.forkIn(work, scope));
+   *   yield* startRecording(
+   *   history.put(changes).pipe(Effect.onInterrupt(() => Effect.logWarning(`${changes.source} not recorded`))),
+   *   );
+   *   ```
+   *
    * @param work The work to run. It cannot fail; an interruption is its only other outcome.
    * @returns An effect that starts `work` and completes once it is started, not once it finishes.
    */
   runBeyondVariant?: (work: Effect<void>) => Effect<void>;
 }
 
-/** How long stopping the wallet waits for work run by {@link VariantContext.runBeyondVariant} before interrupting it. */
+/**
+ * How long stopping the wallet waits for work run by {@link VariantContext.runBeyondVariant} before interrupting it.
+ *
+ * @remarks
+ *   Taken once for the whole wallet, counted from when the running variant has stopped. It is meant for work about to
+ *   land, such as a write waiting on one indexer round trip; it cannot save work that is itself still waiting out a
+ *   longer retry, which `stop()` interrupts after the grace all the same.
+ * @example
+ *   ```ts
+ *   // The longest a stop() can be held up by background work, on top of stopping the variant itself.
+ *   const extraStopTime = Duration.toMillis(Variant.BACKGROUND_WORK_GRACE); // 1000
+ *   ```;
+ */
 export const BACKGROUND_WORK_GRACE: Duration.Duration = Duration.seconds(1);
 
 /**

@@ -269,8 +269,8 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                     restore,
                     // Beyond this variant: these changes are applied, so nothing will record them again, and the
                     // update that hands over to the next variant closes this variant's scope while its own writes are
-                    // still running. Stopping the wallet gives them a short grace to land, then interrupts the rest: a
-                    // write it interrupts is logged and not recorded.
+                    // still running. Stopping the wallet gives them a short grace to land when the runtime runs them,
+                    // then interrupts the rest: a write it interrupts is logged and not recorded.
                     startHistoryWrite,
                   ),
             ),
