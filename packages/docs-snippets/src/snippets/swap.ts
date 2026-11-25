@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
-import { initWalletWithSeed } from '../utils.ts';
+import { initWalletWithSeed, waitForShieldedHistory } from '../utils.ts';
 import { type FacadeState, type FinalizedTx } from '@midnightntwrk/wallet-sdk';
 
 const alice = await initWalletWithSeed(
@@ -58,7 +58,7 @@ const aliceSwapTx: FinalizedTx = await alice.wallet
   )
   .then((recipe) => alice.wallet.finalizeRecipe(recipe));
 
-await bob.wallet
+const swapTransactionId = await bob.wallet
   .balanceFinalizedTransaction(aliceSwapTx, {
     ttl: new Date(Date.now() + 30 * 60 * 1000),
   })
@@ -93,6 +93,12 @@ console.log(
   'Does Bob have specific shielded coin after swap?',
   bobFinalState.shielded.availableCoins.some((c) => c.coin.type === shieldedToken1 && c.coin.value === 1_000_000n),
 );
+
+// Each wallet records the swap's shielded coins in its history in the background; stopping first would cut that off.
+await Promise.all([
+  waitForShieldedHistory(alice.wallet, swapTransactionId),
+  waitForShieldedHistory(bob.wallet, swapTransactionId),
+]);
 
 await alice.wallet.stop();
 await bob.wallet.stop();

@@ -21,10 +21,13 @@ import {
   PublicKey as UnshieldedPublicKey,
   UnshieldedWallet,
   type UnshieldedKeystore,
+  type TransactionIdentifier,
+  type WalletEntry,
   WalletSeeds,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
+import * as rx from 'rxjs';
 
 const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
 const NODE_PORT = Number.parseInt(process.env['NODE_PORT'] ?? '9944', 10);
@@ -72,7 +75,12 @@ export const initWalletWithSeed = async (
   const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, configuration.networkId);
 
   const wallet: WalletFacade = await WalletFacade.init({
-    configuration,
+    // Each wallet keeps its own history, as an application would: a store shared between two wallets merges what each
+    // recorded about a transaction into one entry, so neither could tell whether its own record had landed.
+    configuration: {
+      ...configuration,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+    },
     shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
     unshielded: (config) =>
       UnshieldedWallet(config).startWithPublicKey(UnshieldedPublicKey.fromKeyStore(unshieldedKeystore)),
@@ -83,6 +91,40 @@ export const initWalletWithSeed = async (
 
   return { wallet, seeds, unshieldedKeystore };
 };
+
+/**
+ * Waits until `wallet`'s transaction history holds its shielded record of the transaction `identifier` names.
+ *
+ * The wallet records a transaction's shielded coins in the background, after it has synced the transaction, and
+ * `stop()` cuts off a record still being written. A program that stops straight after a shielded transaction, as these
+ * snippets do, therefore waits for the record first, or the transaction never reaches its history.
+ *
+ * @param wallet The wallet whose history to read.
+ * @param identifier An identifier of the transaction, such as the one `submitTransaction` returns.
+ * @param timeoutMs How long to wait before failing.
+ * @returns The history entry, holding the wallet's shielded record of the transaction.
+ */
+export const waitForShieldedHistory = (
+  wallet: WalletFacade,
+  identifier: TransactionIdentifier,
+  timeoutMs = 60_000,
+): Promise<WalletEntry> =>
+  rx.firstValueFrom(
+    rx.timer(0, 250).pipe(
+      rx.switchMap(() => wallet.getAllFromTxHistory()),
+      rx.map((entries) =>
+        entries.find((entry) => entry.identifiers.includes(identifier) && entry.shielded !== undefined),
+      ),
+      rx.filter((entry): entry is WalletEntry => entry !== undefined),
+      rx.timeout({
+        first: timeoutMs,
+        with: () =>
+          rx.throwError(
+            () => new Error(`No shielded history record of transaction ${identifier} after ${timeoutMs} ms`),
+          ),
+      }),
+    ),
+  );
 
 export const aFakeProvingProvider: ledger.ProvingProvider = {
   check(_serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> {
