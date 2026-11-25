@@ -2454,7 +2454,7 @@ __metadata:
     "@effect/language-service": "npm:0.87.5"
     "@eslint/compat": "npm:2.1.1"
     "@eslint/js": "npm:10.0.1"
-    "@tsconfig/node24": "npm:24.0.6"
+    "@tsconfig/node26": "npm:26.0.0"
     "@types/node": "npm:24.19.2"
     "@vitest/coverage-v8": "npm:4.1.12"
     "@vitest/runner": "npm:4.1.12"
@@ -3857,10 +3857,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tsconfig/node24@npm:24.0.6":
-  version: 24.0.6
-  resolution: "@tsconfig/node24@npm:24.0.6"
-  checksum: 10c0/804ad3d4673e631b626a9debee8d688d27a13aeddec24d59d6a09737df856d89c705dfbc801e2fd7c81f672a650e04df62585ab3f216a18ef90fc7cd579be2c1
+"@tsconfig/node26@npm:26.0.0":
+  version: 26.0.0
+  resolution: "@tsconfig/node26@npm:26.0.0"
+  checksum: 10c0/ac63ed4711b2b809957e45a97524bff2960a9662292caad253ec5577eb1ea35d3793a8b85ba6d308c5d6b21c117c7ab81c65cdf409ca0f6891129b73f3d10a66
   languageName: node
   linkType: hard
 
