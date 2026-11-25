@@ -41,7 +41,7 @@ import {
 import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Duration, Effect, Fiber, pipe, Stream, TestClock, TestContext } from 'effect';
+import { Duration, Effect, Fiber, Schema, Stream, TestClock, TestContext, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
@@ -437,5 +437,29 @@ describe('A shielded transaction whose fallible segments partly failed', () => {
     expect(pendingSpendNonces(reverted)).toEqual(pendingSpendNonces(wallet));
     expect(availableNonces(reverted)).toEqual([]);
     expect(reverted.bookings).toEqual(wallet.bookings);
+  });
+});
+
+/**
+ * The sweep that releases a lapsed booking rebuilds the wallet, and a snapshot is written after it like after any other
+ * update, so a field the snapshot was read with — one a later release stored, and this build does not declare — has to
+ * survive the release as well as the update that carried it.
+ */
+describe('A restored shielded wallet whose booking lapses', () => {
+  const readJson = Schema.decodeUnknownSync(
+    Schema.parseJson(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+  );
+  const LATER_FIELD = { kept: ['exactly', 'as', 'written'], nested: { flag: true, nothing: null } };
+
+  it('should write back a snapshot field this build does not know after the sync that releases the booking, so a later release reading the snapshot still finds it', () => {
+    const seen = syncAt(walletWithAbandonedBooking(), bookedAt);
+    const stored = { ...readJson(serialization.serialize(seen)), fieldFromALaterRelease: LATER_FIELD };
+    const restored = caughtUp(EitherOps.getOrThrowLeft(serialization.deserialize(null, JSON.stringify(stored))));
+    expect(isBooked(restored)).toBe(true);
+
+    const released = syncAt(restored, after(LIFETIME_MS + 1));
+
+    expect(isReleased(released)).toBe(true);
+    expect(readJson(serialization.serialize(released))['fieldFromALaterRelease']).toStrictEqual(LATER_FIELD);
   });
 });

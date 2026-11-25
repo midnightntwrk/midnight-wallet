@@ -422,4 +422,28 @@ describe('a restored wallet keeps a snapshot field this build does not know thro
     expect(HashMap.size(synced.state.availableUtxos)).toBe(1);
     expect(readJson(serialization.serialize(synced))['fieldFromALaterRelease']).toStrictEqual(LATER_FIELD);
   });
+
+  it('should write the field back after an update that reports a failed transaction, so a later release reading the snapshot still finds it', () => {
+    const { capability } = setup();
+    const held = fixtureUtxo(owner, 100n, 0);
+    const holding = CoreWallet.applyUpdate(emptyWallet(), {
+      createdUtxos: [held],
+      spentUtxos: [],
+      status: 'SUCCESS',
+    }).pipe(EitherOps.getOrThrowLeft);
+    const stored = { ...readJson(serialization.serialize(holding)), fieldFromALaterRelease: LATER_FIELD };
+    const restored = EitherOps.getOrThrowLeft(serialization.deserialize(JSON.stringify(stored)));
+
+    const synced = capability
+      .applyUpdate(
+        restored,
+        fixtureTransaction({ id: 1, protocolVersion: 3, spentUtxos: [held], status: 'FAILURE' }),
+        activeRange,
+      )
+      .pipe(EitherOps.getOrThrowLeft);
+
+    expect(synced.progress.appliedId).toBe(1n);
+    expect(HashMap.size(synced.state.availableUtxos)).toBe(1);
+    expect(readJson(serialization.serialize(synced))['fieldFromALaterRelease']).toStrictEqual(LATER_FIELD);
+  });
 });

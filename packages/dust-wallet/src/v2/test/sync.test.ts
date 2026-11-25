@@ -29,7 +29,7 @@ import type {
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryClient, SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Cause, Chunk, Effect, Either, Exit, Logger, Option, Stream } from 'effect';
+import { Cause, Chunk, Effect, Either, Exit, Logger, Option, Schema, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import {
@@ -51,6 +51,7 @@ import {
   type NullifierRegularTransaction,
   type DustSpendProcessedEvent,
   DustUtxoMap,
+  ProgressUpdate,
   StateUpdate,
 } from '../SyncSchema.js';
 import { leBigintToHex } from '../Utils.js';
@@ -1406,5 +1407,65 @@ describe('V2 projections resume height across a restore', () => {
     expect(await dtimeCutoffsOfNextPass(restored(CoreWallet.initEmpty(dustParameters, secretKey, networkId)))).toEqual([
       0,
     ]);
+  });
+});
+
+/**
+ * A wallet on projections sync is read once and then written after every update the projections source sends, so a
+ * field the snapshot was read with — one a later release stored, and this build does not declare — has to survive both
+ * kinds of update it sends, not only a bare read and write.
+ */
+describe('A restored wallet on projections sync', () => {
+  const serialization = makeDefaultV2SerializationCapability();
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const readJson = Schema.decodeUnknownSync(
+    Schema.parseJson(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+  );
+  const LATER_FIELD = { kept: ['exactly', 'as', 'written'], nested: { flag: true, nothing: null } };
+
+  const restoredCarrying = (): CoreWallet => {
+    const fresh = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const stored = { ...readJson(serialization.serialize(fresh)), fieldFromALaterRelease: LATER_FIELD };
+    return Either.getOrThrow(serialization.deserialize(null, JSON.stringify(stored)));
+  };
+
+  it('should write back a snapshot field this build does not know after a state update, so a later release reading the snapshot still finds it', () => {
+    const syncedAt = new Date('2026-07-14T10:00:00.000Z');
+    const update = StateUpdate({
+      dustGenerations: { rawUpdates: [], newGenerations: [], generationDtimeUpdates: [] },
+      newUtxos: DustUtxoMap.create([]),
+      spentUtxos: DustUtxoMap.create([]),
+      collapsedCommitments: [],
+      latestBlock: {
+        height: 1,
+        hash: '00'.repeat(32),
+        protocolVersion: 0,
+        ledgerParameters: LedgerParameters.initialParameters(),
+        timestamp: syncedAt,
+        zswapEndIndex: 0,
+        dustCommitmentEndIndex: 0,
+        dustGenerationEndIndex: 0,
+        dustCommitmentMerkleTreeRoot: '00',
+        dustGenerationMerkleTreeRoot: '00',
+      },
+    });
+
+    const [synced] = makeEventLessSyncCapability().applyUpdate(restoredCarrying(), update, fullSpan);
+
+    expect(synced.state.syncTime).toEqual(syncedAt);
+    expect(synced.progress.highestIndex).toBe(1n);
+    expect(readJson(serialization.serialize(synced))['fieldFromALaterRelease']).toStrictEqual(LATER_FIELD);
+  });
+
+  it('should write back a snapshot field this build does not know after a progress report, so a later release reading the snapshot still finds it', () => {
+    const [synced] = makeEventLessSyncCapability().applyUpdate(
+      restoredCarrying(),
+      ProgressUpdate({ appliedIndex: 3, highestRelevantIndex: 5 }),
+      fullSpan,
+    );
+
+    expect(synced.progress.appliedIndex).toBe(3n);
+    expect(synced.syncKind).toBe('projections');
+    expect(readJson(serialization.serialize(synced))['fieldFromALaterRelease']).toStrictEqual(LATER_FIELD);
   });
 });
