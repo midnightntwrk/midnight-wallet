@@ -803,7 +803,7 @@ describe('a migration that leaves the wallet’s state behind', () => {
 });
 
 describe('a stop while history writes are still running', () => {
-  it('should log each V1 write it interrupts, naming its transaction, because that section is never recorded', async () =>
+  it('should log each V1 write it interrupts, naming its transaction, because that section may never be recorded', async () =>
     Effect.gen(function* () {
       const logs = yield* capturedConsole;
       const started = yield* Ref.make<readonly string[]>([]);
@@ -821,7 +821,7 @@ describe('a stop while history writes are still running', () => {
       expect(running.filter((source) => !loggedAsNotRecorded(logs, source))).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should log each V2 write it interrupts, naming its transaction, because that section is never recorded', async () =>
+  it('should log each V2 write it interrupts, naming its transaction, because that section may never be recorded', async () =>
     Effect.gen(function* () {
       const logs = yield* capturedConsole;
       const started = yield* Ref.make<readonly string[]>([]);

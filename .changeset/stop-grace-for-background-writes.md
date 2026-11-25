@@ -17,6 +17,6 @@ tx-history section, so the section was never recorded, and nothing wrote it agai
   `runBeyondVariant` replaces `VariantContext.runtimeScope`, which only pre-release builds carried.
 - `@midnightntwrk/wallet-sdk-shielded`: tx-history writes run through `runBeyondVariant`, so `stop()` lets a write
   about to land finish. `stop()` can take up to a second longer while a write is still running; a write still running
-  after that is interrupted, logged with its transaction hash, and not recorded, as before.
+  after that is interrupted and logged with its transaction hash; it may not be recorded.
 - `@midnightntwrk/wallet-sdk-facade`: `WalletFacade.stop()` stops the shielded wallet, so it too can take up to a second
   longer while a shielded tx-history write is still running.

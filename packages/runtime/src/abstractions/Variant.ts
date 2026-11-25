@@ -47,17 +47,14 @@ export interface VariantContext<TState> {
    *   to finish, and only then interrupts what is left, logging how many it interrupts. The grace is the wallet's, not
    *   each variant's: work carried over from every variant that has run shares it.
    *
-   *   Work handed over after the wallet has stopped is not run. A defect in the work is logged; anything else the work
-   *   wants reported when it is interrupted, such as which record it was writing, it logs itself. Absent only in a
-   *   context built outside the runtime, where the variant's own scope is all there is.
+   *   Work handed over after the wallet has stopped is not run at all: it neither starts nor runs its own interruption
+   *   handler, and nothing is logged. A defect in the work is logged; anything else the work wants reported when it is
+   *   interrupted, such as which record it was writing, it logs itself. Absent only in a context built outside the
+   *   runtime, where the variant's own scope is all there is.
    * @example
-   *   ```ts
-   *   // Record an applied update's changes without holding up the variant, and without losing them at a hand-over.
-   *   const startRecording = context.runBeyondVariant ?? ((work: Effect.Effect<void>) => Effect.forkIn(work, scope));
-   *   yield* startRecording(
-   *   history.put(changes).pipe(Effect.onInterrupt(() => Effect.logWarning(`${changes.source} not recorded`))),
-   *   );
-   *   ```
+   *   const record = history.put(changes).pipe(Effect.onInterrupt(() => Effect.logWarning('may not be recorded')));
+   *   const start = context.runBeyondVariant ?? ((work) => Effect.forkIn(work, scope).pipe(Effect.asVoid));
+   *   const started = start(record); // An effect that completes once the write has started.
    *
    * @param work The work to run. It cannot fail; an interruption is its only other outcome.
    * @returns An effect that starts `work` and completes once it is started, not once it finishes.
@@ -71,12 +68,11 @@ export interface VariantContext<TState> {
  * @remarks
  *   Taken once for the whole wallet, counted from when the running variant has stopped. It is meant for work about to
  *   land, such as a write waiting on one indexer round trip; it cannot save work that is itself still waiting out a
- *   longer retry, which `stop()` interrupts after the grace all the same.
+ *   longer retry, which `stop()` interrupts after the grace all the same. It bounds only work that can be interrupted:
+ *   work inside an uninterruptible region holds `stop()` until that region ends.
  * @example
- *   ```ts
- *   // The longest a stop() can be held up by background work, on top of stopping the variant itself.
- *   const extraStopTime = Duration.toMillis(Variant.BACKGROUND_WORK_GRACE); // 1000
- *   ```;
+ *   // How much longer a stop() can take while interruptible background work is still running: 1000 ms.
+ *   const extraStopTime = Duration.toMillis(Variant.BACKGROUND_WORK_GRACE);
  */
 export const BACKGROUND_WORK_GRACE: Duration.Duration = Duration.seconds(1);
 
