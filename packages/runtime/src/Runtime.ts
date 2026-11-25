@@ -10,9 +10,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Either, Exit, Option, PubSub, Scope, Stream, SubscriptionRef, SynchronizedRef } from 'effect';
+import {
+  Effect,
+  Either,
+  Exit,
+  FiberSet,
+  Option,
+  PubSub,
+  Scope,
+  Stream,
+  SubscriptionRef,
+  SynchronizedRef,
+} from 'effect';
 import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { StateChange, type Variant, VersionChangeType, WalletRuntimeError } from './abstractions/index.js';
+import { StateChange, Variant, VersionChangeType, WalletRuntimeError } from './abstractions/index.js';
 import { EitherOps, HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
 
 /**
@@ -114,7 +125,12 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
     // and passed down explicitly, because the scope in the environment of a hand-over is the closing variant's, not
     // this one.
     Effect.bind('runtimeScope', () => Effect.scope),
-    Effect.bind('initiatedFirstVariant', ({ runtimeScope }) => initVariant({ ...initArgs, runtimeScope })),
+    // Made before anything else in the runtime's scope, so that closing it waits for this work only once everything
+    // else, the running variant included, has stopped: a scope runs its finalizers last-added first.
+    Effect.bind('runBeyondVariant', () => backgroundWork),
+    Effect.bind('initiatedFirstVariant', ({ runtimeScope, runBeyondVariant }) =>
+      initVariant({ ...initArgs, services: { runtimeScope, runBeyondVariant } }),
+    ),
     Effect.bind('currentStateRef', ({ initiatedFirstVariant }) =>
       initiatedFirstVariant.currentStateRef.get.pipe(
         Effect.flatMap((state: Variant.StateOf<HList.Each<Variants>>) =>
@@ -144,15 +160,19 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
     ),
     Effect.bind(
       'runningStream',
-      ({ initiatedFirstVariant, currentStateRef, progressRef, currentVariantRef, activations, runtimeScope }) => {
-        return runVariantStream(
-          initiatedFirstVariant,
-          currentStateRef,
-          progressRef,
-          currentVariantRef,
-          activations,
+      ({
+        initiatedFirstVariant,
+        currentStateRef,
+        progressRef,
+        currentVariantRef,
+        activations,
+        runtimeScope,
+        runBeyondVariant,
+      }) => {
+        return runVariantStream(initiatedFirstVariant, currentStateRef, progressRef, currentVariantRef, activations, {
           runtimeScope,
-        ).pipe(
+          runBeyondVariant,
+        }).pipe(
           Effect.catchAll((error: WalletRuntimeError) => {
             return SubscriptionRef.set(currentStateRef, Either.left(error));
           }),
@@ -219,6 +239,33 @@ const variantTagOf = <Variants extends Variant.AnyVersionedVariantArray>(
   running: EachRunningVariant<Variants>,
 ): Variant.VariantTag<HList.Each<Variants>> => running.__polyTag__ as Variant.VariantTag<HList.Each<Variants>>;
 
+/** What the runtime hands each variant it starts, beyond the variant's own state: see {@link Variant.VariantContext}. */
+type RuntimeServices = {
+  /** The scope the runtime lives in. */
+  runtimeScope: Scope.Scope;
+  /** Runs work beyond the variant that starts it, until the wallet stops. */
+  runBeyondVariant: (work: Effect.Effect<void>) => Effect.Effect<void>;
+};
+
+/**
+ * Where the runtime runs work handed to it by {@link Variant.VariantContext.runBeyondVariant}, kept open by the scope it
+ * is made in.
+ *
+ * @remarks
+ *   Closing that scope first waits up to {@link Variant.BACKGROUND_WORK_GRACE} for the work already running, then
+ *   interrupts any left. Such work is typically the only record of changes the wallet has already applied, so work
+ *   about to finish is let finish rather than lost; the bound keeps work that never finishes from holding up the stop.
+ *   The wait is a finalizer added after the set's own, so it runs before the set interrupts.
+ */
+const backgroundWork: Effect.Effect<RuntimeServices['runBeyondVariant'], never, Scope.Scope> = Effect.gen(function* () {
+  const work = yield* FiberSet.make<void, never>();
+  // A finalizer runs uninterruptibly, and a timeout cannot cut short a wait it cannot interrupt.
+  yield* Effect.addFinalizer(() =>
+    FiberSet.awaitEmpty(work).pipe(Effect.interruptible, Effect.timeoutOption(Variant.BACKGROUND_WORK_GRACE)),
+  );
+  return (effect: Effect.Effect<void>) => FiberSet.run(work, effect).pipe(Effect.asVoid);
+});
+
 export const dispatch = <Variants extends Variant.AnyVersionedVariantArray, TResult, E = never>(
   runtime: Runtime<Variants>,
   impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, Effect.Effect<TResult, E>>,
@@ -234,8 +281,8 @@ type MigrateArgs<Variants extends Variant.AnyVersionedVariantArray> = {
   variants: Variants;
   state: Variant.PreviousStateOf<HList.Head<Variants>>;
   initProtocolVersion?: ProtocolVersion.ProtocolVersion;
-  /** The scope the runtime lives in, handed to the variant started. */
-  runtimeScope: Scope.Scope;
+  /** What the runtime hands the variant started. */
+  services: RuntimeServices;
 };
 const migrateToNextVariant = <Variants extends Variant.AnyVersionedVariantArray>(
   migrateArgs: MigrateArgs<Variants>,
@@ -253,7 +300,7 @@ const migrateToNextVariant = <Variants extends Variant.AnyVersionedVariantArray>
       variants: migrateArgs.variants,
       state: newState as Variant.StateOf<HList.Head<Variants>>,
       initProtocolVersion: migrateArgs.initProtocolVersion,
-      runtimeScope: migrateArgs.runtimeScope,
+      services: migrateArgs.services,
     });
   });
 };
@@ -262,8 +309,8 @@ type InitArgs<Variants extends Variant.AnyVersionedVariantArray, TTag extends st
   variants: Variants;
   tag: TTag;
   state: Variant.StateOf<HList.Find<Variants, { variant: Poly.WithTag<TTag> }>>;
-  /** The scope the runtime lives in, handed to the variant started. */
-  runtimeScope: Scope.Scope;
+  /** What the runtime hands the variant started. */
+  services: RuntimeServices;
 };
 // Arguments are gathered to a separate type because presence of HList.Find is crashing TS compiler ¯\_(ツ)_/¯
 const initVariant = <Variants extends Variant.AnyVersionedVariantArray, TTag extends string | symbol>(
@@ -280,7 +327,7 @@ const initVariant = <Variants extends Variant.AnyVersionedVariantArray, TTag ext
       variants: theRest as Variants,
       state: init.state,
       initProtocolVersion: undefined,
-      runtimeScope: init.runtimeScope,
+      services: init.services,
     });
   });
 };
@@ -293,8 +340,8 @@ type InitHeadArgs<Variants extends Variant.AnyVersionedVariantArray> = {
    * starts from a state it already holds, in which case the version that state records is the one it starts at.
    */
   initProtocolVersion: ProtocolVersion.ProtocolVersion | undefined;
-  /** The scope the runtime lives in, handed to the variant started. */
-  runtimeScope: Scope.Scope;
+  /** What the runtime hands the variant started. */
+  services: RuntimeServices;
 };
 
 /**
@@ -333,7 +380,7 @@ const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
     const stateRef = yield* SubscriptionRef.make(init.state);
     const variantScope = yield* Scope.make();
     const runningVariant = yield* headVersionedVariant.variant
-      .start({ stateRef, activationRange: validVersionRange, runtimeScope: init.runtimeScope })
+      .start({ stateRef, activationRange: validVersionRange, ...init.services })
       .pipe(Effect.provideService(Scope.Scope, variantScope)) as Effect.Effect<
       Variant.RunningVariantOf<HList.Head<Variants>>,
       WalletRuntimeError
@@ -362,7 +409,7 @@ const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
   progressRef: SynchronizedRef.SynchronizedRef<Progress>,
   currentVariantRef: SynchronizedRef.SynchronizedRef<EachRunningVariant<Variants>>,
   activations: PubSub.PubSub<EachRunningVariant<Variants>>,
-  runtimeScope: Scope.Scope,
+  services: RuntimeServices,
 ): Effect.Effect<void, WalletRuntimeError> => {
   type Accumulator = {
     protocolVersion: ProtocolVersion.ProtocolVersion;
@@ -419,7 +466,7 @@ const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
                     HList.Head<typeof initiatedVariant.restVariants>
                   >,
                   initProtocolVersion: newProtocolVersion,
-                  runtimeScope,
+                  services,
                 });
                 yield* SynchronizedRef.set(currentVariantRef, newInitiatedVariant);
                 // Published before handing control to the new variant's stream, so watchers can
@@ -431,7 +478,7 @@ const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
                   progressRef,
                   currentVariantRef,
                   activations,
-                  runtimeScope,
+                  services,
                 );
               }),
             });

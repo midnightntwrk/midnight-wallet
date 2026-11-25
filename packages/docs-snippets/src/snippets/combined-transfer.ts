@@ -70,7 +70,7 @@ console.log('Transfer completed;');
 console.log('  Night balance:', receiverState.unshielded.balances[Token.night] ?? 0n);
 console.log('  shielded token balance:', receiverState.shielded.balances[Token.night] ?? 0n);
 
-// Each wallet records the transfer's shielded coins in its history in the background; stopping first would cut that off.
+// Each wallet records the transfer's shielded coins in its history in the background; stopping first could cut that off.
 await Promise.all([
   waitForShieldedHistory(sender.wallet, transactionId),
   waitForShieldedHistory(receiver.wallet, transactionId),

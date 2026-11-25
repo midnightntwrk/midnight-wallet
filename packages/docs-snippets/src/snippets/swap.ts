@@ -94,7 +94,7 @@ console.log(
   bobFinalState.shielded.availableCoins.some((c) => c.coin.type === shieldedToken1 && c.coin.value === 1_000_000n),
 );
 
-// Each wallet records the swap's shielded coins in its history in the background; stopping first would cut that off.
+// Each wallet records the swap's shielded coins in its history in the background; stopping first could cut that off.
 await Promise.all([
   waitForShieldedHistory(alice.wallet, swapTransactionId),
   waitForShieldedHistory(bob.wallet, swapTransactionId),

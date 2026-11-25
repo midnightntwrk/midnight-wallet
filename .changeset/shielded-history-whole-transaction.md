@@ -18,5 +18,6 @@ ends only between transactions, so a transaction still arriving is held past `ba
 
 History writes for a batch the variant has applied now run in the runtime's scope rather than the variant's, so a
 hand-over to the next variant no longer cuts them off, and wallet calls go to the next variant at once while they
-finish. `stop()` interrupts them rather than waiting for them; a write it interrupts is logged, with its transaction
-hash, and not recorded.
+finish. `stop()` first stops the wallet syncing, then gives the writes still running up to one second, shared by
+every variant that has run, to land, so a transaction the wallet has just applied is still recorded; a write still
+running after that is interrupted, logged with its transaction hash, and not recorded.

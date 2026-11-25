@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/no-explicit-any -- unknown does not work well as a default, because it causes assignability issues */
-import { Either, Option, type Scope, type SubscriptionRef } from 'effect';
+import { Duration, Either, Option, type Scope, type SubscriptionRef } from 'effect';
 import type { Effect } from 'effect/Effect';
 import type { Stream } from 'effect/Stream';
 import { type HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
@@ -48,7 +48,23 @@ export interface VariantContext<TState> {
    *   context built outside the runtime, where the variant's own scope is all there is.
    */
   runtimeScope?: Scope.Scope;
+  /**
+   * Runs `work` in the background, beyond the variant's own lifetime: across a hand-over, until the wallet stops.
+   *
+   * @remarks
+   *   For work that must finish even though the variant that started it closes, such as recording the changes of a sync
+   *   update the variant has already applied, which nothing will apply again. Stopping the wallet first stops the
+   *   running variant, so nothing starts more of it, then gives the work already running {@link BACKGROUND_WORK_GRACE}
+   *   to finish, and only then interrupts what is left. The grace is the wallet's, not each variant's: work carried
+   *   over from every variant that has run shares it. Absent only in a context built outside the runtime.
+   * @param work The work to run. It cannot fail; an interruption is its only other outcome.
+   * @returns An effect that starts `work` and completes once it is started, not once it finishes.
+   */
+  runBeyondVariant?: (work: Effect<void>) => Effect<void>;
 }
+
+/** How long stopping the wallet waits for work run by {@link VariantContext.runBeyondVariant} before interrupting it. */
+export const BACKGROUND_WORK_GRACE: Duration.Duration = Duration.seconds(1);
 
 /**
  * Encapsulates a variant of a wallet implementation.
