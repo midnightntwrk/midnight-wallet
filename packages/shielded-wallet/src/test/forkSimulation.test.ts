@@ -827,6 +827,71 @@ describe('a stop while history writes are still running', () => {
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
+describe('a stop while history writes are about to land', () => {
+  it('should let each V1 write that lands shortly after stop() is called finish, because a section stop() cuts off is never recorded', async () =>
+    Effect.gen(function* () {
+      const logs = yield* capturedConsole;
+      const started = yield* Ref.make<readonly string[]>([]);
+      const written = yield* Ref.make<readonly WrittenSection[]>([]);
+      const release = yield* Deferred.make<void>();
+
+      const { wallet } = yield* crossTheFork(chainCoins(), undefined, {
+        v1History: { ...noOpV1History, put: (changes) => writeLandingOn(release, started, written, changes) },
+      });
+      yield* settled(wallet);
+      // The premise: one write per payment is running, carried past the hand-over, and none has landed.
+      expect(yield* startedAtLeast(started, walletValues.length)).toHaveLength(walletValues.length);
+      expect(yield* Ref.get(written)).toEqual([]);
+
+      // The writes land a moment after the wallet is asked to stop, as an indexer round trip would.
+      yield* Deferred.succeed(release, undefined).pipe(Effect.delay(Duration.millis(300)), Effect.forkDaemon);
+      yield* wallet.stop;
+
+      expectEachPaymentOnce(yield* Ref.get(written));
+      expect(logs.filter((line) => /not recorded/.test(line))).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should let a V2 write that lands shortly after stop() is called finish, because a section stop() cuts off is never recorded', async () =>
+    Effect.gen(function* () {
+      const logs = yield* capturedConsole;
+      const started = yield* Ref.make<readonly string[]>([]);
+      const written = yield* Ref.make<readonly WrittenSection[]>([]);
+      const release = yield* Deferred.make<void>();
+
+      const { v9, wallet } = yield* crossTheFork(chainCoins(), undefined, {
+        v2History: { ...noOpV2History, put: (changes) => writeLandingOn(release, started, written, changes) },
+      });
+      yield* settled(wallet);
+      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
+      yield* v9.submitTransaction(v9Payment(networkId, late));
+      yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
+      // The premise: the V2 variant's write for that payment is running and has not landed.
+      expect(yield* startedAtLeast(started, 1)).toHaveLength(1);
+      expect(yield* Ref.get(written)).toEqual([]);
+
+      // The write lands a moment after the wallet is asked to stop, as an indexer round trip would.
+      yield* Deferred.succeed(release, undefined).pipe(Effect.delay(Duration.millis(300)), Effect.forkDaemon);
+      yield* wallet.stop;
+
+      expect((yield* Ref.get(written)).map(({ received, spent }) => ({ received, spent }))).toEqual([
+        { received: [900n], spent: [] },
+      ]);
+      expect(logs.filter((line) => /not recorded/.test(line))).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/** A history write that records the transaction it was started for, waits for `release`, then lands in `written`. */
+const writeLandingOn = (
+  release: Deferred.Deferred<void>,
+  started: Ref.Ref<readonly string[]>,
+  written: Ref.Ref<readonly WrittenSection[]>,
+  changes: Parameters<typeof sectionOf>[0],
+): Effect.Effect<void> =>
+  Ref.update(started, (sources) => [...sources, changes.source]).pipe(
+    Effect.zipRight(Deferred.await(release)),
+    Effect.zipRight(Ref.update(written, (sections) => [...sections, sectionOf(changes)])),
+  );
+
 /** A history write that records the transaction it was started for, then never finishes. */
 const writeThatNeverLands = (started: Ref.Ref<readonly string[]>, source: string): Effect.Effect<void> =>
   Ref.update(started, (sources) => [...sources, source]).pipe(Effect.zipRight(Effect.never));
