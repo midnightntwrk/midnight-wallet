@@ -18,9 +18,10 @@
 // cursor did not move, the next variant re-fetches that same transaction and applies it exactly once.
 import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Either, HashMap } from 'effect';
+import { Either, HashMap, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
+import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { makeDefaultSyncCapability } from '../Sync.js';
 import { UnshieldedState } from '../UnshieldedState.js';
 import { fixtureOwner, fixtureProgress, fixtureTransaction, fixtureUtxo, recordingHistory } from './syncFixtures.js';
@@ -390,5 +391,35 @@ describe('unshielded sync capability completeness on a quiet address', () => {
 
     expect(result.progress.appliedId).toBe(1n);
     expect(result.progress.highestTransactionId).toBe(1n);
+  });
+});
+
+/**
+ * A snapshot is read once and then written after every sync update, so a field it was read with — one a later release
+ * stored, and this build does not declare — has to survive the update, not only a bare read and write. Each update
+ * rebuilds the wallet; one that rebuilds it from the fields it knows writes the next save without that field.
+ */
+describe('a restored wallet keeps a snapshot field this build does not know through a sync update', () => {
+  const serialization = makeDefaultV1SerializationCapability();
+  const readJson = Schema.decodeUnknownSync(
+    Schema.parseJson(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+  );
+  const LATER_FIELD = { kept: ['exactly', 'as', 'written'], nested: { flag: true, nothing: null } };
+
+  it('should write the field back after an update that applies a transaction, so a later release reading the snapshot still finds it', () => {
+    const { capability } = setup();
+    const stored = { ...readJson(serialization.serialize(emptyWallet())), fieldFromALaterRelease: LATER_FIELD };
+    const restored = EitherOps.getOrThrowLeft(serialization.deserialize(JSON.stringify(stored)));
+
+    const synced = capability
+      .applyUpdate(
+        restored,
+        fixtureTransaction({ id: 1, protocolVersion: 3, createdUtxos: [fixtureUtxo(owner, 100n, 0)] }),
+        activeRange,
+      )
+      .pipe(EitherOps.getOrThrowLeft);
+
+    expect(HashMap.size(synced.state.availableUtxos)).toBe(1);
+    expect(readJson(serialization.serialize(synced))['fieldFromALaterRelease']).toStrictEqual(LATER_FIELD);
   });
 });

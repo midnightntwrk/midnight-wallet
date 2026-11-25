@@ -11,9 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Either, identity } from 'effect';
+import { Either, Schema, identity } from 'effect';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { type CoreWallet } from '../CoreWallet.js';
+import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import {
   makeDefaultSyncCapability,
   makeSimulatorSyncCapability,
@@ -463,5 +464,33 @@ describe('makeSimulatorSyncCapability.applyUpdate progress', () => {
     expect(state.progress.highestRelevantWalletIndex).toBe(BigInt(DUST_EVENT_COUNT) * 2n + 1n);
     expect(state.progress.isConnected).toBe(true);
     expect(state.progress.isStrictlyComplete()).toBe(false);
+  });
+});
+
+/**
+ * A snapshot is read once and then written after every sync update, so a field it was read with — one a later release
+ * stored, and this build does not declare — has to survive the update, not only a bare read and write. Each update
+ * rebuilds the wallet; one that rebuilds it from the fields it knows writes the next save without that field.
+ */
+describe('a restored wallet keeps a snapshot field this build does not know through a sync update', () => {
+  const capability = makeDefaultSyncCapability();
+  const serialization = makeDefaultV1SerializationCapability();
+  const readJson = Schema.decodeUnknownSync(
+    Schema.parseJson(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+  );
+  const LATER_FIELD = { kept: ['exactly', 'as', 'written'], nested: { flag: true, nothing: null } };
+
+  it('should write the field back after an update that applies events, so a later release reading the snapshot still finds it', () => {
+    const stored = { ...readJson(serialization.serialize(freshWallet())), fieldFromALaterRelease: LATER_FIELD };
+    const restored = Either.getOrThrow(serialization.deserialize(null, JSON.stringify(stored)));
+
+    const [synced] = capability.applyUpdate(
+      restored,
+      batch(Array.from({ length: DUST_EVENT_COUNT }, (_, index) => [index + 1, 3] as const)),
+      activeRange,
+    );
+
+    expect(utxoCount(synced)).toBe(DUST_EVENT_COUNT);
+    expect(readJson(serialization.serialize(synced))['fieldFromALaterRelease']).toStrictEqual(LATER_FIELD);
   });
 });

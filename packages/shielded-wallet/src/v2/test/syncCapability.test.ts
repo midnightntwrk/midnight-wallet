@@ -14,9 +14,10 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import * as otherLedger from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { V8 as OtherSimulation, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { Effect, Either, Option, Stream, identity } from 'effect';
+import { Effect, Either, Option, Schema, Stream, identity } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
+import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 import {
   type EventsSyncUpdate,
   SimulatorSyncUpdate,
@@ -636,5 +637,33 @@ describe('an empty-tree signal racing the event timeline', () => {
     });
 
     expect(untouched).toEqual(late.map(() => true));
+  });
+});
+
+/**
+ * A snapshot is read once and then written after every sync update, so a field it was read with — one a later release
+ * stored, and this build does not declare — has to survive the update, not only a bare read and write. Each update
+ * rebuilds the wallet; one that rebuilds it from the fields it knows writes the next save without that field.
+ */
+describe('a restored wallet keeps a snapshot field this build does not know through a sync update', () => {
+  const capability = makeEventsSyncCapability();
+  const serialization = makeDefaultV2SerializationCapability();
+  const readJson = Schema.decodeUnknownSync(
+    Schema.parseJson(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+  );
+  const LATER_FIELD = { kept: ['exactly', 'as', 'written'], nested: { flag: true, nothing: null } };
+
+  it('should write the field back after an update that replays events, so a later release reading the snapshot still finds it', () => {
+    const stored = { ...readJson(serialization.serialize(freshWallet())), fieldFromALaterRelease: LATER_FIELD };
+    const restored = Either.getOrThrow(serialization.deserialize(null, JSON.stringify(stored)));
+
+    const [synced] = capability.applyUpdate(
+      restored,
+      batch(Array.from({ length: MINT_COUNT }, (_, index) => [index + 1, 3] as const)),
+      activeRange,
+    );
+
+    expect(totalValue(synced)).toBe(MINT_TOTAL);
+    expect(readJson(serialization.serialize(synced))['fieldFromALaterRelease']).toStrictEqual(LATER_FIELD);
   });
 });

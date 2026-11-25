@@ -411,6 +411,75 @@ describe('Carrying the top-level members this build does not declare', () => {
 });
 
 /**
+ * A store is read once and then written after every transaction the facade moves along, so a member it was read with
+ * has to survive each of those moves, not only a bare read and write. Every transition rebuilds the state; one that
+ * rebuilds it from its records alone writes the next save without the member a later release stored.
+ */
+describe('Carrying the top-level members this build does not declare through every transition', () => {
+  const LATER_MEMBER = { kept: ['exactly', 'as', 'written'], nested: { flag: true, nothing: null } };
+
+  const restoredCarrying = (): Lifecycle.TransactionLifecycle<LedgerTx> =>
+    Either.getOrThrow(restore(JSON.stringify({ version: 'v2', records: [], laterMember: LATER_MEMBER })));
+
+  const tx: LedgerTx = { ledger: 'v8', ids: ['id-a'] };
+  const facts: Lifecycle.TransactionFacts<LedgerTx> = {
+    tx,
+    identifiers: tx.ids,
+    intentHashes: tx.ids.map((id) => `v8-intent-${id}`),
+    inputs: { unshielded: tx.ids.map((id) => `v8-coin-${id}#0`) },
+    ttl: TTL,
+    protocolVersion: V8_VERSION,
+  };
+  const FINALIZED_AT = at('2026-01-01T00:01:00.000Z');
+  const PAST_TTL = at('2026-01-01T02:00:00.000Z');
+  const EPOCHS: ProtocolVersion.Registry<string> = {
+    entries: [
+      { range: ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, V9_FORK), value: 'ledger-v8' },
+      { range: ProtocolVersion.makeRange(V9_FORK, ProtocolVersion.MaxSupportedVersion), value: 'ledger-v9' },
+    ],
+  };
+
+  type State = Lifecycle.TransactionLifecycle<LedgerTx>;
+  const balanced = (state: State): State => Lifecycle.balanced(state, facts, CREATED_AT);
+  const submitted = (state: State): State => Lifecycle.submitted(balanced(state), facts, SUBMITTED_AT);
+
+  const transitions: readonly (readonly [string, (state: State) => State, readonly string[]])[] = [
+    ['recording a balanced transaction', balanced, ['Balanced']],
+    ['finalizing it', (state) => Lifecycle.finalized(balanced(state), facts, FINALIZED_AT), ['Finalized']],
+    ['submitting it', submitted, ['Submitted']],
+    ['confirming it', (state) => Lifecycle.confirmed(submitted(state), tx.ids), ['Confirmed']],
+    [
+      'rejecting it',
+      (state) =>
+        Lifecycle.rejected(submitted(state), tx.ids, { status: 'FAILURE', segments: [{ id: 0, success: false }] }),
+      ['Rejected'],
+    ],
+    ['reverting it', (state) => Lifecycle.reverted(submitted(state), tx.ids), ['Reverted']],
+    [
+      'orphaning it once the chain has left its epoch',
+      (state) => Lifecycle.orphanBeyond(submitted(state), EPOCHS, V9_VERSION),
+      ['Orphaned'],
+    ],
+    ['expiring it once its TTL has passed', (state) => Lifecycle.expire(submitted(state), PAST_TTL), ['Rejected']],
+    [
+      'dropping it once it has finished and its TTL has passed',
+      (state) => Lifecycle.dropFinished(Lifecycle.confirmed(submitted(state), tx.ids), PAST_TTL),
+      [],
+    ],
+  ];
+
+  it.each(transitions)(
+    'should write back the member it was read with after %s, so a later release reading the store still finds it',
+    (_, transition, states) => {
+      const moved = transition(restoredCarrying());
+
+      expect(moved.records.map((record) => record.state._tag)).toStrictEqual(states);
+      expect(parseObject(Lifecycle.serialize(moved, traits))['laterMember']).toStrictEqual(LATER_MEMBER);
+    },
+  );
+});
+
+/**
  * A transaction whose form its bytes do not say: the bytes hold only its identifiers, and the form is kept beside them,
  * as the facade keeps whether it holds a transaction finalized or with its proofs erased.
  */
