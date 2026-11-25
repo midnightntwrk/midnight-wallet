@@ -1,5 +1,5 @@
 ---
-'@midnightntwrk/wallet-sdk-runtime': patch
+'@midnightntwrk/wallet-sdk-runtime': minor
 ---
 
 feat(runtime): let a variant run work beyond its own lifetime, with a grace period when the wallet stops
