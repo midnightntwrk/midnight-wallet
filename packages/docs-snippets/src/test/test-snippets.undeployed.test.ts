@@ -18,6 +18,7 @@ import * as path from 'node:path';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk/testing';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { withSmokeTag } from './smokeSnippets.js';
 
 vi.setConfig({ testTimeout: 900_000, hookTimeout: 200_000 });
 
@@ -136,17 +137,6 @@ const maskProtocolVersion = (output: string): string =>
 const maskVolatile = (output: string | null): string | null =>
   output === null ? null : maskProtocolVersion(maskChainHeight(output));
 
-// The pull-request smoke lane selects tests by `@smoke` in their name; every other snippet runs only in the nightly run.
-// A shielded transfer is in it because it shows that a shielded transaction lands and that both wallets record it in
-// their history, and that nothing the wallet logs on the way, such as a warning about a history write cut off, leaks into
-// a snippet's output: changes to a wallet's sync or stop could otherwise break that unseen until the nightly run.
-const SMOKE_SNIPPETS: ReadonlySet<string> = new Set(['shielded-transfer']);
-
-const titled = (snippet: Snippet): Snippet & { title: string } => ({
-  ...snippet,
-  title: SMOKE_SNIPPETS.has(snippet.name) ? `${snippet.name} @smoke` : snippet.name,
-});
-
 const testSnippet = async (snippet: Snippet, envExtension: Record<string, string> = {}) => {
   const result = await runSnippet(snippet, envExtension);
   expect(result.map(maskVolatile)).toMatchSnapshot();
@@ -192,7 +182,7 @@ describe('Snippet outputs', () => {
       await startedEnvironment?.down({ timeout: 10_000 });
     });
 
-    it.each(snippetFiles.net.map(titled))('should output the correct result for $title', (snippet) =>
+    it.each(snippetFiles.net.map(withSmokeTag))('should output the correct result for $title', (snippet) =>
       testSnippet(snippet, envExtension),
     );
   });

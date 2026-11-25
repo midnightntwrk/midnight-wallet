@@ -13,7 +13,7 @@
 import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Cause, Deferred, Duration, Effect, Either, LogLevel, Logger, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { StateChange, Variant, VersionChangeType, WalletRuntimeError } from '../abstractions/index.js';
 import { isOrderedSubsequenceOf, protocolStateEquals, toProtocolStateArray } from '../testing/utils.js';
 import {
@@ -752,6 +752,27 @@ describe('Variant activation and context', () => {
     }).pipe(Effect.scoped, Effect.runPromise));
 
   describe('work a variant runs beyond itself, when the wallet stops', () => {
+    /**
+     * Every line written to the console for the rest of the scope, while the console itself stays quiet.
+     *
+     * @remarks
+     *   A wallet stops on Effect's default runtime, so what it logs while stopping reaches only the global console, not a
+     *   logger the test could provide. The array is mutated by the spies: it is test scaffolding, released with the
+     *   scope.
+     */
+    const capturedConsole: Effect.Effect<readonly string[], never, Scope.Scope> = Effect.acquireRelease(
+      Effect.sync(() => {
+        const lines: string[] = [];
+        const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((method) =>
+          vi.spyOn(console, method).mockImplementation((...args: unknown[]) => {
+            lines.push(args.map(String).join(' '));
+          }),
+        );
+        return { lines, spies };
+      }),
+      ({ spies }) => Effect.sync(() => spies.forEach((spy) => spy.mockRestore())),
+    ).pipe(Effect.map(({ lines }) => lines));
+
     /** The runner the builder's variant at `index` was started with; a missing one fails the test. */
     const runnerOf = <TTag extends string | symbol>(builder: InterceptingVariantBuilder<TTag, number>, index = 0) =>
       Effect.orDie(Effect.fromNullable(builder.built[index]?.receivedContext?.runBeyondVariant));
@@ -838,6 +859,130 @@ describe('Variant activation and context', () => {
 
         expect(Option.isSome(stopped)).toBe(true);
         expect(yield* Deferred.isDone(finished)).toBe(true);
+      }).pipe(Effect.scoped, Effect.runPromise));
+
+    /** Hands the wallet over from the first variant to the second, and waits until it has. */
+    const handOverToSecond = (wallet: Effect.Effect.Success<ReturnType<typeof startTwoVariantWallet>>) =>
+      wallet.runtime
+        .dispatch({
+          [First]: (variant: InterceptingRunningVariant<typeof First, number>) =>
+            variant.emitProtocolVersionChange(
+              VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(100n) }),
+            ),
+          [Second]: () => Effect.void,
+        })
+        .pipe(Effect.zipRight(firstStateWhere(wallet.rawState, atVersion(ProtocolVersion.ProtocolVersion(100n)))));
+
+    it('should give work a grace of one second, because that is the bound the wallet documents for stop()', () => {
+      expect(Duration.toMillis(Variant.BACKGROUND_WORK_GRACE)).toBe(1000);
+    });
+
+    it('should let work that finishes just inside the grace finish, because the whole grace is given, not part of it', () =>
+      Effect.gen(function* () {
+        const { Wallet, firstBuilder } = makeTwoVariantWallet();
+        const wallet = Wallet.startEmpty(Wallet);
+        yield* firstStateWhere(wallet.rawState);
+        const release = yield* Deferred.make<void>();
+        const finished = yield* Deferred.make<void>();
+
+        yield* (yield* runnerOf(firstBuilder))(
+          Deferred.await(release).pipe(Effect.zipRight(Deferred.succeed(finished, undefined))),
+        );
+        yield* Deferred.succeed(release, undefined).pipe(
+          Effect.delay(Duration.subtract(Variant.BACKGROUND_WORK_GRACE, Duration.millis(150))),
+          Effect.forkDaemon,
+        );
+        yield* Effect.promise(() => wallet.stop());
+
+        expect(yield* Deferred.isDone(finished)).toBe(true);
+      }).pipe(Effect.scoped, Effect.runPromise));
+
+    it('should interrupt work as soon as the grace runs out, because the grace bounds the stop, not only the work', () =>
+      Effect.gen(function* () {
+        const { Wallet, firstBuilder } = makeTwoVariantWallet();
+        const wallet = Wallet.startEmpty(Wallet);
+        yield* firstStateWhere(wallet.rawState);
+        const work = yield* runUntilInterrupted(yield* runnerOf(firstBuilder));
+
+        const [elapsed] = yield* Effect.timed(Effect.promise(() => wallet.stop()));
+
+        expect(yield* Deferred.isDone(work)).toBe(true);
+        expect(Duration.toMillis(elapsed)).toBeGreaterThanOrEqual(Duration.toMillis(Variant.BACKGROUND_WORK_GRACE));
+        // A margin for tearing the wallet down, well short of what a longer grace would add.
+        expect(Duration.toMillis(elapsed)).toBeLessThan(Duration.toMillis(Variant.BACKGROUND_WORK_GRACE) + 200);
+      }).pipe(Effect.scoped, Effect.runPromise));
+
+    it('should run the work of a variant started at a hand-over beyond it too, because that variant records its own changes', () =>
+      Effect.gen(function* () {
+        const secondBuilder = new InterceptingVariantBuilder<typeof Second, number>(Second);
+        const { Wallet } = makeTwoVariantWallet(secondBuilder);
+        const wallet = Wallet.startEmpty(Wallet);
+        yield* firstStateWhere(wallet.rawState);
+        yield* handOverToSecond(wallet);
+        const release = yield* Deferred.make<void>();
+        const finished = yield* Deferred.make<void>();
+
+        yield* (yield* runnerOf(secondBuilder))(
+          Deferred.await(release).pipe(Effect.zipRight(Deferred.succeed(finished, undefined))),
+        );
+        yield* Deferred.succeed(release, undefined).pipe(Effect.delay('300 millis'), Effect.forkDaemon);
+        yield* Effect.promise(() => wallet.stop());
+
+        expect(yield* Deferred.isDone(finished)).toBe(true);
+      }).pipe(Effect.scoped, Effect.runPromise));
+
+    it('should resolve every stop() called while the wallet is stopping only once it has stopped, because a caller acts on the stop being done', () =>
+      Effect.gen(function* () {
+        const { Wallet, firstBuilder } = makeTwoVariantWallet();
+        const wallet = Wallet.startEmpty(Wallet);
+        yield* firstStateWhere(wallet.rawState);
+        const release = yield* Deferred.make<void>();
+        const finished = yield* Deferred.make<void>();
+
+        yield* (yield* runnerOf(firstBuilder))(
+          Deferred.await(release).pipe(Effect.zipRight(Deferred.succeed(finished, undefined))),
+        );
+        yield* Deferred.succeed(release, undefined).pipe(Effect.delay('300 millis'), Effect.forkDaemon);
+        // Two callers stop the same wallet at once, as a facade stopping every wallet and an application might.
+        const finishedWhenEachResolved = yield* Effect.promise(() =>
+          Promise.all(
+            [wallet.stop(), wallet.stop()].map((stopping) =>
+              stopping.then(() => Deferred.isDone(finished).pipe(Effect.runSync)),
+            ),
+          ),
+        );
+
+        expect(finishedWhenEachResolved).toEqual([true, true]);
+      }).pipe(Effect.scoped, Effect.runPromise));
+
+    it('should warn when the grace runs out with work still running, because work cut off may leave no trace of its own', () =>
+      Effect.gen(function* () {
+        const lines = yield* capturedConsole;
+        const { Wallet, firstBuilder } = makeTwoVariantWallet();
+        const wallet = Wallet.startEmpty(Wallet);
+        yield* firstStateWhere(wallet.rawState);
+        const work = yield* runUntilInterrupted(yield* runnerOf(firstBuilder));
+
+        yield* Effect.promise(() => wallet.stop());
+
+        expect(yield* Deferred.isDone(work)).toBe(true);
+        expect(lines.filter((line) => /level=WARN/.test(line) && /grace/.test(line))).toEqual([
+          expect.stringMatching(/\b1\b/),
+        ]);
+      }).pipe(Effect.scoped, Effect.runPromise));
+
+    it('should log a defect in work it runs, because nothing else waits on that work to report it', () =>
+      Effect.gen(function* () {
+        const lines = yield* capturedConsole;
+        const { Wallet, firstBuilder } = makeTwoVariantWallet();
+        const wallet = Wallet.startEmpty(Wallet);
+        yield* Effect.addFinalizer(() => Effect.promise(() => wallet.stop()));
+        yield* firstStateWhere(wallet.rawState);
+
+        yield* (yield* runnerOf(firstBuilder))(Effect.die(new Error('background boom')));
+        yield* Effect.sleep('50 millis');
+
+        expect(lines.filter((line) => /level=ERROR/.test(line) && /background boom/.test(line))).toHaveLength(1);
       }).pipe(Effect.scoped, Effect.runPromise));
   });
 

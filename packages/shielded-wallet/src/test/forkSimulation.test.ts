@@ -547,7 +547,7 @@ describe('a shielded wallet crossing a hard fork', () => {
       expectEachPaymentOnce(yield* writtenAtLeast(written, walletValues.length));
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should stop promptly, interrupting history writes still running from before the hand-over, because a write must neither hold up nor outlive the wallet', async () =>
+  it('should stop within the grace, interrupting history writes still running from before the hand-over, because a write must not hold up the stop past the grace nor outlive the wallet', async () =>
     Effect.gen(function* () {
       // Writes that never finish, carried past the hand-over: the V1 variant is gone, so nothing but the wallet's own
       // lifetime bounds them.
@@ -910,8 +910,9 @@ describe('a stop after a hand-over, while writes from both variants are still ru
       // The premise: a write per ledger-v8 payment, carried past the hand-over, and one for the ledger-v9 payment.
       expect(yield* startedAtLeast(started, walletValues.length + 1)).toHaveLength(walletValues.length + 1);
 
-      // One second of grace, and a margin well short of a second one.
-      const stopped = yield* wallet.stop.pipe(Effect.timeoutOption(Duration.millis(1500)));
+      // A fixed bound, not one derived from the grace: one grace and the wallet's teardown fit under it, while a grace
+      // taken per variant (about two seconds here) does not.
+      const stopped = yield* wallet.stop.pipe(Effect.timeoutOption(Duration.millis(1800)));
       expect(Option.isSome(stopped)).toBe(true);
     }).pipe(Effect.scoped, Effect.runPromise));
 
@@ -933,6 +934,8 @@ describe('a stop after a hand-over, while writes from both variants are still ru
       // A payment the chain carries a moment after the wallet is asked to stop.
       const stopping = yield* Effect.fork(wallet.stop);
       yield* Effect.sleep(Duration.millis(100));
+      // The premise: the wallet is still stopping when the payment arrives.
+      expect(Option.isNone(yield* Fiber.poll(stopping))).toBe(true);
       const afterStop = mintable(ledgerV9.shieldedToken().raw, 50n, walletRecipient());
       yield* v9.submitTransaction(v9Payment(networkId, afterStop));
       yield* Fiber.join(stopping);
