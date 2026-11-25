@@ -148,7 +148,7 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   // briefly runs up to twice as many.
   readonly #txHistoryPermits = Effect.makeSemaphore(8).pipe(Effect.runSync);
   // Starts a tx-history write: beyond this variant, through the runtime, so a write a hand-over carries is not cut short.
-  // A context that does not offer that falls back to the runtime's scope, then to the variant's own.
+  // A context built outside the runtime does not offer that, and falls back to the variant's own scope.
   readonly #startHistoryWrite: (write: Effect.Effect<void>) => Effect.Effect<void>;
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
@@ -160,8 +160,7 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   ) {
     this.#scope = scope;
     this.#context = context;
-    this.#startHistoryWrite =
-      context.runBeyondVariant ?? ((write) => Effect.forkIn(write, context.runtimeScope ?? scope).pipe(Effect.asVoid));
+    this.#startHistoryWrite = context.runBeyondVariant ?? ((write) => Effect.forkIn(write, scope).pipe(Effect.asVoid));
     this.#v2Context = v2Context;
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>

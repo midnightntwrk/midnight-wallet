@@ -127,10 +127,8 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
     Effect.bind('runtimeScope', () => Effect.scope),
     // Made before anything else in the runtime's scope, so that closing it waits for this work only once everything
     // else, the running variant included, has stopped: a scope runs its finalizers last-added first.
-    Effect.bind('runBeyondVariant', () => backgroundWork),
-    Effect.bind('initiatedFirstVariant', ({ runtimeScope, runBeyondVariant }) =>
-      initVariant({ ...initArgs, services: { runtimeScope, runBeyondVariant } }),
-    ),
+    Effect.bind('services', () => backgroundWork.pipe(Effect.map((runBeyondVariant) => ({ runBeyondVariant })))),
+    Effect.bind('initiatedFirstVariant', ({ services }) => initVariant({ ...initArgs, services })),
     Effect.bind('currentStateRef', ({ initiatedFirstVariant }) =>
       initiatedFirstVariant.currentStateRef.get.pipe(
         Effect.flatMap((state: Variant.StateOf<HList.Each<Variants>>) =>
@@ -160,19 +158,15 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
     ),
     Effect.bind(
       'runningStream',
-      ({
-        initiatedFirstVariant,
-        currentStateRef,
-        progressRef,
-        currentVariantRef,
-        activations,
-        runtimeScope,
-        runBeyondVariant,
-      }) => {
-        return runVariantStream(initiatedFirstVariant, currentStateRef, progressRef, currentVariantRef, activations, {
-          runtimeScope,
-          runBeyondVariant,
-        }).pipe(
+      ({ initiatedFirstVariant, currentStateRef, progressRef, currentVariantRef, activations, services }) => {
+        return runVariantStream(
+          initiatedFirstVariant,
+          currentStateRef,
+          progressRef,
+          currentVariantRef,
+          activations,
+          services,
+        ).pipe(
           Effect.catchAll((error: WalletRuntimeError) => {
             return SubscriptionRef.set(currentStateRef, Either.left(error));
           }),
@@ -240,12 +234,7 @@ const variantTagOf = <Variants extends Variant.AnyVersionedVariantArray>(
 ): Variant.VariantTag<HList.Each<Variants>> => running.__polyTag__ as Variant.VariantTag<HList.Each<Variants>>;
 
 /** What the runtime hands each variant it starts, beyond the variant's own state: see {@link Variant.VariantContext}. */
-type RuntimeServices = {
-  /** The scope the runtime lives in. */
-  runtimeScope: Scope.Scope;
-  /** Runs work beyond the variant that starts it, until the wallet stops. */
-  runBeyondVariant: (work: Effect.Effect<void>) => Effect.Effect<void>;
-};
+type RuntimeServices = Required<Pick<Variant.VariantContext<unknown>, 'runBeyondVariant'>>;
 
 /**
  * Where the runtime runs work handed to it by {@link Variant.VariantContext.runBeyondVariant}, kept open by the scope it
@@ -261,9 +250,31 @@ const backgroundWork: Effect.Effect<RuntimeServices['runBeyondVariant'], never, 
   const work = yield* FiberSet.make<void, never>();
   // A finalizer runs uninterruptibly, and a timeout cannot cut short a wait it cannot interrupt.
   yield* Effect.addFinalizer(() =>
-    FiberSet.awaitEmpty(work).pipe(Effect.interruptible, Effect.timeoutOption(Variant.BACKGROUND_WORK_GRACE)),
+    FiberSet.awaitEmpty(work).pipe(
+      Effect.interruptible,
+      Effect.timeoutOption(Variant.BACKGROUND_WORK_GRACE),
+      // Work cut off here may have no log of its own to say so.
+      Effect.flatMap(
+        Option.match({
+          onSome: () => Effect.void,
+          onNone: () =>
+            FiberSet.size(work).pipe(
+              Effect.flatMap((running) =>
+                Effect.logWarning(
+                  `${running} background task(s) still running when the stop grace ran out; interrupting them`,
+                ),
+              ),
+            ),
+        }),
+      ),
+    ),
   );
-  return (effect: Effect.Effect<void>) => FiberSet.run(work, effect).pipe(Effect.asVoid);
+  return (effect: Effect.Effect<void>) =>
+    FiberSet.run(
+      work,
+      // Nothing waits on this work to report how it ended, so a defect would otherwise pass unseen.
+      effect.pipe(Effect.tapDefect((cause) => Effect.logError('Background work failed with a defect', cause))),
+    ).pipe(Effect.asVoid);
 });
 
 export const dispatch = <Variants extends Variant.AnyVersionedVariantArray, TResult, E = never>(
