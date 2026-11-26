@@ -51,10 +51,12 @@ import {
   type NullifierRegularTransaction,
   type DustSpendProcessedEvent,
   DustUtxoMap,
+  ProgressUpdate,
   StateUpdate,
 } from '../SyncSchema.js';
 import { leBigintToHex } from '../Utils.js';
 import { makeDefaultV2SerializationCapability } from '../Serialization.js';
+import { LATER_FIELD, laterFieldIn, storedByLaterRelease } from '../../test/laterReleaseField.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -1308,6 +1310,35 @@ describe('V2 projections indexer request shape', () => {
   });
 });
 
+const rootHex = (root: bigint | undefined): string => (root !== undefined ? leBigintToHex(root) : '');
+
+/**
+ * A ledger-v9 block whose dust tree roots are `wallet`'s own, as the indexer serves it to the projections path, so a
+ * pass over a wallet with empty trees has nothing to fetch but the generations.
+ */
+const blockAt = (height: number, wallet: CoreWallet, timestamp: Date = new Date(1_700_000_000_000)): BlockData => ({
+  height,
+  hash: '00'.repeat(32),
+  protocolVersion: V9_NATIVE,
+  ledgerParameters: LedgerParameters.initialParameters(),
+  timestamp,
+  zswapEndIndex: 0,
+  dustCommitmentEndIndex: 0,
+  dustGenerationEndIndex: 0,
+  dustCommitmentMerkleTreeRoot: rootHex(wallet.state.commitmentTreeRoot()),
+  dustGenerationMerkleTreeRoot: rootHex(wallet.state.generatingTreeRoot()),
+});
+
+/** The update a projections pass ends with when it found nothing: it adds and spends nothing, and reaches `latestBlock`. */
+const emptyStateUpdate = (latestBlock: BlockData) =>
+  StateUpdate({
+    dustGenerations: { rawUpdates: [], newGenerations: [], generationDtimeUpdates: [] },
+    newUtxos: DustUtxoMap.create([]),
+    spentUtxos: DustUtxoMap.create([]),
+    collapsedCommitments: [],
+    latestBlock,
+  });
+
 /**
  * Where a projections pass resumes after the wallet was saved and restored.
  *
@@ -1326,22 +1357,6 @@ describe('V2 projections resume height across a restore', () => {
     throw new Error(`${name} must not be called in this scenario`);
   };
 
-  const rootHex = (root: bigint | undefined): string => (root !== undefined ? leBigintToHex(root) : '');
-
-  /** A block whose dust trees are empty, so a pass over an empty wallet has nothing to fetch but the generations. */
-  const blockAt = (height: number, wallet: CoreWallet): BlockData => ({
-    height,
-    hash: '00'.repeat(32),
-    protocolVersion: V9_NATIVE,
-    ledgerParameters: LedgerParameters.initialParameters(),
-    timestamp: new Date(1_700_000_000_000),
-    zswapEndIndex: 0,
-    dustCommitmentEndIndex: 0,
-    dustGenerationEndIndex: 0,
-    dustCommitmentMerkleTreeRoot: rootHex(wallet.state.commitmentTreeRoot()),
-    dustGenerationMerkleTreeRoot: rootHex(wallet.state.generatingTreeRoot()),
-  });
-
   /**
    * A wallet whose last projections pass finished at `height`: the update a pass ends with, adding and spending
    * nothing.
@@ -1350,13 +1365,7 @@ describe('V2 projections resume height across a restore', () => {
     const empty = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
     const [synced] = makeEventLessSyncCapability().applyUpdate(
       empty,
-      StateUpdate({
-        dustGenerations: { rawUpdates: [], newGenerations: [], generationDtimeUpdates: [] },
-        newUtxos: DustUtxoMap.create([]),
-        spentUtxos: DustUtxoMap.create([]),
-        collapsedCommitments: [],
-        latestBlock: blockAt(height, empty),
-      }),
+      emptyStateUpdate(blockAt(height, empty)),
       fullSpan,
     );
     return synced;
@@ -1406,5 +1415,44 @@ describe('V2 projections resume height across a restore', () => {
     expect(await dtimeCutoffsOfNextPass(restored(CoreWallet.initEmpty(dustParameters, secretKey, networkId)))).toEqual([
       0,
     ]);
+  });
+});
+
+/**
+ * An application may save the snapshot of a wallet on projections sync after any update the projections source sends,
+ * so a field the snapshot was read with — one a later release stored, and this build does not declare — has to survive
+ * both kinds of update it sends, not only a bare read and write.
+ */
+describe('V2 projections sync of a restored wallet', () => {
+  const serialization = makeDefaultV2SerializationCapability();
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const fresh = (): CoreWallet => CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+  const restoredCarrying = (): CoreWallet =>
+    Either.getOrThrow(serialization.deserialize(null, storedByLaterRelease(serialization.serialize(fresh()))));
+
+  it('should write back a snapshot field this build does not know after a state update, so a later release reading the snapshot still finds it', () => {
+    const syncedAt = new Date('2026-07-14T10:00:00.000Z');
+
+    const [synced] = makeEventLessSyncCapability().applyUpdate(
+      restoredCarrying(),
+      emptyStateUpdate(blockAt(1, fresh(), syncedAt)),
+      fullSpan,
+    );
+
+    expect(synced.state.syncTime).toEqual(syncedAt);
+    expect(synced.progress.highestIndex).toBe(1n);
+    expect(laterFieldIn(serialization.serialize(synced))).toStrictEqual(LATER_FIELD);
+  });
+
+  it('should write back a snapshot field this build does not know after a progress report, so a later release reading the snapshot still finds it', () => {
+    const [synced] = makeEventLessSyncCapability().applyUpdate(
+      restoredCarrying(),
+      ProgressUpdate({ appliedIndex: 3, highestRelevantIndex: 5 }),
+      fullSpan,
+    );
+
+    expect(synced.progress.appliedIndex).toBe(3n);
+    expect(synced.syncKind).toBe('projections');
+    expect(laterFieldIn(serialization.serialize(synced))).toStrictEqual(LATER_FIELD);
   });
 });

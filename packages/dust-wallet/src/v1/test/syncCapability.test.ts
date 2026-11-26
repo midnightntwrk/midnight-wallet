@@ -14,13 +14,16 @@ import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, identity } from 'effect';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { type CoreWallet } from '../CoreWallet.js';
+import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import {
   makeDefaultSyncCapability,
   makeSimulatorSyncCapability,
+  VersionSignalSyncUpdate,
   type WalletSyncSubscription,
   WalletSyncUpdate,
 } from '../Sync.js';
 import { DUST_EVENT_COUNT, type DustChain, buildDustChain, freshWallet, fixtureSecretKey } from './dustEvents.js';
+import { LATER_FIELD, laterFieldIn, storedByLaterRelease } from '../../test/laterReleaseField.js';
 
 vi.setConfig({ testTimeout: 60000 });
 
@@ -463,5 +466,68 @@ describe('makeSimulatorSyncCapability.applyUpdate progress', () => {
     expect(state.progress.highestRelevantWalletIndex).toBe(BigInt(DUST_EVENT_COUNT) * 2n + 1n);
     expect(state.progress.isConnected).toBe(true);
     expect(state.progress.isStrictlyComplete()).toBe(false);
+  });
+});
+
+/**
+ * An application may save the snapshot after any update, so a field it was read with — one a later release stored, and
+ * this build does not declare — has to survive every update, not only a bare read and write. Each update rebuilds the
+ * wallet; one that rebuilds it from the fields it knows writes the next save without that field.
+ */
+describe('a restored wallet keeps a snapshot field this build does not know through a sync update', () => {
+  const capability = makeDefaultSyncCapability();
+  const serialization = makeDefaultV1SerializationCapability();
+
+  const restoredCarrying = (): CoreWallet =>
+    Either.getOrThrow(serialization.deserialize(null, storedByLaterRelease(serialization.serialize(freshWallet()))));
+
+  it('should write the field back after an update that applies events, so a later release reading the snapshot still finds it', () => {
+    const restored = restoredCarrying();
+
+    const [synced] = capability.applyUpdate(
+      restored,
+      batch(Array.from({ length: DUST_EVENT_COUNT }, (_, index) => [index + 1, 3] as const)),
+      activeRange,
+    );
+
+    expect(utxoCount(synced)).toBe(DUST_EVENT_COUNT);
+    expect(laterFieldIn(serialization.serialize(synced))).toStrictEqual(LATER_FIELD);
+  });
+
+  it('should write the field back after a version signal, so a later release reading the snapshot still finds it', () => {
+    const restored = restoredCarrying();
+    expect(restored.protocolVersion).not.toBe(5n);
+
+    const [synced] = capability.applyUpdate(restored, VersionSignalSyncUpdate.create(5, 0), activeRange);
+
+    expect(synced.protocolVersion).toBe(5n);
+    expect(laterFieldIn(serialization.serialize(synced))).toStrictEqual(LATER_FIELD);
+  });
+
+  it('should write the field back after a simulator chain state it applies, so a later release reading the snapshot still finds it', async () => {
+    const { state } = await buildDustChain(ProtocolVersion.ProtocolVersion(3n));
+
+    const [synced] = makeSimulatorSyncCapability().applyUpdate(
+      restoredCarrying(),
+      { update: state, secretKey: fixtureSecretKey() },
+      activeRange,
+    );
+
+    expect(utxoCount(synced)).toBe(DUST_EVENT_COUNT);
+    expect(laterFieldIn(serialization.serialize(synced))).toStrictEqual(LATER_FIELD);
+  });
+
+  it('should write the field back after a simulator chain state beyond the variant, which only records its version, so a later release reading the snapshot still finds it', async () => {
+    const { state } = await buildDustChain(ProtocolVersion.ProtocolVersion(9n));
+
+    const [synced] = makeSimulatorSyncCapability().applyUpdate(
+      restoredCarrying(),
+      { update: state, secretKey: fixtureSecretKey() },
+      activeRange,
+    );
+
+    expect(synced.protocolVersion).toBe(9n);
+    expect(utxoCount(synced)).toBe(0);
+    expect(laterFieldIn(serialization.serialize(synced))).toStrictEqual(LATER_FIELD);
   });
 });
