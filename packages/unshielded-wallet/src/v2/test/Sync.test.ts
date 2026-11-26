@@ -17,10 +17,12 @@ import { Effect, Either, HashMap, Option, pipe, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, PublicKey } from '../KeyStore.js';
 import { type CoreWallet as CoreWalletType, CoreWallet } from '../CoreWallet.js';
+import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 import { makeDefaultSyncCapability, makeSimulatorSyncCapability } from '../Sync.js';
 import { type PendingUtxo, UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
 import { type SyncUpdate, type UnshieldedTransaction, type WalletSyncUpdate } from '../SyncSchema.js';
 import { generateMockUtxoWithMeta, utxoHash } from './testUtils.js';
+import { LATER_FIELD, laterFieldIn, storedByLaterRelease } from '../../test/laterReleaseField.js';
 
 /**
  * The whole supported span, so no message in these tests falls beyond the running variant's range: they are about
@@ -296,6 +298,28 @@ describe('Unshielded indexer sync capability', () => {
       expect(HashMap.has(after.state.availableUtxos, utxoHash(booked))).toBe(true);
       expect(HashMap.size(after.state.pendingUtxos)).toEqual(0);
     });
+
+    it('should write a snapshot field this build does not know back after the sweep, so a later release reading the snapshot still finds it', () => {
+      // An application may save the snapshot after any update, so a field it was restored with, stored by a later
+      // release, has to survive the sweep that releases a lapsed booking, not only a bare read and write.
+      const serialization = makeDefaultV2SerializationCapability();
+      const booked = generateMockUtxoWithMeta({ intentHash: 'h-restored-lapsed', outputNo: 0 });
+      const stored = storedByLaterRelease(
+        serialization.serialize(walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 9n)),
+      );
+      const restored = getOrThrow(serialization.deserialize(stored));
+      const reconnected = CoreWallet.updateProgress(restored, {
+        isConnected: true,
+        indexerLiveness: IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n }),
+      });
+      expect(HashMap.has(reconnected.state.pendingUtxos, utxoHash(booked))).toBe(true);
+
+      const after = getOrThrow(capability.applyUpdate(reconnected, progressUpdate(9), activeRange));
+
+      expect(HashMap.has(after.state.availableUtxos, utxoHash(booked))).toBe(true);
+      expect(HashMap.size(after.state.pendingUtxos)).toEqual(0);
+      expect(laterFieldIn(serialization.serialize(after))).toStrictEqual(LATER_FIELD);
+    });
   });
 });
 
@@ -375,4 +399,90 @@ describe('Unshielded simulator sync capability', () => {
         }),
       ),
     ));
+
+  describe('restored from a snapshot holding a field this build does not know', () => {
+    const serialization = makeDefaultV2SerializationCapability();
+    const restoredCarrying = (wallet: CoreWalletType): CoreWalletType =>
+      getOrThrow(serialization.deserialize(storedByLaterRelease(serialization.serialize(wallet))));
+
+    it('should write the field back after a chain state that releases a lapsed booking, so a later release reading the snapshot still finds it', () =>
+      Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const { state, coin } = yield* simulatorHoldingOneCoin(new Date(SIM_TTL.getTime() + 1));
+            const restored = restoredCarrying(walletHolding([], [{ utxo: coin, ttl: SIM_TTL }]));
+            expect(HashMap.size(restored.state.pendingUtxos)).toEqual(1);
+
+            const after = getOrThrow(
+              makeSimulatorSyncCapability().applyUpdate(restored, { update: state }, activeRange),
+            );
+
+            expect(HashMap.has(after.state.availableUtxos, utxoHash(coin))).toBe(true);
+            expect(laterFieldIn(serialization.serialize(after))).toStrictEqual(LATER_FIELD);
+          }),
+        ),
+      ));
+
+    it('should write the field back after a chain state that delivers a new coin, so a later release reading the snapshot still finds it', () =>
+      Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const { state, coin } = yield* simulatorHoldingOneCoin(new Date(SIM_TTL.getTime() + 1));
+            const restored = restoredCarrying(walletHolding([], []));
+            expect(HashMap.size(restored.state.availableUtxos)).toEqual(0);
+
+            const after = getOrThrow(
+              makeSimulatorSyncCapability().applyUpdate(restored, { update: state }, activeRange),
+            );
+
+            expect(HashMap.has(after.state.availableUtxos, utxoHash(coin))).toBe(true);
+            expect(laterFieldIn(serialization.serialize(after))).toStrictEqual(LATER_FIELD);
+          }),
+        ),
+      ));
+
+    it('should write the field back after a chain state beyond the variant, which only records its version, so a later release reading the snapshot still finds it', () =>
+      Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const { state } = yield* simulatorHoldingOneCoin(new Date(SIM_TTL.getTime() + 1));
+            const chainVersion = ProtocolVersion.ProtocolVersion(7n);
+            // The variant's range ends where this chain state starts, so the state belongs to whatever replaces it.
+            const endingHere = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, chainVersion);
+            const restored = restoredCarrying(walletHolding([], []));
+            expect(restored.protocolVersion).not.toEqual(chainVersion);
+
+            const after = getOrThrow(
+              makeSimulatorSyncCapability().applyUpdate(
+                restored,
+                { update: { ...state, protocolVersion: chainVersion } },
+                endingHere,
+              ),
+            );
+
+            expect(after.protocolVersion).toEqual(chainVersion);
+            expect(laterFieldIn(serialization.serialize(after))).toStrictEqual(LATER_FIELD);
+          }),
+        ),
+      ));
+
+    it('should write the field back after a liveness verdict, so a later release reading the snapshot still finds it', () => {
+      const restored = restoredCarrying(walletHolding([], []));
+      expect(IndexerLiveness.isInSync(restored.progress.indexerLiveness)).toBe(false);
+
+      const after = getOrThrow(
+        makeSimulatorSyncCapability().applyUpdate(
+          restored,
+          {
+            type: 'IndexerLiveness',
+            verdict: IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n }),
+          },
+          activeRange,
+        ),
+      );
+
+      expect(IndexerLiveness.isInSync(after.progress.indexerLiveness)).toBe(true);
+      expect(laterFieldIn(serialization.serialize(after))).toStrictEqual(LATER_FIELD);
+    });
+  });
 });

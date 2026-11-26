@@ -41,12 +41,13 @@ import {
 import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Duration, Effect, Fiber, pipe, Stream, TestClock, TestContext } from 'effect';
+import { Duration, Effect, Fiber, Stream, TestClock, TestContext, identity, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { WalletSyncUpdate, makeEventsSyncCapability, makeEventsSyncService } from '../Sync.js';
+import { LATER_FIELD, laterFieldIn, storedByLaterRelease } from '../../test/laterReleaseField.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const keys = (): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 5));
@@ -175,8 +176,12 @@ const availableNonces = (wallet: CoreWallet): readonly ledger.Nonce[] =>
 /** A caught-up wallet holding one coin, which it has booked for a transaction it then abandoned. */
 const walletWithAbandonedBooking = (ttl?: Date): CoreWallet => pipe(book(walletWithOneCoin(), ttl), ([, w]) => w);
 
-const restarted = (wallet: CoreWallet): CoreWallet =>
-  caughtUp(EitherOps.getOrThrowLeft(serialization.deserialize(null, serialization.serialize(wallet))));
+/**
+ * Saves `wallet` and loads it again, as a restart does. `rewrite` changes the saved snapshot before it is loaded,
+ * standing in for whatever else wrote it.
+ */
+const restarted = (wallet: CoreWallet, rewrite: (snapshot: string) => string = identity): CoreWallet =>
+  caughtUp(EitherOps.getOrThrowLeft(serialization.deserialize(null, rewrite(serialization.serialize(wallet)))));
 
 const isBooked = (wallet: CoreWallet): boolean =>
   wallet.state.pendingSpends.size === 1 && coinsAndBalances.getAvailableCoins(wallet).length === 0;
@@ -437,5 +442,35 @@ describe('A shielded transaction whose fallible segments partly failed', () => {
     expect(pendingSpendNonces(reverted)).toEqual(pendingSpendNonces(wallet));
     expect(availableNonces(reverted)).toEqual([]);
     expect(reverted.bookings).toEqual(wallet.bookings);
+  });
+});
+
+/**
+ * An application may save the snapshot after any update, so a field the snapshot was read with — one a later release
+ * stored, and this build does not declare — has to survive every update that rebuilds the bookings: the sync that first
+ * sees a booking restored without a deadline, and the sweep inside the sync update that later releases it.
+ */
+describe('A restored shielded wallet whose booking lapses', () => {
+  const restoredCarrying = (): CoreWallet => restarted(walletWithAbandonedBooking(), storedByLaterRelease);
+  const writtenBack = (wallet: CoreWallet): unknown => laterFieldIn(serialization.serialize(wallet));
+
+  it('should write back a snapshot field this build does not know after the sync that first sees the booking, so a later release reading the snapshot still finds it', () => {
+    const restored = restoredCarrying();
+    expect(restored.bookings).toBeUndefined();
+
+    const seen = syncAt(restored, bookedAt);
+
+    expect(coinsAndBalances.getReservedCoins(seen)).toEqual([expect.objectContaining({ reservedSince: bookedAt })]);
+    expect(writtenBack(seen)).toStrictEqual(LATER_FIELD);
+  });
+
+  it('should write back a snapshot field this build does not know after the sync that releases the booking, so a later release reading the snapshot still finds it', () => {
+    const seen = syncAt(restoredCarrying(), bookedAt);
+    expect(isBooked(seen)).toBe(true);
+
+    const released = syncAt(seen, after(LIFETIME_MS + 1));
+
+    expect(isReleased(released)).toBe(true);
+    expect(writtenBack(released)).toStrictEqual(LATER_FIELD);
   });
 });

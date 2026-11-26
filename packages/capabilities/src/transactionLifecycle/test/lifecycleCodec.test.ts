@@ -67,6 +67,19 @@ const TTL = new Date('2026-01-01T01:00:00.000Z');
 
 const hexOf = (tx: LedgerTx): string => Buffer.from(JSON.stringify(tx), 'utf-8').toString('hex');
 
+/** The facts the trait for `tx`'s ledger reads off it. */
+const factsOf = (
+  tx: LedgerTx,
+  protocolVersion: ProtocolVersion.ProtocolVersion,
+): Lifecycle.TransactionFacts<LedgerTx> => ({
+  tx,
+  identifiers: tx.ids,
+  intentHashes: tx.ids.map((id) => `${tx.ledger}-intent-${id}`),
+  inputs: { unshielded: tx.ids.map((id) => `${tx.ledger}-coin-${id}#0`) },
+  ttl: TTL,
+  protocolVersion,
+});
+
 /** A record holding its transaction, with the facts the trait for its ledger reads off it. */
 const heldRecord = (
   tx: LedgerTx,
@@ -74,10 +87,7 @@ const heldRecord = (
   state: Lifecycle.LifecycleState,
   submittedAt: Option.Option<DateTime.Utc> = Option.none(),
 ): Lifecycle.LifecycleRecord<LedgerTx> => ({
-  identifiers: tx.ids,
-  intentHashes: tx.ids.map((id) => `${tx.ledger}-intent-${id}`),
-  inputs: { unshielded: tx.ids.map((id) => `${tx.ledger}-coin-${id}#0`) },
-  ttl: TTL,
+  ...factsOf(tx, protocolVersion),
   protocolVersion: Option.some(protocolVersion),
   tx: Option.some(tx),
   createdAt: CREATED_AT,
@@ -411,60 +421,87 @@ describe('Carrying the top-level members this build does not declare', () => {
 });
 
 /**
- * A transaction whose form its bytes do not say: the bytes hold only its identifiers, and the form is kept beside them,
- * as the facade keeps whether it holds a transaction finalized or with its proofs erased.
+ * An application may save the store after any transaction the facade moves along, so a member it was read with has to
+ * survive each of those moves, not only a bare read and write. Every transition rebuilds the state; one that rebuilds
+ * it from its records alone writes the next save without the member a later release stored.
  */
-type FormedTx = Readonly<{ ids: readonly string[]; form: string }>;
+describe('Carrying the top-level members this build does not declare through every transition', () => {
+  type State = Lifecycle.TransactionLifecycle<LedgerTx>;
+  type Transition = Readonly<{ name: string; move: (state: State) => State; expectedStates: readonly string[] }>;
 
-const formedTrait: TransactionTraits.TransactionTrait<FormedTx> = {
-  isTx: (data): data is FormedTx => typeof data === 'object' && data !== null && 'ids' in data && 'form' in data,
-  serialize: (tx) => Buffer.from(JSON.stringify({ ids: tx.ids }), 'utf-8'),
-  formOf: (tx) => tx.form,
-  deserialize: (bytes, form) => ({
-    // Type cast required because: the bytes are only ever ones `serialize` wrote.
-    ...(JSON.parse(Buffer.from(bytes).toString('utf-8')) as { ids: readonly string[] }),
-    form: form ?? 'read off the bytes',
-  }),
-  ids: (tx) => tx.ids,
-  firstId: (tx) => tx.ids[0],
-  areAllTxIdsIncluded: (tx, ids) => tx.ids.every((id) => ids.includes(id)),
-  intentHashes: (tx) => tx.ids.map((id) => `intent-${id}`),
-  inputs: (tx) => ({ unshielded: tx.ids.map((id) => `coin-${id}#0`) }),
-  ttl: () => TTL,
-};
+  const LATER_MEMBER = { kept: ['exactly', 'as', 'written'], nested: { flag: true, nothing: null } };
 
-const formedTraits: TransactionTraits.VersionedTransactionTrait<FormedTx> = Either.getOrThrow(
-  ProtocolVersion.makeRegistryFromActivations([
-    { sinceVersion: ProtocolVersion.MinSupportedVersion, value: formedTrait },
-  ]),
-);
-
-describe('Storing a transaction whose form its bytes do not say', () => {
-  const formed: Lifecycle.TransactionLifecycle<FormedTx> = {
-    records: [
-      {
-        identifiers: ['id-a'],
-        intentHashes: ['intent-id-a'],
-        inputs: { unshielded: ['coin-id-a#0'] },
-        ttl: TTL,
-        protocolVersion: Option.some(V9_VERSION),
-        tx: Option.some({ ids: ['id-a'], form: 'kept beside the bytes' }),
-        createdAt: CREATED_AT,
-        submittedAt: Option.none(),
-        state: LifecycleState.Expired(),
-      },
-    ],
-  };
-
-  it('should store the form the trait names beside the bytes', () => {
-    expect(parseObject(Lifecycle.serialize(formed, formedTraits))).toMatchObject({
-      records: [{ txForm: 'kept beside the bytes' }],
-    });
-  });
-
-  it('should hand the stored form back to the trait, so the record reads back exactly as it was written', () => {
-    expect(Lifecycle.deserialize(Lifecycle.serialize(formed, formedTraits), formedTraits)).toStrictEqual(
-      Either.right(formed),
+  /** The empty store this build writes, as a later release would have saved it: with one top-level member added. */
+  const restoredCarrying = (): State =>
+    Either.getOrThrow(
+      restore(
+        JSON.stringify({
+          ...parseObject(Lifecycle.serialize(Lifecycle.empty<LedgerTx>(), traits)),
+          laterMember: LATER_MEMBER,
+        }),
+      ),
     );
-  });
+
+  const tx: LedgerTx = { ledger: 'v8', ids: ['id-a'] };
+  const facts = factsOf(tx, V8_VERSION);
+  const FINALIZED_AT = at('2026-01-01T00:01:00.000Z');
+  const PAST_TTL = at('2026-01-01T02:00:00.000Z');
+
+  const balanced = (state: State): State => Lifecycle.balanced(state, facts, CREATED_AT);
+  const submitted = (state: State): State => Lifecycle.submitted(balanced(state), facts, SUBMITTED_AT);
+  const confirmed = (state: State): State => Lifecycle.confirmed(submitted(state), tx.ids);
+
+  const transitions: readonly Transition[] = [
+    { name: 'recording a balanced transaction', move: balanced, expectedStates: ['Balanced'] },
+    {
+      name: 'finalizing it',
+      move: (state) => Lifecycle.finalized(balanced(state), facts, FINALIZED_AT),
+      expectedStates: ['Finalized'],
+    },
+    { name: 'submitting it', move: submitted, expectedStates: ['Submitted'] },
+    { name: 'confirming it', move: confirmed, expectedStates: ['Confirmed'] },
+    {
+      name: 'rejecting it',
+      move: (state) =>
+        Lifecycle.rejected(submitted(state), tx.ids, { status: 'FAILURE', segments: [{ id: 0, success: false }] }),
+      expectedStates: ['Rejected'],
+    },
+    {
+      name: 'reverting it',
+      move: (state) => Lifecycle.reverted(submitted(state), tx.ids),
+      expectedStates: ['Reverted'],
+    },
+    {
+      name: 'orphaning it once the chain has left its epoch',
+      move: (state) => Lifecycle.orphanBeyond(submitted(state), traits, V9_VERSION),
+      expectedStates: ['Orphaned'],
+    },
+    {
+      name: 'expiring it unsubmitted once its TTL has passed',
+      move: (state) => Lifecycle.expire(balanced(state), PAST_TTL),
+      expectedStates: ['Expired'],
+    },
+    {
+      name: 'expiring it after submission once its TTL has passed',
+      move: (state) => Lifecycle.expire(submitted(state), PAST_TTL),
+      expectedStates: ['Rejected'],
+    },
+    {
+      // No records left is the drop having happened: the move starts from the `['Confirmed']` of the row above, not
+      // from the empty store it was restored from.
+      name: 'dropping it once it has been confirmed and its TTL has passed',
+      move: (state) => Lifecycle.dropFinished(confirmed(state), PAST_TTL),
+      expectedStates: [],
+    },
+  ];
+
+  it.each(transitions)(
+    'should write back the member it was read with after $name, so a later release reading the store still finds it',
+    ({ move, expectedStates }) => {
+      const moved = move(restoredCarrying());
+
+      expect(moved.records.map((record) => record.state._tag)).toStrictEqual(expectedStates);
+      expect(parseObject(Lifecycle.serialize(moved, traits))['laterMember']).toStrictEqual(LATER_MEMBER);
+    },
+  );
 });
