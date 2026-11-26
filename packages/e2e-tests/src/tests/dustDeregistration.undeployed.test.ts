@@ -197,6 +197,17 @@ describe('Dust Deregistration', () => {
     expect(decayingDustCoins(walletStateAfterDeregistration)).toHaveLength(deregisteredUtxoCount);
     expect(deregisteredNightUtxos(walletStateAfterDeregistration)).toHaveLength(deregisteredUtxoCount);
 
+    // Spending a Night input sets the dtime of the generation whose initial nonce is that input's (outputNo, intentHash),
+    // so the decaying Dust must be backed by exactly the Night UTxOs this transaction deregistered, not by any others.
+    const deregisteredInitialNonces = deregistrationInputs.map((coin) =>
+      ledger.dustInitialNonce(BigInt(coin.utxo.outputNo), coin.utxo.intentHash),
+    );
+    expect(
+      decayingDustCoins(walletStateAfterDeregistration)
+        .map((coin) => coin.token.backingNight)
+        .toSorted(),
+    ).toEqual(deregisteredInitialNonces.toSorted());
+
     // The deregistered Night UTxOs are the outputs of this transaction and carry exactly the value of its inputs.
     const deregistrationIntentHashes = outputIntentHashesOf(finalizedDustDeregistrationTx);
     const deregisteredUtxos = deregisteredNightUtxos(walletStateAfterDeregistration);
