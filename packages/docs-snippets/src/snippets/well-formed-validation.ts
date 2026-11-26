@@ -15,7 +15,9 @@ import * as v9 from '@midnightntwrk/wallet-sdk/ledger/v9';
 import { type FacadeState, generateRandomSeed, Token, WalletTransaction } from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
-import { configuration, initWalletWithSeed } from '../utils.ts';
+import { makeConfiguration, initWalletWithSeed } from '../utils.ts';
+
+const configuration = makeConfiguration();
 
 const sender = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),

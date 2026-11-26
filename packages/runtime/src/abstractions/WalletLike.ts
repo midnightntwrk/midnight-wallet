@@ -90,6 +90,10 @@ export interface WalletLike<TVariants extends AnyVersionedVariantArray> {
   /** A stream of state changes over any amount of time that have been processed by the wallet. */
   readonly rawState: Observable<RuntimeState<TVariants>>;
 
-  /** Stops the wallet */
+  /**
+   * Stops the wallet: its sync, then the running variant, then any background work, which is given up to
+   * `Variant.BACKGROUND_WORK_GRACE` to finish before it is interrupted. Every call made while the wallet is stopping
+   * resolves only once it has stopped.
+   */
   stop(): Promise<void>;
 }

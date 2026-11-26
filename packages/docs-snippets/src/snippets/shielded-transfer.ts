@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { initWalletWithSeed } from '../utils.ts';
+import { initWalletWithSeed, waitForShieldedHistory } from '../utils.ts';
 import * as rx from 'rxjs';
 import { Buffer } from 'buffer';
 import { generateRandomSeed, Token } from '@midnightntwrk/wallet-sdk';
@@ -22,7 +22,7 @@ const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
 await sender.wallet.waitForSyncedState();
 
-await sender.wallet
+const transactionId = await sender.wallet
   .transferTransaction(
     [
       {
@@ -51,6 +51,12 @@ const receiverState = await rx.firstValueFrom(
 );
 
 console.log('Shielded transfer completed; shielded balance:', receiverState.shielded.balances[Token.night] ?? 0n);
+
+// Each wallet records the transfer's shielded coins in its history in the background; stopping first could cut that off.
+await Promise.all([
+  waitForShieldedHistory(sender.wallet, transactionId),
+  waitForShieldedHistory(receiver.wallet, transactionId),
+]);
 
 await receiver.wallet.stop();
 await sender.wallet.stop();

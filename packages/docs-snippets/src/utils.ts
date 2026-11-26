@@ -20,11 +20,15 @@ import {
   createKeystore,
   PublicKey as UnshieldedPublicKey,
   UnshieldedWallet,
+  type ResolvedConfiguration,
   type UnshieldedKeystore,
+  type TransactionIdentifier,
+  type WalletEntry,
   WalletSeeds,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
+import * as rx from 'rxjs';
 
 const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
 const NODE_PORT = Number.parseInt(process.env['NODE_PORT'] ?? '9944', 10);
@@ -37,26 +41,29 @@ const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
 // Resolved up front rather than left to `WalletFacade.init`, which does the same for the factories it calls: the
 // snippets read `forks` back to choose which ledger version authors a transaction, and `init` takes the resolved
-// configuration as it is.
-export const configuration = WalletFacade.resolveConfiguration({
-  networkId: 'undeployed',
-  costParameters: {
-    feeBlocksMargin: 5,
-  },
-  relayURL: new URL(`ws://localhost:${NODE_PORT}`),
-  // One proof server per ledger version, keyed the way `forks` is: `v8` answers below `forks.v9`, `v9` from it. A
-  // transaction is proved by the backend for the ledger version that authored its bytes, so the wallet proves on either
-  // side of the fork and across it. `hard-fork-support.ts` explains the shape in full.
-  provers: {
-    v8: { kind: 'server', url: new URL(`http://localhost:${V8_PROOF_SERVER_PORT}`) },
-    v9: { kind: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
-  },
-  indexerClientConnection: {
-    indexerHttpUrl: INDEXER_HTTP_URL,
-    indexerWsUrl: INDEXER_WS_URL,
-  },
-  txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-});
+// configuration as it is. A function rather than one shared value, so each wallet gets its own history: a store shared
+// between two wallets merges what each recorded about a transaction into one entry, so neither could tell whether its
+// own record had landed.
+export const makeConfiguration = (): ResolvedConfiguration =>
+  WalletFacade.resolveConfiguration({
+    networkId: 'undeployed',
+    costParameters: {
+      feeBlocksMargin: 5,
+    },
+    relayURL: new URL(`ws://localhost:${NODE_PORT}`),
+    // One proof server per ledger version, keyed the way `forks` is: `v8` answers below `forks.v9`, `v9` from it. A
+    // transaction is proved by the backend for the ledger version that authored its bytes, so the wallet proves on either
+    // side of the fork and across it. `hard-fork-support.ts` explains the shape in full.
+    provers: {
+      v8: { kind: 'server', url: new URL(`http://localhost:${V8_PROOF_SERVER_PORT}`) },
+      v9: { kind: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
+    },
+    indexerClientConnection: {
+      indexerHttpUrl: INDEXER_HTTP_URL,
+      indexerWsUrl: INDEXER_WS_URL,
+    },
+    txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+  });
 
 export const initWalletWithSeed = async (
   seed: Buffer,
@@ -69,6 +76,7 @@ export const initWalletWithSeed = async (
   // what lets one wallet follow the chain through a fork.
   const seeds = WalletSeeds.fromMasterSeed(seed);
 
+  const configuration = makeConfiguration();
   const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, configuration.networkId);
 
   const wallet: WalletFacade = await WalletFacade.init({
@@ -83,6 +91,42 @@ export const initWalletWithSeed = async (
 
   return { wallet, seeds, unshieldedKeystore };
 };
+
+/**
+ * Waits until `wallet`'s transaction history holds its shielded record of the transaction `identifier` names.
+ *
+ * The wallet records a transaction's shielded coins in the background, after it has synced the transaction. `stop()`
+ * gives a record still being written up to a second to land, then cuts it off. A program that stops straight after a
+ * shielded transaction, as these snippets do, therefore waits for the record first, or a slow write never reaches its
+ * history.
+ *
+ * @param wallet The wallet whose history to read.
+ * @param identifier An identifier of the transaction, such as the one `submitTransaction` returns.
+ * @param timeoutMs How long to wait before failing.
+ * @returns The history entry, holding the wallet's shielded record of the transaction.
+ */
+export const waitForShieldedHistory = (
+  wallet: WalletFacade,
+  identifier: TransactionIdentifier,
+  timeoutMs = 60_000,
+): Promise<WalletEntry> =>
+  rx.firstValueFrom(
+    rx.timer(0, 250).pipe(
+      // Each read finishes before the next starts: a slow store must not have every read cancelled by the next tick.
+      rx.exhaustMap(() => wallet.getAllFromTxHistory()),
+      rx.map((entries) =>
+        entries.find((entry) => entry.identifiers.includes(identifier) && entry.shielded !== undefined),
+      ),
+      rx.filter((entry): entry is WalletEntry => entry !== undefined),
+      rx.timeout({
+        first: timeoutMs,
+        with: () =>
+          rx.throwError(
+            () => new Error(`No shielded history record of transaction ${identifier} after ${timeoutMs} ms`),
+          ),
+      }),
+    ),
+  );
 
 export const aFakeProvingProvider: ledger.ProvingProvider = {
   check(_serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> {
