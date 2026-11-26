@@ -14,7 +14,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import * as otherLedger from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { V8 as OtherSimulation, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { Effect, Either, Option, Schema, Stream, identity } from 'effect';
+import { Effect, Either, Option, Stream, identity } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultV2SerializationCapability } from '../Serialization.js';
@@ -26,6 +26,7 @@ import {
   makeEventsSyncCapability,
   makeSimulatorSyncCapability,
 } from '../Sync.js';
+import { LATER_FIELD, laterFieldIn, storedByLaterRelease } from '../../test/laterReleaseField.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -641,21 +642,19 @@ describe('an empty-tree signal racing the event timeline', () => {
 });
 
 /**
- * A snapshot is read once and then written after every sync update, so a field it was read with — one a later release
- * stored, and this build does not declare — has to survive the update, not only a bare read and write. Each update
- * rebuilds the wallet; one that rebuilds it from the fields it knows writes the next save without that field.
+ * An application may save the snapshot after any update, so a field it was read with — one a later release stored, and
+ * this build does not declare — has to survive every update, not only a bare read and write. Each update rebuilds the
+ * wallet; one that rebuilds it from the fields it knows writes the next save without that field.
  */
 describe('a restored wallet keeps a snapshot field this build does not know through a sync update', () => {
   const capability = makeEventsSyncCapability();
   const serialization = makeDefaultV2SerializationCapability();
-  const readJson = Schema.decodeUnknownSync(
-    Schema.parseJson(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
-  );
-  const LATER_FIELD = { kept: ['exactly', 'as', 'written'], nested: { flag: true, nothing: null } };
+
+  const restoredCarrying = (): CoreWallet =>
+    Either.getOrThrow(serialization.deserialize(null, storedByLaterRelease(serialization.serialize(freshWallet()))));
 
   it('should write the field back after an update that replays events, so a later release reading the snapshot still finds it', () => {
-    const stored = { ...readJson(serialization.serialize(freshWallet())), fieldFromALaterRelease: LATER_FIELD };
-    const restored = Either.getOrThrow(serialization.deserialize(null, JSON.stringify(stored)));
+    const restored = restoredCarrying();
 
     const [synced] = capability.applyUpdate(
       restored,
@@ -664,6 +663,48 @@ describe('a restored wallet keeps a snapshot field this build does not know thro
     );
 
     expect(totalValue(synced)).toBe(MINT_TOTAL);
-    expect(readJson(serialization.serialize(synced))['fieldFromALaterRelease']).toStrictEqual(LATER_FIELD);
+    expect(laterFieldIn(serialization.serialize(synced))).toStrictEqual(LATER_FIELD);
+  });
+
+  it.each([
+    { name: 'a version signal', signal: VersionSignalSyncUpdate.create(5, 0) },
+    { name: 'a version signal saying the timeline is empty', signal: VersionSignalSyncUpdate.create(5, null) },
+  ])(
+    'should write the field back after $name, so a later release reading the snapshot still finds it',
+    ({ signal }) => {
+      const restored = restoredCarrying();
+      expect(restored.protocolVersion).not.toBe(ProtocolVersion.ProtocolVersion(5n));
+
+      const [synced] = capability.applyUpdate(restored, signal, activeRange);
+
+      expect(synced.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(5n));
+      expect(laterFieldIn(serialization.serialize(synced))).toStrictEqual(LATER_FIELD);
+    },
+  );
+
+  it('should write the field back after a simulator chain state it replays, so a later release reading the snapshot still finds it', async () => {
+    const simulatorState = await simulatorStateAt(ProtocolVersion.ProtocolVersion(3n));
+
+    const [synced] = makeSimulatorSyncCapability().applyUpdate(
+      restoredCarrying(),
+      SimulatorSyncUpdate.create(simulatorState, secretKeys()),
+      activeRange,
+    );
+
+    expect(totalValue(synced)).toBe(MINT_TOTAL);
+    expect(laterFieldIn(serialization.serialize(synced))).toStrictEqual(LATER_FIELD);
+  });
+
+  it('should write the field back after a simulator chain state beyond the variant, which only records its version, so a later release reading the snapshot still finds it', async () => {
+    const simulatorState = await simulatorStateAt(ProtocolVersion.ProtocolVersion(9n));
+
+    const [synced] = makeSimulatorSyncCapability().applyUpdate(
+      restoredCarrying(),
+      SimulatorSyncUpdate.create(simulatorState, secretKeys()),
+      activeRange,
+    );
+
+    expect(synced.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(9n));
+    expect(laterFieldIn(serialization.serialize(synced))).toStrictEqual(LATER_FIELD);
   });
 });
