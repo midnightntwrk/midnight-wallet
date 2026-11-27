@@ -12,7 +12,6 @@ on:
         required: true
         default: 'preview'
         options:
-          - devnet
           - preview
           - preprod
           - stagenet
@@ -50,9 +49,8 @@ on:
     inputs:
       network:
         type: string
-        description: Midnight network to use (devnet/undeployed)
+        description: Midnight network to use (preview/preprod/stagenet/undeployed)
         required: true
-        default: 'devnet'
       seed:
         type: string
         description: Seed of a funded wallet
@@ -101,8 +99,25 @@ on:
 permissions: {}
 
 jobs:
+  validate-network:
+    name: Validate network
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep private network testing in GitOps
+        env:
+          NETWORK: ${{ inputs.network }}
+        run: |
+          case "$NETWORK" in
+            preview|preprod|stagenet|undeployed) ;;
+            *)
+              echo "::error::Unsupported network. Devnet and qanet tests are owned by shieldedtech/shielded-gitops."
+              exit 1
+              ;;
+          esac
+
   build:
     name: E2E tests
+    needs: validate-network
     runs-on: ubuntu-latest-8-core-x64
     timeout-minutes: 240
     # One run per network at a time: runs on a network share its funded wallets and its sync cache, whichever branch or
