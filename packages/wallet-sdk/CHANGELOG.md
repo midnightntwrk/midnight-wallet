@@ -1,5 +1,35 @@
 # @midnightntwrk/wallet-sdk
 
+## 2.1.0
+
+### Minor Changes
+
+- c419aa8: feat(node-client): add a fake Polkadot node to the testing entry
+
+  `FakePolkadotNode` in `@midnightntwrk/wallet-sdk-node-client/testing`, and re-exported from
+  `@midnightntwrk/wallet-sdk/node-client/testing`, stands in for `@polkadot/api` in unit tests, so a
+  `PolkadotNodeClient`, or a submission service built on one, submits to a node whose answers a test sets: the statuses
+  it reports (`submissionResult`), a refusal of the submission call, or calls that fail on a connected socket. Pass
+  `FakePolkadotNode.shared.module` to `vi.mock('@polkadot/api', …)` and drive the same node from the test. Importing
+  `/testing` also loads `TestTransactions`, so its optional peer dependencies (`@effect/platform`,
+  `@midnightntwrk/ledger-v9`, `@midnightntwrk/wallet-sdk-prover-client`, `tar-stream`, `testcontainers`) must be
+  installed.
+
+### Patch Changes
+
+- Updated dependencies [9cb2369]
+- Updated dependencies [c419aa8]
+- Updated dependencies [413431a]
+- Updated dependencies [c372f94]
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.2
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.1.1
+  - @midnightntwrk/wallet-sdk-shielded@4.0.2
+  - @midnightntwrk/wallet-sdk-node-client@2.1.0
+  - @midnightntwrk/wallet-sdk-runtime@2.1.0
+  - @midnightntwrk/wallet-sdk-facade@5.0.2
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.2
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.2
+
 ## 2.0.1
 
 ### Patch Changes

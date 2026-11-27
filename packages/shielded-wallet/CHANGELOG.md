@@ -1,5 +1,64 @@
 # @midnightntwrk/wallet-sdk-shielded
 
+## 4.0.2
+
+### Patch Changes
+
+- 9cb2369: fix(dust-wallet,shielded-wallet): notice an event subscription that stays open but stops delivering
+
+  A dust or zswap event subscription that an indexer stopped writing to, with its socket still open, left a wallet that
+  was behind waiting for as long as the connection lasted. Both wallets, on both variants, now give up on it: when a
+  wallet is behind the highest event id it knows of and nothing arrives for 30 seconds, the sync fails and the existing
+  retry reconnects and resubscribes from the last event applied. A wallet level with the timeline, or on a chain with no
+  such events, is left alone. `DustWallet.stepSync` has no retry of its own, so a step waiting on such a subscription
+  now rejects after those 30 seconds. `indexerClientConnection.stallTimeout`, in milliseconds, changes the 30 seconds
+  for an indexer that needs longer.
+
+  In the indexer client, `BackpressureOptions` takes an optional `stall` (`tip`, `knownTip`, `timeout`); a subscription
+  given up on fails with a `ServerError`.
+
+- 413431a: fix(shielded-wallet): write each transaction to tx history once, whole
+
+  The built-in events sync (`makeEventsSyncService`) now batches indexer events by whole transaction, in both the v1 and
+  v2 variants. A batch used to end wherever `batchUpdates.size` or `batchUpdates.timeout` cut it, often between a
+  transaction's spent and received coins, and each half was written to tx history on its own. A reader could then see a
+  sender's entry with no spent coins for a moment, and a wallet stopped between the halves could leave it that way until
+  it synced again.
+
+  A transaction is held until it is known whole — once the next transaction's first event has arrived, or once it
+  reaches the last event the indexer holds — then applied and written in one go; a wallet stopped part-way, or a
+  subscription that ends part-way, fetches it again from the start. A batch is emitted as soon as it holds
+  `batchUpdates.size` events or more, and may exceed `size` by the rest of the transaction that filled it, since a
+  transaction is never split. A batch ends only between transactions, so a transaction still arriving is held past
+  `batchUpdates.timeout`.
+
+  History writes for a batch the variant has applied now run beyond the variant, so a hand-over to the next variant no
+  longer cuts them off, and wallet calls go to the next variant at once while they finish. `stop()` gives them a short
+  grace to land, then interrupts the rest; a write it interrupts is logged, with its transaction hash.
+
+- c372f94: fix: let a shielded tx-history write about to land finish when the wallet stops
+
+  Stopping a shielded wallet straight after a transaction interrupted the write of that transaction's shielded
+  tx-history section, so the section was never recorded, and nothing wrote it again after a restart.
+
+  - `@midnightntwrk/wallet-sdk-runtime`: `Variant.VariantContext` gains an optional `runBeyondVariant`, which runs work
+    beyond the variant that starts it, across a hand-over, until the wallet stops. Stopping the wallet first stops the
+    running variant, then gives that work up to `Variant.BACKGROUND_WORK_GRACE` (one second), once for the whole wallet,
+    and only then interrupts the rest, logging how many it interrupts. A defect in such work is logged. Every `stop()`
+    called while the wallet is stopping now resolves only once it has stopped; a second call used to resolve at once.
+    `runBeyondVariant` replaces `VariantContext.runtimeScope`, which only pre-release builds carried.
+  - `@midnightntwrk/wallet-sdk-shielded`: tx-history writes run through `runBeyondVariant`, so `stop()` lets a write
+    about to land finish. `stop()` can take up to a second longer while a write is still running; a write still running
+    after that is interrupted and logged with its transaction hash; it may not be recorded.
+  - `@midnightntwrk/wallet-sdk-facade`: `WalletFacade.stop()` stops the shielded wallet, so it too can take up to a
+    second longer while a shielded tx-history write is still running.
+
+- Updated dependencies [9cb2369]
+- Updated dependencies [c372f94]
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.2
+  - @midnightntwrk/wallet-sdk-runtime@2.1.0
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.2
+
 ## 4.0.1
 
 ### Patch Changes
