@@ -63,7 +63,15 @@ await sender.wallet
   .then((tx) => sender.wallet.finalizeRecipe(tx))
   .then((finalizedTransaction) => sender.wallet.submitTransaction(finalizedTransaction));
 
-const finalSenderState = await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
+// `isSynced` is already true when the submission returns, before the sender's wallet has applied the spend, and the
+// coins balancing booked are not in the available balance either way. Wait until no coin is still booked: the spend
+// has then either been applied, leaving the Night gone, or released, returning it to the balance.
+const finalSenderState = await rx.firstValueFrom(
+  sender.wallet.state().pipe(
+    rx.filter((s) => s.isSynced),
+    rx.filter((s) => s.unshielded.pendingCoins.length === 0),
+  ),
+);
 const receiverState = await rx.firstValueFrom(
   receiver.wallet.state().pipe(
     rx.filter((s) => s.isSynced),
