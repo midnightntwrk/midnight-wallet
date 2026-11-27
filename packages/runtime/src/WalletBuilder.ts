@@ -192,6 +192,9 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
       readonly runtime: WalletRuntime;
       readonly runtimeScope: Scope.CloseableScope;
       readonly rawState: rx.Observable<Runtime.RuntimeState<Variants>>;
+      // Closing the runtime scope, run once and shared: a scope already closing returns at once from a second close, so
+      // every caller of stop() waits on this one instead.
+      readonly #stopping: Effect.Effect<void>;
 
       get syncComplete(): boolean {
         const { sourceGap, applyGap } = Effect.runSync(this.runtime.progress);
@@ -201,13 +204,14 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
       constructor(runtime: Runtime.Runtime<Variants>, runtimeScope: Scope.CloseableScope) {
         this.runtime = runtime;
         this.runtimeScope = runtimeScope;
+        this.#stopping = Effect.cached(Scope.close(runtimeScope, Exit.void)).pipe(Effect.runSync);
         this.rawState = ObservableOps.fromStream(runtime.stateChanges).pipe(
           rx.shareReplay({ refCount: true, bufferSize: 1 }),
         );
       }
 
       stop(): Promise<void> {
-        return Scope.close(this.runtimeScope, Exit.void).pipe(Effect.runPromise);
+        return Effect.runPromise(this.#stopping);
       }
     };
   }

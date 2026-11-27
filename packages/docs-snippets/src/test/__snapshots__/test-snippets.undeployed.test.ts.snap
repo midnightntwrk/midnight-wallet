@@ -849,7 +849,7 @@ Generating dust after designation: true
 ]
 `;
 
-exports[`Snippet outputs > with network > should output the correct result for 'shielded-transfer' 1`] = `
+exports[`Snippet outputs > with network > should output the correct result for 'shielded-transfer @smoke' 1`] = `
 [
   "Shielded transfer completed; shielded balance: 1000000n
 ",

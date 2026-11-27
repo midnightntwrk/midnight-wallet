@@ -92,18 +92,26 @@ export type IndexerClientConnection = {
   bufferSize?: number;
   /** In-flight count at which the disposed WS subscription is reopened. Default: 100. */
   resumeThreshold?: number;
+  /**
+   * How long, in milliseconds, an event subscription that is behind may deliver nothing before it is given up on and
+   * reopened. Default: 30000.
+   */
+  stallTimeout?: number;
 };
 
 export type BatchUpdatesConfig = {
   /**
-   * Maximum number of events to collect into a single batch before emitting.
+   * Number of events at which a batch is emitted. A batch is emitted as soon as it holds `size` events or more, and
+   * holds only whole transactions, so it can exceed `size` by the rest of the transaction that filled it.
    *
    * @default 10
    */
   readonly size?: number;
   /**
-   * Maximum time in milliseconds to wait for a full batch before emitting a partial one. Controls the `groupedWithin`
-   * timeout — lower values mean more responsive (but smaller) batches when events arrive slowly.
+   * Time in milliseconds to wait for a full batch before emitting a partial one — lower values mean more responsive
+   * (but smaller) batches when events arrive slowly. A batch ends only between transactions, so a transaction is held
+   * past the timeout until it is known whole: once the next transaction's first event has arrived, or once it reaches
+   * the last event the indexer holds.
    *
    * @default 1
    */

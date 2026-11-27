@@ -22,7 +22,7 @@ jobs:
       # can ever fire. Resolved by the "Resolve publish mode" step from two
       # internal signals (hasChangesets from changesets/action, hasReleases from
       # the detect step below):
-      #   'stable' → release PR merged: no changesets left → publish canonical
+      #   'stable' → release PR merged: no changesets left → publish stable
       #   'canary' → pending package-bumping changeset(s) → publish snapshot
       #   'none'   → docs/CI-only (empty changeset): publish nothing
       mode: ${{ steps.mode.outputs.mode }}
@@ -117,7 +117,7 @@ jobs:
           echo "Resolved publish mode: ${MODE}"
           echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
 
-  # Publishes stable packages (primary @midnightntwrk + @midnight-ntwrk alias).
+  # Publishes stable packages to @midnightntwrk.
   # Runs only on the push that merged the release PR (no changesets left) and
   # is gated by the npm-publish-stable environment. Independent of canary, so
   # snapshot publishing is never blocked by this gate.
@@ -175,7 +175,7 @@ jobs:
       - name: Build packages
         run: yarn dist:publish
 
-      # Publish the canonical @midnightntwrk scope via changesets. The action
+      # Publish to @midnightntwrk via changesets. The action
       # runs `changeset publish` (OIDC Trusted Publishing — no token; provenance
       # via NPM_CONFIG_PROVENANCE), then pushes the release tags and creates one
       # GitHub Release per package from its CHANGELOG. This restores the Releases
@@ -188,12 +188,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
           NPM_CONFIG_PROVENANCE: 'true'
-
-      # Mirror the transitional @midnight-ntwrk alias (dashed scope). The
-      # canonical scope is already live from the step above; this only stages
-      # and publishes the alias, so it can never lead the canonical scope.
-      - name: Publish @midnight-ntwrk alias
-        run: node scripts/publish-alias.mjs
 
   canary:
     name: Canary (snapshot publish)
@@ -297,14 +291,11 @@ jobs:
             CANARY_TAG="canary-$REF_NAME"
           fi
 
-          # Canonical @midnightntwrk scope: `changeset publish` (OIDC +
+          # Publish to @midnightntwrk: `changeset publish` (OIDC +
           # provenance via NPM_CONFIG_PROVENANCE), the same mechanism the stable
           # job uses. --no-git-tag so canary snapshots leave no git tags (and
           # no GitHub Releases — that is the action's job, not the CLI's).
           yarn changeset publish --tag "$CANARY_TAG" --no-git-tag
-
-          # Dashed @midnight-ntwrk alias: mirrored afterwards from the workspace.
-          node scripts/publish-alias.mjs --tag "$CANARY_TAG"
 
       - name: Cleanup (always)
         if: always()

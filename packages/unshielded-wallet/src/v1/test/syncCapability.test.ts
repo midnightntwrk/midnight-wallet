@@ -21,9 +21,12 @@ import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either, HashMap } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
+import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { makeDefaultSyncCapability } from '../Sync.js';
+import { VersionSignalSyncUpdate } from '../SyncSchema.js';
 import { UnshieldedState } from '../UnshieldedState.js';
 import { fixtureOwner, fixtureProgress, fixtureTransaction, fixtureUtxo, recordingHistory } from './syncFixtures.js';
+import { LATER_FIELD, laterFieldIn, storedByLaterRelease } from '../../test/laterReleaseField.js';
 
 /** The running variant owns versions 0..6; 7 and above belong to whatever replaces it. */
 const activeRange = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.ProtocolVersion(7n));
@@ -391,4 +394,95 @@ describe('unshielded sync capability completeness on a quiet address', () => {
     expect(result.progress.appliedId).toBe(1n);
     expect(result.progress.highestTransactionId).toBe(1n);
   });
+});
+
+/**
+ * An application may save the snapshot after any update, so a field it was read with — one a later release stored, and
+ * this build does not declare — has to survive every update, not only a bare read and write. Each update rebuilds the
+ * wallet; one that rebuilds it from the fields it knows writes the next save without that field.
+ */
+describe('a restored wallet keeps a snapshot field this build does not know through a sync update', () => {
+  const serialization = makeDefaultV1SerializationCapability();
+  /** An expiry no real clock has reached, so the sweep on a caught-up update never releases a booking dated here. */
+  const FAR_FUTURE = new Date('2999-01-01T00:00:00.000Z');
+
+  /** Saves `wallet` with the field added, as a later release would have stored it, and loads it again. */
+  const restoredCarrying = (wallet: CoreWallet): CoreWallet =>
+    EitherOps.getOrThrowLeft(serialization.deserialize(storedByLaterRelease(serialization.serialize(wallet))));
+  const writtenBack = (wallet: CoreWallet): unknown => laterFieldIn(serialization.serialize(wallet));
+
+  it('should write the field back after an update that applies a transaction, so a later release reading the snapshot still finds it', () => {
+    const { capability } = setup();
+
+    const synced = capability
+      .applyUpdate(
+        restoredCarrying(emptyWallet()),
+        fixtureTransaction({ id: 1, protocolVersion: 3, createdUtxos: [fixtureUtxo(owner, 100n, 0)] }),
+        activeRange,
+      )
+      .pipe(EitherOps.getOrThrowLeft);
+
+    expect(HashMap.size(synced.state.availableUtxos)).toBe(1);
+    expect(writtenBack(synced)).toStrictEqual(LATER_FIELD);
+  });
+
+  it('should write the field back after an update that reports a failed transaction, so a later release reading the snapshot still finds it', () => {
+    const { capability } = setup();
+    const held = fixtureUtxo(owner, 100n, 0);
+    const booked = CoreWallet.applyUpdate(emptyWallet(), {
+      createdUtxos: [held],
+      spentUtxos: [],
+      status: 'SUCCESS',
+    }).pipe(
+      Either.flatMap((wallet) =>
+        Either.map(UnshieldedState.spend(wallet.state, held, FAR_FUTURE), (state) =>
+          CoreWallet.withState(wallet, state),
+        ),
+      ),
+      EitherOps.getOrThrowLeft,
+    );
+    const restored = restoredCarrying(booked);
+    expect(HashMap.size(restored.state.pendingUtxos)).toBe(1);
+    expect(HashMap.size(restored.state.availableUtxos)).toBe(0);
+
+    const synced = capability
+      .applyUpdate(
+        restored,
+        fixtureTransaction({ id: 1, protocolVersion: 3, spentUtxos: [held], status: 'FAILURE' }),
+        activeRange,
+      )
+      .pipe(EitherOps.getOrThrowLeft);
+
+    expect(HashMap.size(synced.state.pendingUtxos)).toBe(0);
+    expect(HashMap.size(synced.state.availableUtxos)).toBe(1);
+    expect(writtenBack(synced)).toStrictEqual(LATER_FIELD);
+  });
+
+  it.each([
+    {
+      name: 'a liveness verdict',
+      update: {
+        type: 'IndexerLiveness' as const,
+        verdict: IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n }),
+      },
+      applied: (wallet: CoreWallet): boolean => IndexerLiveness.isInSync(wallet.progress.indexerLiveness),
+    },
+    {
+      name: 'a version signal',
+      update: VersionSignalSyncUpdate.create(5, 0),
+      applied: (wallet: CoreWallet): boolean => wallet.protocolVersion === ProtocolVersion.ProtocolVersion(5n),
+    },
+  ])(
+    'should write the field back after $name, so a later release reading the snapshot still finds it',
+    ({ update, applied }) => {
+      const { capability } = setup();
+      const restored = restoredCarrying(emptyWallet(3n));
+      expect(applied(restored)).toBe(false);
+
+      const synced = capability.applyUpdate(restored, update, activeRange).pipe(EitherOps.getOrThrowLeft);
+
+      expect(applied(synced)).toBe(true);
+      expect(writtenBack(synced)).toStrictEqual(LATER_FIELD);
+    },
+  );
 });

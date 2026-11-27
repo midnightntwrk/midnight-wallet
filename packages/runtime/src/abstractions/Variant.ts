@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/no-explicit-any -- unknown does not work well as a default, because it causes assignability issues */
-import { Either, Option, type Scope, type SubscriptionRef } from 'effect';
+import { Duration, Either, Option, type Scope, type SubscriptionRef } from 'effect';
 import type { Effect } from 'effect/Effect';
 import type { Stream } from 'effect/Stream';
 import { type HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
@@ -37,7 +37,44 @@ export interface VariantContext<TState> {
    *   cannot drift apart.
    */
   activationRange: ProtocolVersion.ProtocolVersion.Range;
+  /**
+   * Runs `work` in the background, beyond the variant's own lifetime: across a hand-over, until the wallet stops.
+   *
+   * @remarks
+   *   For work that must finish even though the variant that started it closes, such as recording the changes of a sync
+   *   update the variant has already applied, which nothing will apply again. Stopping the wallet first stops the
+   *   running variant, so nothing starts more of it, then gives the work already running {@link BACKGROUND_WORK_GRACE}
+   *   to finish, and only then interrupts what is left, logging how many it interrupts. The grace is the wallet's, not
+   *   each variant's: work carried over from every variant that has run shares it.
+   *
+   *   Work handed over after the wallet has stopped is not run at all: it neither starts nor runs its own interruption
+   *   handler, and nothing is logged. A defect in the work is logged; anything else the work wants reported when it is
+   *   interrupted, such as which record it was writing, it logs itself. Absent only in a context built outside the
+   *   runtime, where the variant's own scope is all there is.
+   * @example
+   *   const record = history.put(changes).pipe(Effect.onInterrupt(() => Effect.logWarning('may not be recorded')));
+   *   const start = context.runBeyondVariant ?? ((work) => Effect.forkIn(work, scope).pipe(Effect.asVoid));
+   *   const started = start(record); // An effect that completes once the write has started.
+   *
+   * @param work The work to run. It cannot fail; an interruption is its only other outcome.
+   * @returns An effect that starts `work` and completes once it is started, not once it finishes.
+   */
+  runBeyondVariant?: (work: Effect<void>) => Effect<void>;
 }
+
+/**
+ * How long stopping the wallet waits for work run by {@link VariantContext.runBeyondVariant} before interrupting it.
+ *
+ * @remarks
+ *   Taken once for the whole wallet, counted from when the running variant has stopped. It is meant for work about to
+ *   land, such as a write waiting on one indexer round trip; it cannot save work that is itself still waiting out a
+ *   longer retry, which `stop()` interrupts after the grace all the same. It bounds only work that can be interrupted:
+ *   work inside an uninterruptible region holds `stop()` until that region ends.
+ * @example
+ *   // How much longer a stop() can take while interruptible background work is still running: 1000 ms.
+ *   const extraStopTime = Duration.toMillis(Variant.BACKGROUND_WORK_GRACE);
+ */
+export const BACKGROUND_WORK_GRACE: Duration.Duration = Duration.seconds(1);
 
 /**
  * Encapsulates a variant of a wallet implementation.

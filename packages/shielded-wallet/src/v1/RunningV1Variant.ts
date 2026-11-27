@@ -141,9 +141,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   readonly #scope: Scope.Scope;
   readonly #context: Variant.VariantContext<CoreWallet>;
   readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>;
-  // Variant-wide cap on concurrent tx-history lookups. Each sync batch forks its own fan-out fiber, so a per-batch
+  // This variant's cap on concurrent tx-history writes. Each sync batch forks its own fan-out fiber, so a per-batch
   // `concurrency` limit alone would let in-flight indexer queries grow with the number of live batches while their
-  // lookups retry through the indexer-lag window. Every lookup acquires a permit here, making the cap global.
+  // lookups retry through the indexer-lag window. Every write acquires a permit here, making the cap span every batch
+  // of this variant. Each variant has its own, so while the writes a hand-over carries are still finishing, the wallet
+  // briefly runs up to twice as many.
   readonly #txHistoryPermits = Effect.makeSemaphore(8).pipe(Effect.runSync);
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
@@ -195,64 +197,85 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   }
 
   startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
+    // Read once, so the fibers this stream forks hold what they use rather than the variant itself.
+    const { stateRef, activationRange } = this.#context;
+    const { syncService, syncCapability, transactionHistoryService } = this.#v1Context;
+    const txHistoryPermits = this.#txHistoryPermits;
+    // Starts a tx-history write: beyond this variant, through the runtime, so a write a hand-over carries is not cut
+    // short. A context built outside the runtime does not offer that, and falls back to the variant's own scope.
+    const scope = this.#scope;
+    const startHistoryWrite =
+      this.#context.runBeyondVariant ??
+      ((write: Effect.Effect<void>) => Effect.forkIn(write, scope).pipe(Effect.asVoid));
+
     return pipe(
-      SubscriptionRef.get(this.#context.stateRef),
+      SubscriptionRef.get(stateRef),
       Stream.fromEffect,
-      Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
+      Stream.flatMap((state) => syncService.updates(state, startAux)),
       Stream.mapEffect((update) =>
-        SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
-          Effect.try({
-            try: () => {
-              const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(
-                state,
-                update,
-                this.#context.activationRange,
-              );
-              return [changesResult, newState] as const;
-            },
-            catch: (err) =>
-              new OtherWalletError({
-                message: 'Error while applying sync update',
-                cause: err,
-              }),
-          }),
-        ).pipe(
-          Effect.flatMap(({ changes, protocolVersion }) =>
-            // Skip the tx-history fork entirely when there are no changes.
-            // Forking unconditionally allocates a fiber per apply call (one
-            // for every batch the sync emits, even the all-progress ones),
-            // which adds up fast during catch-up.
-            changes.length === 0
-              ? Effect.void
-              : pipe(
-                  Effect.forEach(
-                    changes,
-                    (change) =>
-                      pipe(
-                        this.#txHistoryPermits.withPermits(1)(
-                          pipe(
-                            this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
-                            Effect.flatMap((metadata) =>
-                              this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+        // Applying an update and registering the fiber that records its changes happen as one step: a stop between the
+        // two would leave applied changes that nothing records and nothing logs. The recording itself stays
+        // interruptible.
+        Effect.uninterruptibleMask((restore) =>
+          SubscriptionRef.modifyEffect(stateRef, (state) =>
+            Effect.try({
+              try: () => {
+                const [newState, changesResult] = syncCapability.applyUpdate(state, update, activationRange);
+                return [changesResult, newState] as const;
+              },
+              catch: (err) =>
+                new OtherWalletError({
+                  message: 'Error while applying sync update',
+                  cause: err,
+                }),
+            }),
+          ).pipe(
+            Effect.flatMap(({ changes, protocolVersion }) =>
+              // Skip the tx-history fork entirely when there are no changes.
+              // Forking unconditionally allocates a fiber per apply call (one
+              // for every batch the sync emits, even the all-progress ones),
+              // which adds up fast during catch-up.
+              changes.length === 0
+                ? Effect.void
+                : pipe(
+                    Effect.forEach(
+                      changes,
+                      (change) =>
+                        pipe(
+                          txHistoryPermits.withPermits(1)(
+                            pipe(
+                              transactionHistoryService.getTransactionDetails(change.source),
+                              Effect.flatMap((metadata) =>
+                                transactionHistoryService.put(change, metadata, protocolVersion),
+                              ),
                             ),
                           ),
+                          Effect.onInterrupt(() =>
+                            Effect.logWarning(
+                              `Shielded tx-history section for ${change.source} not recorded when the wallet stopped; the write was cut off and may still land`,
+                            ),
+                          ),
+                          Effect.catchAllCause((cause) =>
+                            // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
+                            // here. applyUpdate has already advanced appliedIndex, so this change.source won't be
+                            // re-processed — the shielded section is permanently lost. Surface that as a structured
+                            // error carrying the tx hash, not a silent Console.error defect.
+                            Effect.logError(cause, `Failed to record shielded tx-history section for ${change.source}`),
+                          ),
                         ),
-                        Effect.catchAllCause((cause) =>
-                          // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
-                          // here. applyUpdate has already advanced appliedIndex, so this change.source won't be
-                          // re-processed — the shielded section is permanently lost. Surface that as a structured
-                          // error carrying the tx hash, not a silent Console.error defect.
-                          Effect.logError(cause, `Failed to record shielded tx-history section for ${change.source}`),
-                        ),
-                      ),
-                    // `concurrency` only bounds fiber creation within this one batch; the real cap on simultaneous
-                    // indexer queries is the variant-wide semaphore acquired around each lookup above.
-                    { discard: true, concurrency: 8 },
+                      // `concurrency` only bounds fiber creation within this one batch; the cap on simultaneous writes
+                      // across batches is the variant's semaphore acquired around each write above.
+                      { discard: true, concurrency: 8 },
+                    ),
+                    restore,
+                    // Beyond this variant: these changes are applied, so nothing will record them again, and the
+                    // update that hands over to the next variant closes this variant's scope while its own writes are
+                    // still running. Stopping the wallet gives them a short grace to land when the runtime runs them,
+                    // then interrupts the rest: a write it interrupts is logged, and may not be recorded.
+                    startHistoryWrite,
                   ),
-                  Effect.forkScoped,
-                ),
+            ),
           ),
-          Effect.provideService(Scope.Scope, this.#scope),
         ),
       ),
       Stream.tapError((error) => Console.error(error)),

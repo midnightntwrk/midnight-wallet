@@ -102,16 +102,17 @@ will return as soon as the release workflow runs again.
 
 ## Release Lines: `main` (2.x) and `v1` (1.x)
 
-The SDK has **two release lines**, because the 2.x line migrated from `@midnight-ntwrk/ledger-v8` to
+The SDK had **two release lines**, because the 2.x line migrated from `@midnight-ntwrk/ledger-v8` to
 `@midnightntwrk/ledger-v9` (a breaking change). 2.x was built on a `v2` branch until it merged into `main`; that branch
-is retired. 2.0.0 was released on 2026-11-05, and 2.x owns the `latest` dist-tag.
+is retired. 2.0.0 was released on 2026-11-05, and 2.x owns the `latest` dist-tag. The 1.x line on `v1` is retired too:
+1.x gets no more releases, and only `main` is released from.
 
 | Branch | Line | Ledger                          | Publishes as                                                                |
 | ------ | ---- | ------------------------------- | --------------------------------------------------------------------------- |
 | `main` | 2.x  | v8 below `forks.v9`, v9 from it | `latest` dist-tag, `rc` during a release candidate, canaries under `canary` |
-| `v1`   | 1.x  | v8                              | canaries under `canary-v1`; a stable release needs `--tag v1` first (below) |
+| `v1`   | 1.x  | v8                              | retired: no more releases; nothing is pushed to `v1`                        |
 
-How the two lines work:
+How releases work:
 
 - `main` releases stable versions under `latest`. To put a release candidate out first, enter pre-release mode with
   `yarn changeset pre enter rc` (see [Pre-release (Beta) Mode](#pre-release-beta-mode)): releases are then versioned
@@ -121,12 +122,10 @@ How the two lines work:
   the first release PR after a switch is renumbered to `-rc.0` by hand, in package versions, internal dependency ranges
   and changelogs. Switching the tag alone releases nothing: the PR that switches it must also carry a changeset that
   `patch`-bumps every published package, or no release PR opens.
-- `v1` is the 1.x maintenance branch, cut from the last 1.x commit on `main`. Its branch-local `.changeset/config.json`
-  sets `baseBranch: "v1"`, and its automated release PR lives on `changeset-release/v1`. Its `publish-stable` job in
-  `.github/workflows/cd.yml` passes no dist-tag, and `changeset publish` tags `latest` by default, so a 1.x release
-  would take `latest` back from 2.x. Before a stable 1.x release, add `--tag v1` to `yarn changeset publish` and to
-  `node scripts/publish-alias.mjs` in that job.
-- 2.x work targets `main`; 1.x fixes target `v1`. A fix both lines need lands on each of them.
+- `v1` is the retired 1.x branch. It is kept as it was, and nothing is pushed to it: its own `.github/workflows/cd.yml`
+  still publishes on a push to `v1`, including the retired `@midnight-ntwrk` alias, so a push there would release 1.x
+  again.
+- All work targets `main`.
 
 ## Known Install Warnings
 
@@ -337,7 +336,7 @@ Packages that are private or explicitly ignored in the .changeset/config.json wi
 currently ignore test-related packages:
 
 ```json
-"ignore": ["@midnight/wallet-e2e-tests", "@midnight-ntwrk/wallet-integration-tests"],
+"ignore": ["@midnight/wallet-e2e-tests", "@midnightntwrk/wallet-integration-tests"],
 ```
 
 ---

@@ -94,7 +94,7 @@ jobs:
           yarn --version
 
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: 'https://ghcr.io'
           username: ${{ github.actor }}
@@ -197,7 +197,7 @@ jobs:
       # "GitHub Actions" app) that GitHub mis-groups under an unrelated suite
       # ("Check for Changeset") and duplicates the job status — see #520.
       - name: Publish Integration Test Report
-        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6
+        uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6
         if: success() || failure()
         with:
           annotate_only: true

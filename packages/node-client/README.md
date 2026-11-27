@@ -83,6 +83,33 @@ Testing utilities and mocks:
 import { ... } from '@midnightntwrk/wallet-sdk-node-client/testing';
 ```
 
+The entry also exports `TestTransactions`, which needs the optional peer dependencies `@effect/platform`,
+`@midnightntwrk/ledger-v9`, `@midnightntwrk/wallet-sdk-prover-client`, `tar-stream` and `testcontainers`. Importing
+anything from `/testing` loads it, so install those even to use only `FakePolkadotNode`.
+
+`FakePolkadotNode` stands in for `@polkadot/api` in unit tests, so a `PolkadotNodeClient`, or anything built on one,
+submits to a node whose answers the test sets. Each test file shares one node between its mock and its tests (under
+vitest's default per-file isolation):
+
+```typescript
+import { FakePolkadotNode } from '@midnightntwrk/wallet-sdk-node-client/testing';
+
+vi.mock(
+  '@polkadot/api',
+  async () => (await import('@midnightntwrk/wallet-sdk-node-client/testing')).FakePolkadotNode.shared.module,
+);
+
+const node = FakePolkadotNode.shared;
+const result = FakePolkadotNode.submissionResult;
+
+beforeEach(() => node.reset());
+
+it('fails when the pool reports the transaction invalid', async () => {
+  node.reportStatuses([result('isReady'), result('isInvalid')]); // or node.refuseSubmission(error), node.failCalls()
+  // submit through a client built on `new URL('ws://127.0.0.1:9944')`, then assert on how it ended
+});
+```
+
 ## License
 
 Apache-2.0
