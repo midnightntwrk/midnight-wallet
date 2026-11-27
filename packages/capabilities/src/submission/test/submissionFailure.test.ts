@@ -15,6 +15,7 @@ import { NetworkId, SerializedTransaction } from '@midnightntwrk/wallet-sdk-abst
 import { NodeClientError } from '@midnightntwrk/wallet-sdk-node-client/effect';
 import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Data, Effect, Runtime } from 'effect';
+import * as fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
 import { Simulator } from '../../simulation/v9/index.js';
 
@@ -106,8 +107,16 @@ const nonExcludingCauses: ReadonlyArray<readonly [string, unknown]> = [
     'the socket failed with a non-numeric code',
     nodeAnswered(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' })),
   ],
-  // A numeric code proves a refusal only as the node's answer to the submission call.
+  // The client parses only reports that a block holds the transaction, so a report it could not parse still said one
+  // did.
+  ['the node’s report could not be parsed', new NodeClientError.ParseError({ message: 'unparseable' })],
+  // A refusal code proves a refusal only as the node's answer to the submission call itself; the same code found bare,
+  // or under some other failure, is an answer to a different request.
   ['a cause other than the node client’s submission failure carries a refusal code', rpcError(1010)],
+  [
+    'a failure other than the node client’s submission failure wraps a refusal answer',
+    new UnrelatedFailure({ cause: rpcError(1010) }),
+  ],
 ];
 
 describe('Classifying a rejected submission', () => {
@@ -128,6 +137,48 @@ describe('Classifying a rejected submission', () => {
       expect(classifySubmissionFailure(await fiberRejection(nodeAnswered(rpcError(code))))._tag).toBe('NotIncluded');
     },
   );
+
+  it('should not prove exclusion for any code of the JSON-RPC reserved range or from 0 to 9999 other than the documented refusals, because only those prove the pool never took the transaction', () => {
+    // Every code a node is likely to answer with: the JSON-RPC protocol's reserved range (-32768 to -32000), the author
+    // RPC's own range (polkadot-sdk `author/error.rs`, base 1000) and every other code below 10000. A code added to the
+    // refusal set by mistake would release coins and Dust for a transaction a block may hold.
+    const documented = new Set(refusalCodes.map(([, code]) => code));
+    const jsonRpcReserved = Array.from({ length: 769 }, (_, offset) => -32768 + offset);
+    const belowTenThousand = Array.from({ length: 10_000 }, (_, code) => code);
+    const others = [...jsonRpcReserved, ...belowTenThousand].filter((code) => !documented.has(code));
+
+    const misclassified = others.filter(
+      (code) =>
+        classifySubmissionFailure(new SubmissionError({ message: 'x', cause: nodeAnswered(rpcError(code)) }))._tag !==
+        'Undetermined',
+    );
+
+    expect(misclassified).toStrictEqual([]);
+  });
+
+  it('should prove exclusion only for the documented refusals among any other codes, because a refusal is a fixed set of answers', () => {
+    const documented = new Set(refusalCodes.map(([, code]) => code));
+
+    fc.assert(
+      fc.property(fc.integer(), (code) => {
+        const classification = classifySubmissionFailure(
+          new SubmissionError({ message: 'x', cause: nodeAnswered(rpcError(code)) }),
+        )._tag;
+        expect(classification).toBe(documented.has(code) ? 'NotIncluded' : 'Undetermined');
+      }),
+    );
+  });
+
+  it('should not prove exclusion when the submission died rather than failed, because a defect says nothing about where the transaction is', async () => {
+    const rejection = await Effect.runPromise(
+      Effect.die(new SubmissionError({ message: 'x', cause: nodeAnswered(rpcError(1010)) })),
+    ).then(
+      () => expect.unreachable('a dying effect resolved'),
+      (error: unknown) => error,
+    );
+
+    expect(classifySubmissionFailure(rejection)._tag).toBe('Undetermined');
+  });
 
   it.each(nonRefusalCodes)(
     'should not prove exclusion when the node answers %s (%i), because the pool or a block may hold the transaction',
