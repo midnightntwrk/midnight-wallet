@@ -48,36 +48,34 @@ const recordingSearch = (answer: Option.Option<DustTimelineStart>) => {
 };
 
 describe('dustWalletProbes', () => {
-  it.each([false, undefined])(
-    'should set no timeline search when skipLedgerV8DustHistory is %s, so a fresh start replays the ledger-v8 dust history',
-    (skip) => {
-      const { asked, search } = recordingSearch(Option.none());
+  it('should set no timeline search when skipLedgerV8DustHistory is false, so a fresh start replays the ledger-v8 dust history', () => {
+    const { asked, search } = recordingSearch(Option.none());
 
-      const probes = dustWalletProbes(
-        configuration(skip === undefined ? {} : { skipLedgerV8DustHistory: skip }),
-        search,
-      );
+    const probes = dustWalletProbes(configuration({ skipLedgerV8DustHistory: false }), search);
 
-      expect(probes).not.toHaveProperty('dustTimelineStartProbe');
-      expect(asked).toEqual([]);
+    expect(probes).not.toHaveProperty('dustTimelineStartProbe');
+    expect(asked).toEqual([]);
+  });
+
+  it.each([true, undefined])(
+    "should search the wallet's own indexer for where the timeline reaches forks.v9 when skipLedgerV8DustHistory is %s, and answer with what the search finds",
+    async (skip) => {
+      // Unset is the default, and the default skips: a wallet that crosses the boundary discards what it replayed below it.
+      const start: DustTimelineStart = { cursor: 41n, version: v9 };
+      const { asked, search } = recordingSearch(Option.some(start));
+      const config = configuration(skip === undefined ? {} : { skipLedgerV8DustHistory: skip });
+
+      const answer = await dustWalletProbes(config, search).dustTimelineStartProbe?.();
+
+      expect(answer).toEqual(Option.some(start));
+      expect(asked).toEqual([{ configuration: config, boundary: v9 }]);
     },
   );
-
-  it("should search the wallet's own indexer for where the timeline reaches forks.v9, and answer with what the search finds", async () => {
-    const start: DustTimelineStart = { cursor: 41n, version: v9 };
-    const { asked, search } = recordingSearch(Option.some(start));
-    const config = configuration({ skipLedgerV8DustHistory: true });
-
-    const answer = await dustWalletProbes(config, search).dustTimelineStartProbe?.();
-
-    expect(answer).toEqual(Option.some(start));
-    expect(asked).toEqual([{ configuration: config, boundary: v9 }]);
-  });
 
   it('should search only when the start asks, never while the wallet is being configured', () => {
     const { asked, search } = recordingSearch(Option.none());
 
-    dustWalletProbes(configuration({ skipLedgerV8DustHistory: true }), search);
+    dustWalletProbes(configuration(), search);
 
     expect(asked).toEqual([]);
   });

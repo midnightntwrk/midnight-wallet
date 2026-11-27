@@ -69,7 +69,7 @@ export const eventLessDustWallet: DustWalletFactory = (config) => {
     {
       ...config,
       // The probes `DustWallet` asks, so a fresh start begins where it would for the event-based wallet: on a chain past
-      // the boundary with `skipLedgerV8DustHistory`, where the dust timeline reaches it.
+      // the boundary, where the dust timeline reaches it, unless `skipLedgerV8DustHistory` is `false`.
       ...dustWalletProbes(config),
     },
     { builder: new V1Builder().withDefaults(), configuration: v1 },

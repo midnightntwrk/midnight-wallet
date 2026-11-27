@@ -117,7 +117,9 @@ const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshi
 // its genesis therefore starts these wallets on V2 directly; one that forked over existing history starts them
 // on V1, and they cross with what they read there. Without an answer a wallet begins on V1 — where a wallet with
 // no history belongs — and is handed over on the first batch that reports a ledger-v9 version. Nothing about the probe
-// can make a start fail.
+// can make a start fail. The dust wallet first searches for where its event timeline reaches `forks.v9`, unless
+// `skipLedgerV8DustHistory` is `false`, and on a chain that forked over existing history starts on V2 there: a wallet
+// that crosses discards the dust state it built below the boundary, so it skips replaying it.
 const wallet: WalletFacade = await WalletFacade.init({
   configuration,
   shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
