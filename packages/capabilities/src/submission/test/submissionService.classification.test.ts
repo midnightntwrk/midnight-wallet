@@ -10,239 +10,213 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import BN from 'bn.js';
-import { Cause, Option, Predicate, Runtime, pipe } from 'effect';
+import { FakePolkadotNode } from '@midnightntwrk/wallet-sdk-node-client/testing';
+import { NodeClientError } from '@midnightntwrk/wallet-sdk-node-client/effect';
+import { Cause, Duration, Effect, Exit, Option, Predicate, Runtime, identity, pipe } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { type SubmissionFailure } from '../submissionFailure.js';
 
 /*
  * A wallet decides whether to release what a failed submission booked by classifying the default service's rejection.
  * The service wraps whichever failure the node client ended with in a `SubmissionError`, so the classification must
  * come out the same as the node's own report: undetermined whenever a block may hold the transaction, and excluded only
- * when the node proved no block does. The wrapped failure is also what an application reads to say why a submission
- * failed, so it must be the node client's own error, not another of the same class.
+ * on a report the classifier treats as proof that no block does. Whether `Usurped` and `Invalid` should count as that
+ * proof is an open question: these tests pin how they are classified today, not that they should be. The wrapped
+ * failure is also what an application reads to say why a submission failed, so it must be the node client's own error:
+ * its class, and for a refused call the node's own answer as its cause.
  */
 
-/** The node statuses a submission subscription reports, as `@polkadot/api` exposes them: one flag set at a time. */
-type StatusKind =
-  | 'isReady'
-  | 'isFuture'
-  | 'isBroadcast'
-  | 'isRetracted'
-  | 'isInBlock'
-  | 'isFinalized'
-  | 'isFinalityTimeout'
-  | 'isUsurped'
-  | 'isDropped'
-  | 'isInvalid';
-
-const allFlagsOff: Readonly<Record<StatusKind, boolean>> = {
-  isReady: false,
-  isFuture: false,
-  isBroadcast: false,
-  isRetracted: false,
-  isInBlock: false,
-  isFinalized: false,
-  isFinalityTimeout: false,
-  isUsurped: false,
-  isDropped: false,
-  isInvalid: false,
-};
-
-/**
- * One result the node's submission subscription delivers, with the block's number a block status carries. Without it,
- * as `@polkadot/api` delivers a status whose block events it could not read, the client cannot decode the report.
- */
-const result = (kind: StatusKind, options: { readonly withBlockNumber?: boolean } = {}) => ({
-  status: {
-    ...allFlagsOff,
-    [kind]: true,
-    asInBlock: { toString: () => '0xb10c' },
-    asFinalized: { toString: () => '0xb10c' },
-  },
-  txHash: { toString: () => '0x7a' },
-  ...((options.withBlockNumber ?? true) ? { blockNumber: new BN(42) } : {}),
-});
-
-type SubmissionResult = ReturnType<typeof result>;
-
-const faithfulProbe = () =>
-  mockApi.isConnected ? Promise.resolve('Midnight Dev') : Promise.reject(new Error('disconnected'));
-
-const mockApi = {
-  isConnected: false,
-  connect: vi.fn(() => {
-    mockApi.isConnected = true;
-    return Promise.resolve();
-  }),
-  // As `WsProvider.disconnect()` does: it returns before the socket closes, and the close event follows.
-  disconnect: vi.fn(() => {
-    setTimeout(() => {
-      mockApi.isConnected = false;
-      mockApi.emit('disconnected');
-    }, 0);
-    return Promise.resolve();
-  }),
-  handlers: {} as Record<string, Array<() => void>>,
-  once: vi.fn((event: string, handler: () => void) => {
-    (mockApi.handlers[event] ??= []).push(handler);
-    return () => {};
-  }),
-  emit: (event: string) => {
-    const handlers = mockApi.handlers[event] ?? [];
-    mockApi.handlers[event] = [];
-    handlers.forEach((handler) => handler());
-  },
-  tx: { midnight: { sendMnTransaction: vi.fn() } },
-  rpc: { system: { chain: vi.fn(faithfulProbe) } },
-  genesisHash: '0x00',
-};
-
-vi.mock('@polkadot/api', () => ({
-  ApiPromise: {
-    create: vi.fn(() => {
-      mockApi.isConnected = true;
-      return Promise.resolve(mockApi);
-    }),
-  },
-  WsProvider: vi.fn(),
-}));
+// The node the default service's client builds its api on, shared with the tests through node-client's testing entry.
+vi.mock(
+  '@polkadot/api',
+  async () => (await import('@midnightntwrk/wallet-sdk-node-client/testing')).FakePolkadotNode.shared.module,
+);
 
 // Imported after vi.mock so the mock is in place.
 const { classifySubmissionFailure, makeDefaultSubmissionService } = await import('../index.js');
 
-/** A node that answers the submission by delivering `results` to the subscription, as `@polkadot/api` does. */
-const nodeReporting = (results: ReadonlyArray<SubmissionResult>): void => {
-  mockApi.tx.midnight.sendMnTransaction.mockReturnValue({
-    send: vi.fn((callback: (delivered: SubmissionResult) => Promise<void>) => {
-      results.forEach((delivered) => process.nextTick(() => void callback(delivered)));
-      return Promise.resolve(() => {});
-    }),
-  });
-};
-
-/** A node that answers the submission call itself with `error`, so no subscription starts. */
-const nodeAnsweringWith = (error: Error): void => {
-  mockApi.tx.midnight.sendMnTransaction.mockReturnValue({
-    send: vi.fn(() => Promise.reject(error)),
-  });
-};
+const node = FakePolkadotNode.shared;
+const result = FakePolkadotNode.submissionResult;
 
 /** The submission service reads nothing from a transaction but its bytes, so this stands in for a finalized one. */
 const stubTransaction = { serialize: () => new Uint8Array([1, 2, 3]), toString: () => 'stub transaction' };
 
-/** The tag of the node client's error inside the service's rejection: the `SubmissionError`'s cause. */
-const nodeErrorTagOf = (rejection: unknown): string =>
+/**
+ * How long a submission may take to settle once the node has answered, before the test fails naming the hang. The
+ * default service waits its client's default reconnection delay of 1 s between readiness probes, so a node whose calls
+ * fail takes about 2 s to be reported unreachable.
+ */
+const SETTLE_WITHIN = Duration.seconds(5);
+
+/** The node client's error inside the service's rejection: the `SubmissionError`'s cause. */
+const nodeErrorOf = (rejection: unknown): Option.Option<unknown> =>
   pipe(
     Runtime.isFiberFailure(rejection) ? Cause.failureOption(rejection[Runtime.FiberFailureCauseId]) : Option.none(),
     Option.filter(Predicate.isTagged('SubmissionError')),
-    Option.flatMap((error) =>
-      Predicate.hasProperty(error, 'cause') && Predicate.hasProperty(error.cause, '_tag')
-        ? Option.some(String(error.cause._tag))
-        : Option.none(),
-    ),
-    Option.getOrElse(() => 'no node client error inside the rejection'),
+    Option.flatMap((error) => (Predicate.hasProperty(error, 'cause') ? Option.some(error.cause) : Option.none())),
   );
 
-/** How long a submission may take to settle once the node has answered, before the test fails naming the hang. */
-const SETTLE_WITHIN_MS = 1_000;
-
 /**
- * How a wallet classifies the default service's rejection of a submission awaiting finality, and the node client's
- * error the rejection wraps. A submission that neither resolves nor rejects once the node has answered fails the test
- * by name, rather than through the runner's timeout.
+ * The default service's rejection of a submission awaiting `stage`, exactly as its promise rejects. A submission that
+ * neither resolves nor rejects once the node has answered fails the test by name, rather than through the runner's
+ * timeout, and the service is closed whichever way the submission ends.
  */
-const classifiedRejection = async (): Promise<{ readonly classification: string; readonly nodeError: string }> => {
+const rejectionOfSubmission = (stage: Stage): Promise<Exit.Exit<unknown, unknown>> => {
   const service = makeDefaultSubmissionService<typeof stubTransaction>({ relayURL: new URL('ws://127.0.0.1:9944') });
-  const timer = { id: undefined as ReturnType<typeof setTimeout> | undefined };
-  try {
-    const rejection = await Promise.race([
-      service.submitTransaction(stubTransaction, 'Finalized').then(
-        () => expect.unreachable('the submission resolved'),
-        (error: unknown) => error,
-      ),
-      new Promise<never>((_, reject) => {
-        timer.id = setTimeout(
-          () => reject(new Error('the submission neither resolved nor rejected after the node answered')),
-          SETTLE_WITHIN_MS,
-        );
-      }),
-    ]);
-    return { classification: classifySubmissionFailure(rejection)._tag, nodeError: nodeErrorTagOf(rejection) };
-  } finally {
-    clearTimeout(timer.id);
-    await service.close();
-  }
+  return pipe(
+    // `identity` keeps the `FiberFailure` the promise rejects with, which is what a wallet hands the classifier.
+    Effect.tryPromise({ try: () => service.submitTransaction(stubTransaction, stage), catch: identity }),
+    Effect.flip,
+    Effect.timeoutFail({
+      duration: SETTLE_WITHIN,
+      onTimeout: () => new Error('the submission neither resolved nor rejected after the node answered'),
+    }),
+    Effect.ensuring(Effect.promise(() => service.close())),
+    Effect.runPromiseExit,
+  );
 };
 
-/** A node's answer, and the node client's error that answer ends the submission with. */
-type Answer = readonly [string, () => void, string];
+/** The rejection a submission's exit holds, failing the test when the submission resolved or never settled. */
+const rejectionOf = (exit: Exit.Exit<unknown, unknown>): Promise<unknown> =>
+  Exit.isSuccess(exit)
+    ? Promise.resolve(exit.value)
+    : Promise.reject(new Error(`the submission did not reject: ${Cause.pretty(exit.cause)}`));
 
-/** Answers to a submission that leave a block holding the transaction, or may. */
-const answersAfterWhichABlockMayHoldIt: ReadonlyArray<Answer> = [
-  [
-    'finality timed out on the block that holds it',
-    () => nodeReporting([result('isReady'), result('isInBlock'), result('isFinalityTimeout')]),
-    'TransactionProgressError',
-  ],
-  [
-    'the finalized report could not be parsed',
-    () => nodeReporting([result('isReady'), result('isInBlock'), result('isFinalized', { withBlockNumber: false })]),
-    'ParseError',
-  ],
-  [
-    'the pool dropped it after broadcasting it',
-    () => nodeReporting([result('isReady'), result('isBroadcast'), result('isDropped')]),
-    'TransactionDroppedError',
-  ],
-  [
-    'the socket failed during the call',
-    () => nodeAnsweringWith(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' })),
-    'SubmissionError',
-  ],
+/** Any of the node client's error classes. */
+type NodeClientErrorClass = (typeof NodeClientError)[keyof typeof NodeClientError];
+
+/** The stages a caller can wait for: the default service's own default, and the one the facade waits for. */
+type Stage = 'InBlock' | 'Finalized';
+
+/** A node's answer to a submission, and what the service's rejection of it must say. */
+type Answer = {
+  readonly scenario: string;
+  /** The stages the answer can end a submission at: a report of a block ends one waiting for `InBlock` successfully. */
+  readonly stages: ReadonlyArray<Stage>;
+  readonly answer: () => void;
+  readonly classification: SubmissionFailure['_tag'];
+  /** The class of the node client's error the rejection wraps. */
+  readonly nodeError: NodeClientErrorClass;
+};
+
+const socketFailure = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
+const poolRefusal = Object.assign(new Error('1010: Invalid'), { code: 1010 });
+
+/** Answers to a submission that leave open whether a block holds the transaction. */
+const answersLeavingInclusionOpen: ReadonlyArray<Answer> = [
+  {
+    scenario: 'finality timed out on the block that included it',
+    stages: ['Finalized'],
+    answer: () => node.reportStatuses([result('isReady'), result('isInBlock'), result('isFinalityTimeout')]),
+    classification: 'Undetermined',
+    nodeError: NodeClientError.TransactionProgressError,
+  },
+  {
+    scenario: 'the finalized report could not be parsed',
+    stages: ['Finalized'],
+    answer: () =>
+      node.reportStatuses([result('isReady'), result('isInBlock'), result('isFinalized', { withBlockNumber: false })]),
+    classification: 'Undetermined',
+    nodeError: NodeClientError.ParseError,
+  },
+  {
+    scenario: 'the pool dropped it after broadcasting it',
+    stages: ['InBlock', 'Finalized'],
+    answer: () => node.reportStatuses([result('isReady'), result('isBroadcast'), result('isDropped')]),
+    classification: 'Undetermined',
+    nodeError: NodeClientError.TransactionDroppedError,
+  },
+  {
+    scenario: 'the socket failed during the call',
+    stages: ['InBlock', 'Finalized'],
+    answer: () => node.refuseSubmission(socketFailure),
+    classification: 'Undetermined',
+    nodeError: NodeClientError.SubmissionError,
+  },
+  {
+    scenario: 'the subscription ended without reporting a block',
+    stages: ['InBlock'],
+    answer: () => node.reportStatuses([result('isReady'), result('isFinalized')]),
+    classification: 'Undetermined',
+    nodeError: NodeClientError.TransactionProgressError,
+  },
 ];
 
-/** Answers to a submission that prove no block holds the transaction. */
-const answersProvingNoBlockHoldsIt: ReadonlyArray<Answer> = [
-  [
-    'the pool refused it outright',
-    () => nodeAnsweringWith(Object.assign(new Error('1010: Invalid'), { code: 1010 })),
-    'SubmissionError',
-  ],
-  [
-    'another transaction usurped it',
-    () => nodeReporting([result('isReady'), result('isUsurped')]),
-    'TransactionUsurpedError',
-  ],
-  [
-    'the pool reported it invalid',
-    () => nodeReporting([result('isReady'), result('isInvalid')]),
-    'TransactionInvalidError',
-  ],
+/** Answers to a submission that the classifier treats as proof that no block holds the transaction, today. */
+const answersProvingExclusion: ReadonlyArray<Answer> = [
+  {
+    scenario: 'the pool refused it outright',
+    stages: ['InBlock', 'Finalized'],
+    answer: () => node.refuseSubmission(poolRefusal),
+    classification: 'NotIncluded',
+    nodeError: NodeClientError.SubmissionError,
+  },
+  {
+    scenario: 'another transaction usurped it',
+    stages: ['InBlock', 'Finalized'],
+    answer: () => node.reportStatuses([result('isReady'), result('isUsurped')]),
+    classification: 'NotIncluded',
+    nodeError: NodeClientError.TransactionUsurpedError,
+  },
+  {
+    scenario: 'the pool reported it invalid',
+    stages: ['InBlock', 'Finalized'],
+    answer: () => node.reportStatuses([result('isReady'), result('isInvalid')]),
+    classification: 'NotIncluded',
+    nodeError: NodeClientError.TransactionInvalidError,
+  },
+  {
+    scenario: 'the node answered the socket but not its calls, so nothing was sent',
+    stages: ['InBlock', 'Finalized'],
+    answer: () => node.failCalls(),
+    classification: 'NotIncluded',
+    nodeError: NodeClientError.ConnectionError,
+  },
 ];
+
+/** One case per answer and per stage it can end a submission at. */
+const perStage = (answers: ReadonlyArray<Answer>) =>
+  answers.flatMap((answer) => answer.stages.map((stage) => ({ ...answer, stage })));
 
 describe('Classifying the default submission service’s rejection', () => {
-  beforeEach(() => {
-    mockApi.isConnected = false;
-    mockApi.handlers = {};
-    mockApi.tx.midnight.sendMnTransaction.mockReset();
-    mockApi.rpc.system.chain.mockImplementation(faithfulProbe);
-  });
+  beforeEach(() => node.reset());
 
-  it.each(answersAfterWhichABlockMayHoldIt)(
-    'should be undetermined when %s, because the service wraps the node client’s own error, which leaves a block holding it',
-    async (_, answer, nodeError) => {
+  it.each(perStage(answersLeavingInclusionOpen))(
+    'should be undetermined when waiting for $stage and $scenario, because the service wraps the node client’s own error, which leaves open whether a block holds it',
+    async ({ stage, answer, classification, nodeError }) => {
       answer();
 
-      expect(await classifiedRejection()).toStrictEqual({ classification: 'Undetermined', nodeError });
+      const rejection = await rejectionOf(await rejectionOfSubmission(stage));
+
+      expect(classifySubmissionFailure(rejection)._tag).toBe(classification);
+      expect(Option.getOrThrow(nodeErrorOf(rejection))).toBeInstanceOf(nodeError);
     },
   );
 
-  it.each(answersProvingNoBlockHoldsIt)(
-    'should prove exclusion when %s, because the service wraps the node client’s own error, which proves it',
-    async (_, answer, nodeError) => {
+  it.each(perStage(answersProvingExclusion))(
+    'should be classified as excluding when waiting for $stage and $scenario, because the service wraps the node client’s own error, which the classifier treats as proof',
+    async ({ stage, answer, classification, nodeError }) => {
       answer();
 
-      expect(await classifiedRejection()).toStrictEqual({ classification: 'NotIncluded', nodeError });
+      const rejection = await rejectionOf(await rejectionOfSubmission(stage));
+
+      expect(classifySubmissionFailure(rejection)._tag).toBe(classification);
+      expect(Option.getOrThrow(nodeErrorOf(rejection))).toBeInstanceOf(nodeError);
+    },
+  );
+
+  it.each([
+    ['the socket failed during the call', socketFailure],
+    ['the pool refused it outright', poolRefusal],
+  ])(
+    'should keep the node’s own answer inside the wrapped error when %s, because its code says whether the pool ever took the transaction',
+    async (_, nodeAnswer) => {
+      node.refuseSubmission(nodeAnswer);
+
+      const rejection = await rejectionOf(await rejectionOfSubmission('Finalized'));
+
+      const wrapped = Option.getOrThrow(nodeErrorOf(rejection));
+      expect(Predicate.hasProperty(wrapped, 'cause') ? wrapped.cause : undefined).toBe(nodeAnswer);
     },
   );
 });

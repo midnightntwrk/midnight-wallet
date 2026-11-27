@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Effect, Layer, Stream, pipe } from 'effect';
+import { Cause, Effect, Exit, Layer, Option, Stream, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as NodeClient from '../NodeClient.js';
 import * as NodeClientError from '../NodeClientError.js';
@@ -20,8 +20,8 @@ import * as SubmissionEvent from '../SubmissionEvent.js';
 /*
  * A wallet reads the error a submission ends with to tell whether a block may hold the transaction, and releases what
  * the transaction booked only when the error proves no block does. Waiting for a stage must therefore hand on
- * whichever failure ended the client's stream unchanged, and must not turn a stream that ended in a block into a
- * failure that proves exclusion.
+ * whichever failure ended the client's stream unchanged, and must not turn a stream that ended early into a failure
+ * that proves exclusion, whatever came before the end.
  */
 
 const tx = SerializedTransaction.of(new Uint8Array([1, 2, 3]));
@@ -40,76 +40,139 @@ const clientSubmittingWith = (
     getGenesisHash: () => Effect.die('not used by submission'),
   });
 
-/** What waiting for finality fails with on `stream`. Flipped, so a wait that resolved rejects the test instead. */
-const failureAwaitingFinality = (
+/** The stages a caller can wait for. */
+type Stage = SubmissionEvent.SubmissionEvent['_tag'];
+
+/** How waiting for `stage` on `stream` ends. */
+const awaiting = (
+  stage: Stage,
   stream: Stream.Stream<SubmissionEvent.SubmissionEvent, NodeClientError.NodeClientError>,
 ) =>
   pipe(
-    NodeClient.sendMidnightTransactionAndWait(tx, 'Finalized'),
+    NodeClient.sendMidnightTransactionAndWait(tx, stage),
     Effect.provide(clientSubmittingWith(stream)),
-    Effect.flip,
-    Effect.runPromise,
+    Effect.runPromiseExit,
   );
 
+/** The failure an exit ended with: none when it succeeded, or when it died rather than failed. */
+const failureOf = <A, E>(exit: Exit.Exit<A, E>): Option.Option<E> =>
+  Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none();
+
+/** A failure a client's submission stream can end with, after the events that can precede it. */
+type StreamFailure<Tag extends NodeClientError.NodeClientError['_tag']> = {
+  readonly scenario: string;
+  readonly preceding: ReadonlyArray<SubmissionEvent.SubmissionEvent>;
+  readonly error: Extract<NodeClientError.NodeClientError, { readonly _tag: Tag }>;
+};
+
 /**
- * Every failure a client's submission stream can end with, after the events that can precede it: a failed connection or
- * a refused call ends the stream before the node reports anything.
+ * Every failure a client's submission stream can end with, one per tag of the error union, so a new tag does not
+ * compile without its case. A failed connection or a refused call ends the stream before the node reports anything.
  */
-const streamFailures: ReadonlyArray<
-  readonly [string, ReadonlyArray<SubmissionEvent.SubmissionEvent>, NodeClientError.NodeClientError]
-> = [
-  [
-    'finality timed out',
-    [submitted, inBlock],
-    new NodeClientError.TransactionProgressError({ message: 'timed out', txData: tx, desiredStage: 'Finalized' }),
-  ],
-  [
-    'the finalized report could not be parsed',
-    [submitted, inBlock],
-    new NodeClientError.ParseError({ message: 'unparseable' }),
-  ],
-  [
-    'the pool dropped the transaction',
-    [submitted],
-    new NodeClientError.TransactionDroppedError({ message: 'dropped', txData: tx }),
-  ],
-  [
-    'the socket failed during the call',
-    [],
-    new NodeClientError.SubmissionError({
+const streamFailures = {
+  TransactionProgressError: {
+    scenario: 'finality timed out',
+    preceding: [submitted, inBlock],
+    error: new NodeClientError.TransactionProgressError({
+      message: 'timed out',
+      txData: tx,
+      desiredStage: 'Finalized',
+    }),
+  },
+  ParseError: {
+    scenario: 'the finalized report could not be parsed',
+    preceding: [submitted, inBlock],
+    error: new NodeClientError.ParseError({ message: 'unparseable' }),
+  },
+  TransactionDroppedError: {
+    scenario: 'the pool dropped the transaction',
+    preceding: [submitted],
+    error: new NodeClientError.TransactionDroppedError({ message: 'dropped', txData: tx }),
+  },
+  SubmissionError: {
+    scenario: 'the socket failed during the call',
+    preceding: [],
+    error: new NodeClientError.SubmissionError({
       message: 'Transaction submission failed',
       txData: tx,
       cause: Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }),
     }),
-  ],
-  ['no connection to the node was made', [], new NodeClientError.ConnectionError({ message: 'Could not connect' })],
-  [
-    'another transaction usurped it',
-    [submitted],
-    new NodeClientError.TransactionUsurpedError({ message: 'usurped', txData: tx }),
-  ],
-  [
-    'the pool reported it invalid',
-    [submitted],
-    new NodeClientError.TransactionInvalidError({ message: 'invalid', txData: tx }),
-  ],
+  },
+  ConnectionError: {
+    scenario: 'the node never took the call',
+    preceding: [],
+    error: new NodeClientError.ConnectionError({ message: 'Could not connect' }),
+  },
+  TransactionUsurpedError: {
+    scenario: 'another transaction usurped it',
+    preceding: [submitted],
+    error: new NodeClientError.TransactionUsurpedError({ message: 'usurped', txData: tx }),
+  },
+  TransactionInvalidError: {
+    scenario: 'the pool reported it invalid',
+    preceding: [submitted],
+    error: new NodeClientError.TransactionInvalidError({ message: 'invalid', txData: tx }),
+  },
+} satisfies { readonly [Tag in NodeClientError.NodeClientError['_tag']]: StreamFailure<Tag> };
+
+/** Every history a stream can end early after, for each stage a caller can wait for: none reaches that stage. */
+const earlyEnds: ReadonlyArray<readonly [Stage, string, ReadonlyArray<SubmissionEvent.SubmissionEvent>]> = [
+  ['Submitted', 'before the node reported anything', []],
+  ['InBlock', 'before the node reported anything', []],
+  ['InBlock', 'after the pool took the transaction', [submitted]],
+  ['Finalized', 'before the node reported anything', []],
+  ['Finalized', 'after the pool took the transaction', [submitted]],
+  ['Finalized', 'after a block included it', [submitted, inBlock]],
 ];
 
+/** Every stage a caller can wait for. */
+const stages: ReadonlyArray<Stage> = ['Submitted', 'InBlock', 'Finalized'];
+
 describe('Waiting for a submission stage', () => {
-  it('should fail with a progress error when the stream ends in a block without reaching the stage, because a block holds the transaction', async () => {
-    const failure = await failureAwaitingFinality(Stream.make(submitted, inBlock));
+  it.each(earlyEnds)(
+    'should fail with a progress error when waiting for %s and the stream ends %s, because an early end proves nothing about inclusion',
+    async (stage, _, preceding) => {
+      const exit = await awaiting(stage, Stream.fromIterable(preceding));
 
-    expect(failure).toMatchObject({ _tag: 'TransactionProgressError', desiredStage: 'Finalized' });
-  });
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(Option.getOrThrow(failureOf(exit))).toMatchObject({
+        _tag: 'TransactionProgressError',
+        desiredStage: stage,
+      });
+    },
+  );
 
-  it.each(streamFailures)(
-    'should fail with the stream’s own error when %s, because the wallet reads that error to tell whether a block may hold the transaction',
-    async (_, preceding, error) => {
-      const failure = await failureAwaitingFinality(
-        pipe(Stream.fromIterable(preceding), Stream.concat(Stream.fail(error))),
-      );
+  it.each(Object.values(streamFailures))(
+    'should fail with the stream’s own error when waiting for finality and $scenario, because the wallet reads that error to tell whether a block may hold the transaction',
+    async ({ preceding, error }) => {
+      const exit = await awaiting('Finalized', pipe(Stream.fromIterable(preceding), Stream.concat(Stream.fail(error))));
 
-      expect(failure).toBe(error);
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(Option.getOrThrow(failureOf(exit))).toBe(error);
+    },
+  );
+
+  it.each(
+    Object.values(streamFailures).flatMap((failure) =>
+      failure.preceding.length === 0 ? [] : [{ stage: 'InBlock' as const, ...failure, preceding: [submitted] }],
+    ),
+  )(
+    'should fail with the stream’s own error when waiting for $stage and $scenario after the pool took the transaction, because what came before must not change the error',
+    async ({ stage, preceding, error }) => {
+      const exit = await awaiting(stage, pipe(Stream.fromIterable(preceding), Stream.concat(Stream.fail(error))));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(Option.getOrThrow(failureOf(exit))).toBe(error);
+    },
+  );
+
+  it.each(stages.flatMap((stage) => Object.values(streamFailures).map((failure) => ({ stage, ...failure }))))(
+    'should fail with the stream’s own error when waiting for $stage and $scenario before any report, because the stage waited for must not change the error',
+    async ({ stage, error }) => {
+      const exit = await awaiting(stage, Stream.fail(error));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(Option.getOrThrow(failureOf(exit))).toBe(error);
     },
   );
 });
