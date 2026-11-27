@@ -106,8 +106,15 @@ const nonExcludingCauses: ReadonlyArray<readonly [string, unknown]> = [
     'the socket failed with a non-numeric code',
     nodeAnswered(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' })),
   ],
-  // A numeric code proves a refusal only as the node's answer to the submission call.
+  // The client parses only reports that a block holds the transaction, so a report it could not parse still said one did.
+  ['the node’s report could not be parsed', new NodeClientError.ParseError({ message: 'unparseable' })],
+  // A refusal code proves a refusal only as the node's answer to the submission call itself; the same code found bare,
+  // or under some other failure, is an answer to a different request.
   ['a cause other than the node client’s submission failure carries a refusal code', rpcError(1010)],
+  [
+    'a failure other than the node client’s submission failure wraps a refusal answer',
+    new UnrelatedFailure({ cause: rpcError(1010) }),
+  ],
 ];
 
 describe('Classifying a rejected submission', () => {
