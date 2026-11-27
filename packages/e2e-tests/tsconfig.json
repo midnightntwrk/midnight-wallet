@@ -1,6 +1,6 @@
 {
   "include": ["src/**/*.ts", ".eslintrc.cjs"],
-  "extends": "@tsconfig/node24/tsconfig.json",
+  "extends": "@tsconfig/node26/tsconfig.json",
   "compilerOptions": {
     "types": ["vitest/globals"],
     "module": "ESNext",
