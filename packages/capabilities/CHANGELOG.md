@@ -1,5 +1,14 @@
 # @midnightntwrk/wallet-sdk-capabilities
 
+## 4.0.2
+
+### Patch Changes
+
+- Updated dependencies [9cb2369]
+- Updated dependencies [c419aa8]
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.2
+  - @midnightntwrk/wallet-sdk-node-client@2.1.0
+
 ## 4.0.1
 
 ### Patch Changes
