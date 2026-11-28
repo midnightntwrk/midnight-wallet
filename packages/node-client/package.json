@@ -68,8 +68,8 @@
   },
   "devDependencies": {
     "@effect/cluster": "0.60.5",
-    "@effect/experimental": "0.61.2",
-    "@effect/platform": "0.97.3",
+    "@effect/experimental": "0.61.3",
+    "@effect/platform": "0.97.4",
     "@effect/platform-node": "0.108.4",
     "@effect/rpc": "0.76.4",
     "@effect/sql": "0.52.2",
